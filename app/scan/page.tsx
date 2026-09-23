@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft, Volume2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface VerificationResult {
@@ -20,41 +20,62 @@ export default function GymScanner() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const isProcessingRef = useRef(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Web Audio API Synthesizer (Zero asset dependency)
+  // Initialize Audio Context on first interaction
+  function getAudioContext() {
+    if (!audioCtxRef.current) {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      audioCtxRef.current = new AudioCtx();
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  }
+
   function playSound(type: 'success' | 'denied') {
     try {
-      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      const ctx = getAudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(ctx.destination);
 
       if (type === 'success') {
-        // High upbeat chime (880Hz -> 1320Hz)
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
+        // High upbeat 2-tone chime
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
       } else {
-        // Low harsh buzzer (220Hz -> 150Hz)
+        // Double warning buzz
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(220, audioCtx.currentTime);
-        osc.frequency.linearRampToValueAtTime(140, audioCtx.currentTime + 0.4);
-        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.4);
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
       }
-    } catch {
-      // Audio autoplay policy fallback
+    } catch (e) {
+      console.error('Audio playback error:', e);
     }
   }
 
   useEffect(() => {
+    // Unlock audio context on any first touch/click anywhere on screen
+    function unlockAudio() {
+      getAudioContext();
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    }
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
     const html5QrCode = new Html5Qrcode('qr-reader');
     scannerRef.current = html5QrCode;
 
@@ -160,6 +181,8 @@ export default function GymScanner() {
       });
 
     return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
       if (scannerRef.current && scannerRef.current.isScanning) {
         scannerRef.current.stop().catch(console.error);
       }
@@ -172,7 +195,10 @@ export default function GymScanner() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4">
+    <div 
+      onClick={() => getAudioContext()} 
+      className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4 cursor-pointer"
+    >
       {/* Header */}
       <div className="flex items-center justify-between w-full max-w-md mb-6">
         <Link
@@ -223,10 +249,13 @@ export default function GymScanner() {
             </div>
 
             <button
-              onClick={resetScanner}
+              onClick={(e) => {
+                e.stopPropagation();
+                resetScanner();
+              }}
               className="w-full bg-white text-black font-bold py-3 rounded-xl transition hover:bg-neutral-200 flex items-center justify-center gap-2"
             >
-              <RefreshCw className="w-4 h-4" /> Scan Next Member
+              <RefreshCw className="w-4 h-4" /> Scan Next
             </button>
           </div>
         )}
@@ -236,7 +265,7 @@ export default function GymScanner() {
             <Camera className="w-10 h-10 mx-auto mb-2 text-rose-400" />
             <p className="font-medium text-sm">{cameraError}</p>
             <p className="text-xs text-neutral-400 mt-2">
-              Brave/Chrome address bar mein lock icon par click karke Camera &quot;Allow&quot; karein aur reload karein.
+              Browser address bar mein camera allow karein aur reload karein.
             </p>
           </div>
         ) : (
@@ -245,11 +274,12 @@ export default function GymScanner() {
           </div>
         )}
 
-        {verifying && (
-          <p className="text-center text-xs text-emerald-400 mt-4 animate-pulse">
-            Verifying credential with database...
-          </p>
-        )}
+        <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+          <span className="flex items-center gap-1">
+            <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> Audio Chime Active
+          </span>
+          {verifying && <span className="text-emerald-400 animate-pulse">Verifying...</span>}
+        </div>
       </div>
     </div>
   );
