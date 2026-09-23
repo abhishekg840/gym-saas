@@ -2,7 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, AlertTriangle, CheckCircle, Plus, Dumbbell, Send, ExternalLink, QrCode } from 'lucide-react';
+import { 
+  Users, 
+  AlertTriangle, 
+  CheckCircle, 
+  Plus, 
+  Dumbbell, 
+  Send, 
+  ExternalLink, 
+  QrCode, 
+  Calendar 
+} from 'lucide-react';
 import Link from 'next/link';
 
 interface Member {
@@ -83,22 +93,28 @@ export default function GymDashboard() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Gym SaaS Command Center</h1>
-            <p className="text-sm text-neutral-400">Manage memberships, gate access, and fee alerts</p>
+            <p className="text-sm text-neutral-400">Manage memberships, gate access, and live check-ins</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <Link
+            href="/attendance"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
+          >
+            <Calendar className="w-4 h-4 text-emerald-400" /> Live Logs
+          </Link>
           <Link
             href="/member"
             target="_blank"
-            className="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
           >
-            <ExternalLink className="w-4 h-4" /> Member App
+            <ExternalLink className="w-4 h-4" /> Member Pass
           </Link>
           <Link
             href="/scan"
             target="_blank"
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-xl text-sm transition"
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-xl text-sm transition shadow-lg shadow-emerald-500/20"
           >
             <QrCode className="w-4 h-4" /> Open Scanner
           </Link>
