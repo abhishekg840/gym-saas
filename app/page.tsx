@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, AlertTriangle, CheckCircle, Plus, Dumbbell } from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle, Plus, Dumbbell, Send, ExternalLink, QrCode } from 'lucide-react';
+import Link from 'next/link';
 
 interface Member {
   id: string;
@@ -19,17 +20,19 @@ export default function GymDashboard() {
   const [days, setDays] = useState('30');
   const [loading, setLoading] = useState(false);
 
-  // Fetch members list
   async function fetchMembers() {
-    const { data } = await supabase.from('members').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('members')
+      .select('*')
+      .order('created_at', { ascending: false });
     if (data) setMembers(data);
+    if (error) console.error('Fetch error:', error.message);
   }
 
   useEffect(() => {
     fetchMembers();
   }, []);
 
-  // Add new member
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -56,26 +59,54 @@ export default function GymDashboard() {
     setLoading(false);
   }
 
+  function sendWhatsAppReminder(member: Member) {
+    const cleanPhone = member.phone.replace(/[^0-9]/g, '');
+    const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    
+    const message = encodeURIComponent(
+      `Hello ${member.full_name}! 👋\n\nYour gym membership at GlitchFiesta Fitness ended on ${member.membership_end}.\n\nTo avoid gate access blockage, please renew your plan online or visit the counter.\n\nThank you!`
+    );
+
+    window.open(`https://wa.me/${phoneWithCountry}?text=${message}`, '_blank');
+  }
+
   const activeCount = members.filter(m => new Date(m.membership_end) >= new Date()).length;
   const expiredCount = members.length - activeCount;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
-      {/* Header */}
-      <div className="max-w-6xl mx-auto flex items-center justify-between border-b border-neutral-800 pb-6 mb-8">
+      {/* Top Bar with Quick Navigation */}
+      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-6 mb-8 gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
             <Dumbbell className="w-8 h-8" />
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Gym SaaS Command Center</h1>
-            <p className="text-sm text-neutral-400">Manage memberships, access, and automated billing</p>
+            <p className="text-sm text-neutral-400">Manage memberships, gate access, and fee alerts</p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/member"
+            target="_blank"
+            className="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
+          >
+            <ExternalLink className="w-4 h-4" /> Member App
+          </Link>
+          <Link
+            href="/scan"
+            target="_blank"
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-xl text-sm transition"
+          >
+            <QrCode className="w-4 h-4" /> Open Scanner
+          </Link>
         </div>
       </div>
 
+      {/* Metrics */}
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Metric Cards */}
         <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center gap-4">
           <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl">
             <Users className="w-6 h-6" />
@@ -91,7 +122,7 @@ export default function GymDashboard() {
             <CheckCircle className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-sm text-neutral-400">Active Access</p>
+            <p className="text-sm text-neutral-400">Active Gate Access</p>
             <p className="text-2xl font-bold text-emerald-400">{activeCount}</p>
           </div>
         </div>
@@ -108,10 +139,10 @@ export default function GymDashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Add Member Form */}
+        {/* Enroll Form */}
         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl h-fit">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Plus className="w-5 h-5 text-emerald-400" /> Quick Add Member
+            <Plus className="w-5 h-5 text-emerald-400" /> Enroll Member
           </h2>
           <form onSubmit={addMember} className="space-y-4">
             <div>
@@ -135,7 +166,7 @@ export default function GymDashboard() {
               />
             </div>
             <div>
-              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Validity</label>
+              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Plan Validity</label>
               <select
                 value={days}
                 onChange={e => setDays(e.target.value)}
@@ -156,10 +187,10 @@ export default function GymDashboard() {
           </form>
         </div>
 
-        {/* Members Table */}
+        {/* Member Table */}
         <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-neutral-800">
-            <h2 className="text-lg font-semibold">Active Roster & Expiry Status</h2>
+            <h2 className="text-lg font-semibold">Active Member Access Roster</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-neutral-300">
@@ -167,15 +198,16 @@ export default function GymDashboard() {
                 <tr>
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Phone</th>
-                  <th className="px-6 py-4">Expiry</th>
+                  <th className="px-6 py-4">Expiry Date</th>
                   <th className="px-6 py-4">Gate Access</th>
+                  <th className="px-6 py-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
                 {members.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-neutral-500">
-                      No members registered yet. Add your first member above.
+                    <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                      No members registered yet. Fill the form to enroll your first member.
                     </td>
                   </tr>
                 ) : (
@@ -195,6 +227,16 @@ export default function GymDashboard() {
                             <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
                               Allowed
                             </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {isExpired && (
+                            <button
+                              onClick={() => sendWhatsAppReminder(member)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-lg transition"
+                            >
+                              <Send className="w-3 h-3" /> Remind
+                            </button>
                           )}
                         </td>
                       </tr>
