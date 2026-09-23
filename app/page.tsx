@@ -13,7 +13,8 @@ import {
   QrCode, 
   Calendar,
   RotateCw,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -27,6 +28,8 @@ interface Member {
 
 export default function GymDashboard() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterTab, setFilterTab] = useState<'all' | 'active' | 'expired'>('all');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [days, setDays] = useState('30');
@@ -72,7 +75,6 @@ export default function GymDashboard() {
     setLoading(false);
   }
 
-  // Quick renew membership by adding 30 days from either current expiry or today
   async function renewMember(member: Member) {
     setActionId(member.id);
     const currentEnd = new Date(member.membership_end);
@@ -95,7 +97,6 @@ export default function GymDashboard() {
     setActionId(null);
   }
 
-  // Delete member from database
   async function deleteMember(member: Member) {
     if (!confirm(`Are you sure you want to remove ${member.full_name}?`)) return;
 
@@ -124,6 +125,19 @@ export default function GymDashboard() {
   const activeCount = members.filter(m => new Date(m.membership_end) >= new Date()).length;
   const expiredCount = members.length - activeCount;
 
+  // Filtered members list
+  const filteredMembers = members.filter(member => {
+    const isExpired = new Date(member.membership_end) < new Date();
+    const matchesSearch = 
+      member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.phone.includes(searchTerm);
+
+    if (!matchesSearch) return false;
+    if (filterTab === 'active') return !isExpired;
+    if (filterTab === 'expired') return isExpired;
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
       {/* Top Bar with Quick Navigation */}
@@ -133,8 +147,8 @@ export default function GymDashboard() {
             <Dumbbell className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Gym SaaS Command Center</h1>
-            <p className="text-sm text-neutral-400">Manage memberships, gate access, and live check-ins</p>
+            <h1 className="text-2xl font-bold tracking-tight">Gym Command Center</h1>
+            <p className="text-sm text-neutral-400">Manage memberships, gate access, and real-time alerts</p>
           </div>
         </div>
 
@@ -244,11 +258,49 @@ export default function GymDashboard() {
           </form>
         </div>
 
-        {/* Member Table */}
+        {/* Member Table with Search & Tabs */}
         <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
-          <div className="p-6 border-b border-neutral-800">
-            <h2 className="text-lg font-semibold">Active Member Access Roster</h2>
+          <div className="p-6 border-b border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Filter Tabs */}
+            <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-xs font-semibold">
+              <button
+                onClick={() => setFilterTab('all')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  filterTab === 'all' ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                All ({members.length})
+              </button>
+              <button
+                onClick={() => setFilterTab('active')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  filterTab === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Active ({activeCount})
+              </button>
+              <button
+                onClick={() => setFilterTab('expired')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  filterTab === 'expired' ? 'bg-rose-500/20 text-rose-400' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Expired ({expiredCount})
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full sm:w-60">
+              <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-2.5" />
+              <input
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search name or phone..."
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
           </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-neutral-300">
               <thead className="bg-neutral-950 text-neutral-400 uppercase text-xs">
@@ -261,14 +313,14 @@ export default function GymDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
-                {members.length === 0 ? (
+                {filteredMembers.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
-                      No members registered yet. Fill the form to enroll your first member.
+                      No matching members found.
                     </td>
                   </tr>
                 ) : (
-                  members.map(member => {
+                  filteredMembers.map(member => {
                     const isExpired = new Date(member.membership_end) < new Date();
                     const isProcessing = actionId === member.id;
 
@@ -290,7 +342,6 @@ export default function GymDashboard() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Quick +30 Days Renewal */}
                             <button
                               disabled={isProcessing}
                               onClick={() => renewMember(member)}
@@ -301,7 +352,6 @@ export default function GymDashboard() {
                               +30D
                             </button>
 
-                            {/* WhatsApp Reminder (if expired) */}
                             {isExpired && (
                               <button
                                 onClick={() => sendWhatsAppReminder(member)}
@@ -312,7 +362,6 @@ export default function GymDashboard() {
                               </button>
                             )}
 
-                            {/* Delete Member */}
                             <button
                               disabled={isProcessing}
                               onClick={() => deleteMember(member)}
