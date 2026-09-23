@@ -11,7 +11,9 @@ import {
   Send, 
   ExternalLink, 
   QrCode, 
-  Calendar 
+  Calendar,
+  RotateCw,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,6 +31,7 @@ export default function GymDashboard() {
   const [phone, setPhone] = useState('');
   const [days, setDays] = useState('30');
   const [loading, setLoading] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
 
   async function fetchMembers() {
     const { data, error } = await supabase
@@ -52,8 +55,8 @@ export default function GymDashboard() {
 
     const { error } = await supabase.from('members').insert([
       {
-        full_name: name,
-        phone: phone,
+        full_name: name.trim(),
+        phone: phone.trim(),
         membership_end: endDate.toISOString().split('T')[0],
         status: 'active'
       }
@@ -67,6 +70,44 @@ export default function GymDashboard() {
       alert(error.message);
     }
     setLoading(false);
+  }
+
+  // Quick renew membership by adding 30 days from either current expiry or today
+  async function renewMember(member: Member) {
+    setActionId(member.id);
+    const currentEnd = new Date(member.membership_end);
+    const today = new Date();
+    const baseDate = currentEnd > today ? currentEnd : today;
+
+    baseDate.setDate(baseDate.getDate() + 30);
+    const newEndStr = baseDate.toISOString().split('T')[0];
+
+    const { error } = await supabase
+      .from('members')
+      .update({ membership_end: newEndStr, status: 'active' })
+      .eq('id', member.id);
+
+    if (!error) {
+      fetchMembers();
+    } else {
+      alert(error.message);
+    }
+    setActionId(null);
+  }
+
+  // Delete member from database
+  async function deleteMember(member: Member) {
+    if (!confirm(`Are you sure you want to remove ${member.full_name}?`)) return;
+
+    setActionId(member.id);
+    const { error } = await supabase.from('members').delete().eq('id', member.id);
+
+    if (!error) {
+      fetchMembers();
+    } else {
+      alert(error.message);
+    }
+    setActionId(null);
   }
 
   function sendWhatsAppReminder(member: Member) {
@@ -216,7 +257,7 @@ export default function GymDashboard() {
                   <th className="px-6 py-4">Phone</th>
                   <th className="px-6 py-4">Expiry Date</th>
                   <th className="px-6 py-4">Gate Access</th>
-                  <th className="px-6 py-4 text-right">Action</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
@@ -229,11 +270,13 @@ export default function GymDashboard() {
                 ) : (
                   members.map(member => {
                     const isExpired = new Date(member.membership_end) < new Date();
+                    const isProcessing = actionId === member.id;
+
                     return (
                       <tr key={member.id} className="hover:bg-neutral-800/40 transition">
                         <td className="px-6 py-4 font-medium text-white">{member.full_name}</td>
-                        <td className="px-6 py-4">{member.phone}</td>
-                        <td className="px-6 py-4">{member.membership_end}</td>
+                        <td className="px-6 py-4 font-mono text-neutral-400">{member.phone}</td>
+                        <td className="px-6 py-4 font-mono">{member.membership_end}</td>
                         <td className="px-6 py-4">
                           {isExpired ? (
                             <span className="px-2.5 py-1 text-xs rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">
@@ -246,14 +289,39 @@ export default function GymDashboard() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          {isExpired && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Quick +30 Days Renewal */}
                             <button
-                              onClick={() => sendWhatsAppReminder(member)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-lg transition"
+                              disabled={isProcessing}
+                              onClick={() => renewMember(member)}
+                              title="Extend 30 Days"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs rounded-lg transition disabled:opacity-50"
                             >
-                              <Send className="w-3 h-3" /> Remind
+                              <RotateCw className={`w-3 h-3 text-emerald-400 ${isProcessing ? 'animate-spin' : ''}`} />
+                              +30D
                             </button>
-                          )}
+
+                            {/* WhatsApp Reminder (if expired) */}
+                            {isExpired && (
+                              <button
+                                onClick={() => sendWhatsAppReminder(member)}
+                                title="Send WhatsApp Fee Alert"
+                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg transition"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Delete Member */}
+                            <button
+                              disabled={isProcessing}
+                              onClick={() => deleteMember(member)}
+                              title="Delete Member"
+                              className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg transition disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
