@@ -16,7 +16,8 @@ import {
   Trash2,
   Search,
   Download,
-  Tag
+  Tag,
+  FileText
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -80,7 +81,6 @@ export default function GymDashboard() {
     fetchMembers();
   }, []);
 
-  // When plan changes in form, auto-update default price
   function handlePlanChange(planId: string) {
     setSelectedPlanId(planId);
     const chosen = plans.find(p => p.id === planId);
@@ -98,28 +98,44 @@ export default function GymDashboard() {
 
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + durationDays);
+    const feeAmount = parseFloat(amountPaid) || 0;
 
-    const { error } = await supabase.from('members').insert([
-      {
-        full_name: name.trim(),
-        phone: phone.trim(),
-        email: email.trim() || null,
-        emergency_contact: emergencyPhone.trim() || null,
-        plan_id: selectedPlanId || null,
-        amount_paid: parseFloat(amountPaid) || 0,
-        membership_end: endDate.toISOString().split('T')[0],
-        status: 'active'
-      }
-    ]);
+    // 1. Insert Member
+    const { data: memberData, error: memberError } = await supabase
+      .from('members')
+      .insert([
+        {
+          full_name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim() || null,
+          emergency_contact: emergencyPhone.trim() || null,
+          plan_id: selectedPlanId || null,
+          amount_paid: feeAmount,
+          membership_end: endDate.toISOString().split('T')[0],
+          status: 'active'
+        }
+      ])
+      .select()
+      .single();
 
-    if (!error) {
+    if (!memberError && memberData) {
+      // 2. Auto-generate Tax Receipt / Invoice
+      await supabase.from('invoices').insert([
+        {
+          member_id: memberData.id,
+          amount: feeAmount,
+          payment_method: 'Cash/UPI',
+          status: 'paid'
+        }
+      ]);
+
       setName('');
       setPhone('');
       setEmail('');
       setEmergencyPhone('');
       fetchMembers();
     } else {
-      alert(error.message);
+      alert(memberError?.message || 'Error enrolling member');
     }
     setLoading(false);
   }
@@ -139,6 +155,15 @@ export default function GymDashboard() {
       .eq('id', member.id);
 
     if (!error) {
+      // Create renewal invoice record
+      await supabase.from('invoices').insert([
+        {
+          member_id: member.id,
+          amount: member.amount_paid || 1500,
+          payment_method: 'Renewal',
+          status: 'paid'
+        }
+      ]);
       fetchMembers();
     } else {
       alert(error.message);
@@ -160,18 +185,38 @@ export default function GymDashboard() {
     setActionId(null);
   }
 
+  // Open latest invoice receipt for member
+  async function viewLatestInvoice(memberId: string) {
+    const { data } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('member_id', memberId)
+      .order('issued_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      window.open(`/invoice/${data.id}`, '_blank');
+    } else {
+      alert('No invoice receipt generated yet for this member.');
+    }
+  }
+
+  // Direct UPI Intent + WhatsApp Reminder
   function sendWhatsAppReminder(member: Member) {
     const cleanPhone = member.phone.replace(/[^0-9]/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     
+    // Custom Gym UPI link (0% gateway fee)
+    const upiPayLink = `upi://pay?pa=paytmqr@paytm&pn=GlitchFiestaGym&am=${member.amount_paid || 1500}&cu=INR`;
+
     const message = encodeURIComponent(
-      `Hello ${member.full_name}! 👋\n\nYour gym membership at GlitchFiesta Fitness ended on ${member.membership_end}.\n\nTo avoid gate access blockage, please renew your plan online or visit the counter.\n\nThank you!`
+      `Hello ${member.full_name}! 👋\n\nYour membership at GlitchFiesta Fitness ended on ${member.membership_end}.\n\n💳 Pay directly via UPI to instantly unblock your gate access:\n${upiPayLink}\n\nThank you!`
     );
 
     window.open(`https://wa.me/${phoneWithCountry}?text=${message}`, '_blank');
   }
 
-  // Export to CSV Function
   function exportToCSV() {
     if (members.length === 0) return alert('No members to export.');
 
@@ -222,7 +267,7 @@ export default function GymDashboard() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Gym Command Center</h1>
-            <p className="text-sm text-neutral-400">Manage memberships, gate access, and real-time alerts</p>
+            <p className="text-sm text-neutral-400">Manage memberships, gate access, and real-time billing</p>
           </div>
         </div>
 
@@ -317,14 +362,14 @@ export default function GymDashboard() {
               />
             </div>
             <div>
-              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Select Membership Plan</label>
+              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Membership Plan</label>
               <select
                 value={selectedPlanId}
                 onChange={e => handlePlanChange(e.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 text-white"
               >
                 {plans.length === 0 ? (
-                  <option value="">No Plans Available (Add in Packages tab)</option>
+                  <option value="">No Plans Available</option>
                 ) : (
                   plans.map(p => (
                     <option key={p.id} value={p.id}>
@@ -360,12 +405,12 @@ export default function GymDashboard() {
               disabled={loading}
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-semibold py-2.5 rounded-xl transition text-sm disabled:opacity-50 mt-2"
             >
-              {loading ? 'Enrolling...' : 'Enroll & Activate Pass'}
+              {loading ? 'Enrolling...' : 'Enroll & Generate Invoice'}
             </button>
           </form>
         </div>
 
-        {/* Member Table with Search, Tabs, and Export */}
+        {/* Member Table with Invoices Action */}
         <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-xs font-semibold">
@@ -454,26 +499,38 @@ export default function GymDashboard() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* View Tax Receipt */}
+                            <button
+                              onClick={() => viewLatestInvoice(member.id)}
+                              title="View / Print Tax Receipt"
+                              className="p-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 rounded-lg transition"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-blue-400" />
+                            </button>
+
+                            {/* +30 Days Renewal */}
                             <button
                               disabled={isProcessing}
                               onClick={() => renewMember(member)}
-                              title="Extend 30 Days"
+                              title="Extend 30 Days & Invoiced"
                               className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs rounded-lg transition disabled:opacity-50"
                             >
                               <RotateCw className={`w-3 h-3 text-emerald-400 ${isProcessing ? 'animate-spin' : ''}`} />
                               +30D
                             </button>
 
+                            {/* WhatsApp Reminder + Direct UPI Link */}
                             {isExpired && (
                               <button
                                 onClick={() => sendWhatsAppReminder(member)}
-                                title="Send WhatsApp Fee Alert"
+                                title="Send WhatsApp Fee & Direct UPI Link"
                                 className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg transition"
                               >
                                 <Send className="w-3.5 h-3.5" />
                               </button>
                             )}
 
+                            {/* Delete */}
                             <button
                               disabled={isProcessing}
                               onClick={() => deleteMember(member)}
