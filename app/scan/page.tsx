@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 interface VerificationResult {
   allowed: boolean;
@@ -20,6 +21,39 @@ export default function GymScanner() {
   const isProcessingRef = useRef(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
+  // Web Audio API Synthesizer (Zero asset dependency)
+  function playSound(type: 'success' | 'denied') {
+    try {
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'success') {
+        // High upbeat chime (880Hz -> 1320Hz)
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } else {
+        // Low harsh buzzer (220Hz -> 150Hz)
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(140, audioCtx.currentTime + 0.4);
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+      }
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  }
+
   useEffect(() => {
     const html5QrCode = new Html5Qrcode('qr-reader');
     scannerRef.current = html5QrCode;
@@ -29,7 +63,6 @@ export default function GymScanner() {
       qrbox: { width: 250, height: 250 },
     };
 
-    // Auto start with rear camera on mobile or default camera on laptop
     html5QrCode
       .start(
         { facingMode: 'environment' },
@@ -48,6 +81,7 @@ export default function GymScanner() {
             const isTimeValid = Math.abs(currentWindow - t) <= 1;
 
             if (!isTimeValid) {
+              playSound('denied');
               setResult({
                 allowed: false,
                 name: 'Unknown Member',
@@ -66,17 +100,19 @@ export default function GymScanner() {
               .maybeSingle();
 
             if (error || !member) {
+              playSound('denied');
               setResult({
                 allowed: false,
                 name: 'Not Found',
                 phone: ph,
                 expiry: 'N/A',
-                reason: 'Member record does not exist.',
+                reason: 'Member record does not exist in database.',
               });
             } else {
               const isExpired = new Date(member.membership_end) < new Date();
 
               if (isExpired) {
+                playSound('denied');
                 setResult({
                   allowed: false,
                   name: member.full_name,
@@ -89,6 +125,7 @@ export default function GymScanner() {
                   { member_id: member.id, method: 'qr_geofence', status: 'blocked_expired' },
                 ]);
               } else {
+                playSound('success');
                 setResult({
                   allowed: true,
                   name: member.full_name,
@@ -103,6 +140,7 @@ export default function GymScanner() {
               }
             }
           } catch {
+            playSound('denied');
             setResult({
               allowed: false,
               name: 'Invalid QR',
@@ -118,7 +156,7 @@ export default function GymScanner() {
       )
       .catch((err) => {
         console.error('Camera startup error:', err);
-        setCameraError('Camera access denied or device not found. Check browser permissions.');
+        setCameraError('Camera access denied or device not found. Please allow camera permissions.');
       });
 
     return () => {
@@ -135,11 +173,20 @@ export default function GymScanner() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4">
-      <div className="flex items-center gap-2 mb-6">
-        <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
-          <Dumbbell className="w-6 h-6" />
+      {/* Header */}
+      <div className="flex items-center justify-between w-full max-w-md mb-6">
+        <Link
+          href="/"
+          className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-xl"
+        >
+          <ArrowLeft className="w-4 h-4" /> Dashboard
+        </Link>
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+            <Dumbbell className="w-5 h-5" />
+          </div>
+          <h1 className="text-base font-bold tracking-tight">Kiosk Scanner</h1>
         </div>
-        <h1 className="text-xl font-bold tracking-tight">Kiosk Access Terminal</h1>
       </div>
 
       <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl relative">
@@ -179,7 +226,7 @@ export default function GymScanner() {
               onClick={resetScanner}
               className="w-full bg-white text-black font-bold py-3 rounded-xl transition hover:bg-neutral-200 flex items-center justify-center gap-2"
             >
-              <RefreshCw className="w-4 h-4" /> Scan Next
+              <RefreshCw className="w-4 h-4" /> Scan Next Member
             </button>
           </div>
         )}
