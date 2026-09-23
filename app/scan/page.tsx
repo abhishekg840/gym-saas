@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Volume2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera } from 'lucide-react';
 
 interface VerificationResult {
   allowed: boolean;
@@ -16,121 +16,115 @@ interface VerificationResult {
 export default function GymScanner() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const isProcessingRef = useRef(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
-    const scanner = new Html5QrcodeScanner(
-      'reader',
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-      },
-      false
-    );
+    const html5QrCode = new Html5Qrcode('qr-reader');
+    scannerRef.current = html5QrCode;
 
-    scanner.render(onScanSuccess, onScanFailure);
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+    };
 
-    function onScanFailure() {
-      // Quietly ignore scan failures while viewfinder is searching
-    }
+    // Auto start with rear camera on mobile or default camera on laptop
+    html5QrCode
+      .start(
+        { facingMode: 'environment' },
+        config,
+        async (decodedText) => {
+          if (isProcessingRef.current) return;
+          isProcessingRef.current = true;
+          setVerifying(true);
 
-    async function onScanSuccess(decodedText: string) {
-      if (isProcessingRef.current) return;
-      isProcessingRef.current = true;
-      setVerifying(true);
+          try {
+            const rawJson = atob(decodedText);
+            const payload = JSON.parse(rawJson);
+            const { id, t, ph } = payload;
 
-      try {
-        // 1. Decode base64 payload
-        const rawJson = atob(decodedText);
-        const payload = JSON.parse(rawJson);
-        const { id, t, ph } = payload;
+            const currentWindow = Math.floor(Date.now() / 30000);
+            const isTimeValid = Math.abs(currentWindow - t) <= 1;
 
-        // 2. Validate TOTP time window (allows max 1 window drift)
-        const currentWindow = Math.floor(Date.now() / 30000);
-        const isTimeValid = Math.abs(currentWindow - t) <= 1;
+            if (!isTimeValid) {
+              setResult({
+                allowed: false,
+                name: 'Unknown Member',
+                phone: ph || 'N/A',
+                expiry: 'N/A',
+                reason: 'Expired QR Code! Screenshots are not allowed.',
+              });
+              setVerifying(false);
+              return;
+            }
 
-        if (!isTimeValid) {
-          setResult({
-            allowed: false,
-            name: 'Unknown Member',
-            phone: ph || 'N/A',
-            expiry: 'N/A',
-            reason: 'Expired QR Code! Screenshots are not allowed.',
-          });
-          setVerifying(false);
-          return;
-        }
+            const { data: member, error } = await supabase
+              .from('members')
+              .select('*')
+              .eq('id', id)
+              .maybeSingle();
 
-        // 3. Query Database for real-time validity
-        const { data: member, error } = await supabase
-          .from('members')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
+            if (error || !member) {
+              setResult({
+                allowed: false,
+                name: 'Not Found',
+                phone: ph,
+                expiry: 'N/A',
+                reason: 'Member record does not exist.',
+              });
+            } else {
+              const isExpired = new Date(member.membership_end) < new Date();
 
-        if (error || !member) {
-          setResult({
-            allowed: false,
-            name: 'Not Found',
-            phone: ph,
-            expiry: 'N/A',
-            reason: 'Member record does not exist.',
-          });
-        } else {
-          const isExpired = new Date(member.membership_end) < new Date();
+              if (isExpired) {
+                setResult({
+                  allowed: false,
+                  name: member.full_name,
+                  phone: member.phone,
+                  expiry: member.membership_end,
+                  reason: 'Membership expired! Fee renewal required.',
+                });
 
-          if (isExpired) {
+                await supabase.from('attendances').insert([
+                  { member_id: member.id, method: 'qr_geofence', status: 'blocked_expired' },
+                ]);
+              } else {
+                setResult({
+                  allowed: true,
+                  name: member.full_name,
+                  phone: member.phone,
+                  expiry: member.membership_end,
+                  reason: 'Access Approved. Welcome!',
+                });
+
+                await supabase.from('attendances').insert([
+                  { member_id: member.id, method: 'qr_geofence', status: 'granted' },
+                ]);
+              }
+            }
+          } catch {
             setResult({
               allowed: false,
-              name: member.full_name,
-              phone: member.phone,
-              expiry: member.membership_end,
-              reason: 'Membership expired! Please pay fee to enter.',
+              name: 'Invalid QR',
+              phone: '',
+              expiry: '',
+              reason: 'Unrecognized QR code structure.',
             });
-
-            // Log rejected attendance
-            await supabase.from('attendances').insert([
-              {
-                member_id: member.id,
-                method: 'qr_geofence',
-                status: 'blocked_expired',
-              },
-            ]);
-          } else {
-            setResult({
-              allowed: true,
-              name: member.full_name,
-              phone: member.phone,
-              expiry: member.membership_end,
-              reason: 'Access Approved. Welcome!',
-            });
-
-            // Log successful attendance
-            await supabase.from('attendances').insert([
-              {
-                member_id: member.id,
-                method: 'qr_geofence',
-                status: 'granted',
-              },
-            ]);
+          } finally {
+            setVerifying(false);
           }
-        }
-      } catch {
-        setResult({
-          allowed: false,
-          name: 'Invalid QR',
-          phone: '',
-          expiry: '',
-          reason: 'Unrecognized QR code format.',
-        });
-      } finally {
-        setVerifying(false);
-      }
-    }
+        },
+        () => {}
+      )
+      .catch((err) => {
+        console.error('Camera startup error:', err);
+        setCameraError('Camera access denied or device not found. Check browser permissions.');
+      });
 
     return () => {
-      scanner.clear().catch(console.error);
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(console.error);
+      }
     };
   }, []);
 
@@ -141,7 +135,6 @@ export default function GymScanner() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
           <Dumbbell className="w-6 h-6" />
@@ -150,7 +143,6 @@ export default function GymScanner() {
       </div>
 
       <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl relative">
-        {/* Verification Status Overlay */}
         {result && (
           <div
             className={`absolute inset-0 z-20 rounded-3xl p-6 flex flex-col items-center justify-center text-center backdrop-blur-md ${
@@ -158,12 +150,12 @@ export default function GymScanner() {
             }`}
           >
             {result.allowed ? (
-              <ShieldCheck className="w-20 h-20 text-emerald-400 mb-3 animate-bounce" />
+              <ShieldCheck className="w-20 h-20 text-emerald-400 mb-3" />
             ) : (
-              <ShieldAlert className="w-20 h-20 text-rose-400 mb-3 animate-pulse" />
+              <ShieldAlert className="w-20 h-20 text-rose-400 mb-3" />
             )}
 
-            <h2 className="text-3xl font-black mb-1">
+            <h2 className="text-2xl font-black mb-1">
               {result.allowed ? 'ACCESS GRANTED' : 'ACCESS DENIED'}
             </h2>
             <p className="text-sm font-semibold opacity-90 mb-4">{result.reason}</p>
@@ -187,28 +179,30 @@ export default function GymScanner() {
               onClick={resetScanner}
               className="w-full bg-white text-black font-bold py-3 rounded-xl transition hover:bg-neutral-200 flex items-center justify-center gap-2"
             >
-              <RefreshCw className="w-4 h-4" /> Scan Next Member
+              <RefreshCw className="w-4 h-4" /> Scan Next
             </button>
           </div>
         )}
 
-        {/* Camera Viewfinder */}
-        <div className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950">
-          <div id="reader" className="w-full"></div>
-        </div>
-
-        {verifying && (
-          <p className="text-center text-xs text-neutral-400 mt-4 animate-pulse">
-            Verifying token with secure database...
-          </p>
+        {cameraError ? (
+          <div className="p-6 text-center text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+            <Camera className="w-10 h-10 mx-auto mb-2 text-rose-400" />
+            <p className="font-medium text-sm">{cameraError}</p>
+            <p className="text-xs text-neutral-400 mt-2">
+              Brave/Chrome address bar mein lock icon par click karke Camera &quot;Allow&quot; karein aur reload karein.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-neutral-800 bg-black min-h-[300px] flex items-center justify-center">
+            <div id="qr-reader" className="w-full"></div>
+          </div>
         )}
 
-        <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
-          <span>Camera Access: Active</span>
-          <span className="flex items-center gap-1">
-            <Volume2 className="w-3.5 h-3.5" /> Auto-Logging Enabled
-          </span>
-        </div>
+        {verifying && (
+          <p className="text-center text-xs text-emerald-400 mt-4 animate-pulse">
+            Verifying credential with database...
+          </p>
+        )}
       </div>
     </div>
   );
