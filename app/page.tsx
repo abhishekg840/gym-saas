@@ -9,7 +9,6 @@ import {
   Plus, 
   Dumbbell, 
   Send, 
-  ExternalLink, 
   QrCode, 
   Calendar,
   RotateCw,
@@ -17,7 +16,11 @@ import {
   Search,
   Download,
   Tag,
-  FileText
+  FileText,
+  BarChart3,
+  Lock,
+  Unlock,
+  Target
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -48,6 +51,11 @@ export default function GymDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'expired'>('all');
   
+  // RBAC Role State ('reception' or 'owner')
+  const [currentRole, setCurrentRole] = useState<'owner' | 'reception'>('owner');
+  const [pinPrompt, setPinPrompt] = useState(false);
+  const [enteredPin, setEnteredPin] = useState('');
+
   // Form States
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -100,7 +108,6 @@ export default function GymDashboard() {
     endDate.setDate(endDate.getDate() + durationDays);
     const feeAmount = parseFloat(amountPaid) || 0;
 
-    // 1. Insert Member
     const { data: memberData, error: memberError } = await supabase
       .from('members')
       .insert([
@@ -119,7 +126,6 @@ export default function GymDashboard() {
       .single();
 
     if (!memberError && memberData) {
-      // 2. Auto-generate Tax Receipt / Invoice
       await supabase.from('invoices').insert([
         {
           member_id: memberData.id,
@@ -155,7 +161,6 @@ export default function GymDashboard() {
       .eq('id', member.id);
 
     if (!error) {
-      // Create renewal invoice record
       await supabase.from('invoices').insert([
         {
           member_id: member.id,
@@ -172,6 +177,10 @@ export default function GymDashboard() {
   }
 
   async function deleteMember(member: Member) {
+    if (currentRole !== 'owner') {
+      alert('Only Owner role can delete member profiles.');
+      return;
+    }
     if (!confirm(`Are you sure you want to remove ${member.full_name}?`)) return;
 
     setActionId(member.id);
@@ -185,7 +194,6 @@ export default function GymDashboard() {
     setActionId(null);
   }
 
-  // Open latest invoice receipt for member
   async function viewLatestInvoice(memberId: string) {
     const { data } = await supabase
       .from('invoices')
@@ -198,16 +206,13 @@ export default function GymDashboard() {
     if (data) {
       window.open(`/invoice/${data.id}`, '_blank');
     } else {
-      alert('No invoice receipt generated yet for this member.');
+      alert('No invoice receipt generated yet.');
     }
   }
 
-  // Direct UPI Intent + WhatsApp Reminder
   function sendWhatsAppReminder(member: Member) {
     const cleanPhone = member.phone.replace(/[^0-9]/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    
-    // Custom Gym UPI link (0% gateway fee)
     const upiPayLink = `upi://pay?pa=paytmqr@paytm&pn=GlitchFiestaGym&am=${member.amount_paid || 1500}&cu=INR`;
 
     const message = encodeURIComponent(
@@ -242,6 +247,25 @@ export default function GymDashboard() {
     document.body.removeChild(link);
   }
 
+  function handleSwitchRole() {
+    if (currentRole === 'owner') {
+      setCurrentRole('reception');
+    } else {
+      setPinPrompt(true);
+    }
+  }
+
+  function verifyPin(e: React.FormEvent) {
+    e.preventDefault();
+    if (enteredPin === '1111') {
+      setCurrentRole('owner');
+      setPinPrompt(false);
+      setEnteredPin('');
+    } else {
+      alert('Invalid Owner PIN (Default: 1111)');
+    }
+  }
+
   const activeCount = members.filter(m => new Date(m.membership_end) >= new Date()).length;
   const expiredCount = members.length - activeCount;
 
@@ -259,24 +283,88 @@ export default function GymDashboard() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
-      {/* Top Bar */}
+      {/* Role PIN Dialog Modal */}
+      {pinPrompt && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl w-full max-w-xs text-center">
+            <Lock className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+            <h3 className="font-bold text-base mb-1">Enter Owner PIN</h3>
+            <p className="text-xs text-neutral-400 mb-4">Required to switch to full Owner Admin mode.</p>
+            <form onSubmit={verifyPin} className="space-y-3">
+              <input
+                type="password"
+                maxLength={4}
+                autoFocus
+                value={enteredPin}
+                onChange={e => setEnteredPin(e.target.value)}
+                placeholder="****"
+                className="w-full bg-neutral-950 border border-neutral-800 text-center tracking-widest text-xl rounded-xl py-2 focus:border-amber-400 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPinPrompt(false)}
+                  className="w-1/2 bg-neutral-800 py-2 rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 bg-amber-500 font-bold text-black py-2 rounded-xl text-xs"
+                >
+                  Verify
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Top Header */}
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-6 mb-8 gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
             <Dumbbell className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Gym Command Center</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">Gym Command Center</h1>
+              <button
+                onClick={handleSwitchRole}
+                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                  currentRole === 'owner'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                }`}
+              >
+                {currentRole === 'owner' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                {currentRole} Mode
+              </button>
+            </div>
             <p className="text-sm text-neutral-400">Manage memberships, gate access, and real-time billing</p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {currentRole === 'owner' && (
+            <Link
+              href="/analytics"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
+            >
+              <BarChart3 className="w-4 h-4 text-emerald-400" /> Analytics
+            </Link>
+          )}
+          <Link
+            href="/leads"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
+          >
+            <Target className="w-4 h-4 text-amber-400" /> Leads CRM
+          </Link>
           <Link
             href="/plans"
             className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
           >
-            <Tag className="w-4 h-4 text-emerald-400" /> Packages
+            <Tag className="w-4 h-4 text-purple-400" /> Packages
           </Link>
           <Link
             href="/attendance"
@@ -289,7 +377,7 @@ export default function GymDashboard() {
             className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
             title="Download CSV"
           >
-            <Download className="w-4 h-4" /> Export CSV
+            <Download className="w-4 h-4" /> CSV
           </button>
           <Link
             href="/scan"
@@ -410,7 +498,7 @@ export default function GymDashboard() {
           </form>
         </div>
 
-        {/* Member Table with Invoices Action */}
+        {/* Member Table */}
         <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-xs font-semibold">
@@ -499,7 +587,6 @@ export default function GymDashboard() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* View Tax Receipt */}
                             <button
                               onClick={() => viewLatestInvoice(member.id)}
                               title="View / Print Tax Receipt"
@@ -508,7 +595,6 @@ export default function GymDashboard() {
                               <FileText className="w-3.5 h-3.5 text-blue-400" />
                             </button>
 
-                            {/* +30 Days Renewal */}
                             <button
                               disabled={isProcessing}
                               onClick={() => renewMember(member)}
@@ -519,7 +605,6 @@ export default function GymDashboard() {
                               +30D
                             </button>
 
-                            {/* WhatsApp Reminder + Direct UPI Link */}
                             {isExpired && (
                               <button
                                 onClick={() => sendWhatsAppReminder(member)}
@@ -530,15 +615,16 @@ export default function GymDashboard() {
                               </button>
                             )}
 
-                            {/* Delete */}
-                            <button
-                              disabled={isProcessing}
-                              onClick={() => deleteMember(member)}
-                              title="Delete Member"
-                              className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg transition disabled:opacity-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {currentRole === 'owner' && (
+                              <button
+                                disabled={isProcessing}
+                                onClick={() => deleteMember(member)}
+                                title="Delete Member"
+                                className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg transition disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
