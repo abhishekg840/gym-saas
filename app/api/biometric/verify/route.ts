@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 
+// Browser me test karne ke liye GET method
+export async function GET() {
+  return NextResponse.json({
+    status: 'online',
+    message: 'Biometric Cloud Gateway Active. Ready for POST verification from Raspberry Pi.',
+  });
+}
+
+// Raspberry Pi se fingerprint verify karne ke liye POST method
 export async function POST(req: Request) {
   try {
     const { biometric_id } = await req.json();
@@ -13,7 +22,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Database me find karo kaunsa member is fingerprint ID se linked hai
+    // 1. Fetch member linked to this fingerprint template ID
     const { data: member, error } = await supabase
       .from('members')
       .select('id, full_name, phone, membership_end, status')
@@ -35,7 +44,6 @@ export async function POST(req: Request) {
     const isExpired = new Date(member.membership_end) < new Date();
 
     if (isExpired) {
-      // Expired entry log karo
       await supabase.from('attendances').insert([
         { member_id: member.id, method: 'biometric', status: 'blocked_expired' },
       ]);
@@ -48,12 +56,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Active member: Attendance mark karo
+    // 3. Mark Granted Attendance
     await supabase.from('attendances').insert([
       { member_id: member.id, method: 'biometric', status: 'granted' },
     ]);
 
-    // 4. WhatsApp greeting trigger karo (background)
+    // 4. Trigger WhatsApp Greeting
     sendWhatsAppNotification({
       phone: member.phone,
       message: `Welcome to the gym, ${member.full_name}! 💪 Your biometric attendance has been recorded.`,
