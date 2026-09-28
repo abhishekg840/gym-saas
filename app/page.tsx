@@ -20,7 +20,8 @@ import {
   BarChart3,
   Lock,
   Unlock,
-  Target
+  Target,
+  Fingerprint
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,6 +38,7 @@ interface Member {
   phone: string;
   email?: string;
   emergency_contact?: string;
+  biometric_id?: number | null;
   membership_end: string;
   status: string;
   amount_paid?: number;
@@ -51,7 +53,6 @@ export default function GymDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'expired'>('all');
   
-  // RBAC Role State ('reception' or 'owner')
   const [currentRole, setCurrentRole] = useState<'owner' | 'reception'>('owner');
   const [pinPrompt, setPinPrompt] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
@@ -61,6 +62,7 @@ export default function GymDashboard() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
+  const [biometricId, setBiometricId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [amountPaid, setAmountPaid] = useState('');
   const [loading, setLoading] = useState(false);
@@ -116,6 +118,7 @@ export default function GymDashboard() {
           phone: phone.trim(),
           email: email.trim() || null,
           emergency_contact: emergencyPhone.trim() || null,
+          biometric_id: biometricId ? parseInt(biometricId) : null,
           plan_id: selectedPlanId || null,
           amount_paid: feeAmount,
           membership_end: endDate.toISOString().split('T')[0],
@@ -139,6 +142,7 @@ export default function GymDashboard() {
       setPhone('');
       setEmail('');
       setEmergencyPhone('');
+      setBiometricId('');
       fetchMembers();
     } else {
       alert(memberError?.message || 'Error enrolling member');
@@ -225,12 +229,12 @@ export default function GymDashboard() {
   function exportToCSV() {
     if (members.length === 0) return alert('No members to export.');
 
-    const headers = ['Full Name', 'Phone', 'Email', 'Emergency Contact', 'Plan', 'Expiry Date', 'Status', 'Fee Paid'];
+    const headers = ['Full Name', 'Phone', 'Email', 'Biometric ID', 'Plan', 'Expiry Date', 'Status', 'Fee Paid'];
     const rows = members.map(m => [
       `"${m.full_name}"`,
       `"${m.phone}"`,
       `"${m.email || ''}"`,
-      `"${m.emergency_contact || ''}"`,
+      `"${m.biometric_id || 'N/A'}"`,
       `"${m.plans?.name || 'Custom'}"`,
       `"${m.membership_end}"`,
       `"${new Date(m.membership_end) < new Date() ? 'Expired' : 'Active'}"`,
@@ -273,7 +277,8 @@ export default function GymDashboard() {
     const isExpired = new Date(member.membership_end) < new Date();
     const matchesSearch = 
       member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.phone.includes(searchTerm);
+      member.phone.includes(searchTerm) ||
+      (member.biometric_id && member.biometric_id.toString().includes(searchTerm));
 
     if (!matchesSearch) return false;
     if (filterTab === 'active') return !isExpired;
@@ -283,7 +288,6 @@ export default function GymDashboard() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
-      {/* Role PIN Dialog Modal */}
       {pinPrompt && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl w-full max-w-xs text-center">
@@ -320,7 +324,7 @@ export default function GymDashboard() {
         </div>
       )}
 
-      {/* Top Header */}
+      {/* Header */}
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-6 mb-8 gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
@@ -341,7 +345,7 @@ export default function GymDashboard() {
                 {currentRole} Mode
               </button>
             </div>
-            <p className="text-sm text-neutral-400">Manage memberships, gate access, and real-time billing</p>
+            <p className="text-sm text-neutral-400">Manage memberships, biometric IDs, and real-time billing</p>
           </div>
         </div>
 
@@ -375,7 +379,6 @@ export default function GymDashboard() {
           <button
             onClick={exportToCSV}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-sm transition"
-            title="Download CSV"
           >
             <Download className="w-4 h-4" /> CSV
           </button>
@@ -423,7 +426,7 @@ export default function GymDashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Enroll Member Form */}
+        {/* Enroll Form */}
         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl h-fit">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Plus className="w-5 h-5 text-emerald-400" /> New Enrollment
@@ -479,14 +482,26 @@ export default function GymDashboard() {
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Emergency Ph</label>
+                <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                  <Fingerprint className="w-3 h-3 text-cyan-400" /> Biometric ID
+                </label>
                 <input
-                  value={emergencyPhone}
-                  onChange={e => setEmergencyPhone(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 text-white font-mono"
+                  type="number"
+                  value={biometricId}
+                  onChange={e => setBiometricId(e.target.value)}
+                  placeholder="e.g. 1"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-cyan-500 text-white font-mono"
                 />
               </div>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Emergency Ph</label>
+              <input
+                value={emergencyPhone}
+                onChange={e => setEmergencyPhone(e.target.value)}
+                placeholder="Optional"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 text-white font-mono"
+              />
             </div>
             <button
               type="submit"
@@ -533,7 +548,7 @@ export default function GymDashboard() {
               <input
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search member or phone..."
+                placeholder="Search name, phone, bio ID..."
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -543,17 +558,18 @@ export default function GymDashboard() {
             <table className="w-full text-left text-sm text-neutral-300">
               <thead className="bg-neutral-950 text-neutral-400 uppercase text-xs">
                 <tr>
-                  <th className="px-6 py-4">Member</th>
-                  <th className="px-6 py-4">Package</th>
-                  <th className="px-6 py-4">Expiry Date</th>
-                  <th className="px-6 py-4">Gate Access</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-5 py-4">Member</th>
+                  <th className="px-4 py-4">Biometric</th>
+                  <th className="px-4 py-4">Package</th>
+                  <th className="px-4 py-4">Expiry</th>
+                  <th className="px-4 py-4">Gate</th>
+                  <th className="px-5 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
                 {filteredMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                    <td colSpan={6} className="px-6 py-8 text-center text-neutral-500">
                       No matching member records found.
                     </td>
                   </tr>
@@ -564,32 +580,41 @@ export default function GymDashboard() {
 
                     return (
                       <tr key={member.id} className="hover:bg-neutral-800/40 transition">
-                        <td className="px-6 py-4">
+                        <td className="px-5 py-4">
                           <p className="font-medium text-white">{member.full_name}</p>
                           <p className="font-mono text-xs text-neutral-400">{member.phone}</p>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-4">
+                          {member.biometric_id ? (
+                            <span className="inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                              <Fingerprint className="w-3 h-3" /> #{member.biometric_id}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-neutral-500">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
                           <span className="text-xs px-2.5 py-1 rounded-md bg-neutral-800 text-neutral-300 border border-neutral-700">
-                            {member.plans?.name || 'Custom Plan'}
+                            {member.plans?.name || 'Custom'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-mono text-xs">{member.membership_end}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-4 font-mono text-xs">{member.membership_end}</td>
+                        <td className="px-4 py-4">
                           {isExpired ? (
-                            <span className="px-2.5 py-1 text-xs rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">
+                            <span className="px-2.5 py-0.5 text-xs rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">
                               Blocked
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                            <span className="px-2.5 py-0.5 text-xs rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
                               Allowed
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => viewLatestInvoice(member.id)}
-                              title="View / Print Tax Receipt"
+                              title="Print Receipt"
                               className="p-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 rounded-lg transition"
                             >
                               <FileText className="w-3.5 h-3.5 text-blue-400" />
@@ -598,8 +623,8 @@ export default function GymDashboard() {
                             <button
                               disabled={isProcessing}
                               onClick={() => renewMember(member)}
-                              title="Extend 30 Days & Invoiced"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs rounded-lg transition disabled:opacity-50"
+                              title="Extend 30 Days"
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs rounded-lg transition disabled:opacity-50"
                             >
                               <RotateCw className={`w-3 h-3 text-emerald-400 ${isProcessing ? 'animate-spin' : ''}`} />
                               +30D
@@ -608,7 +633,7 @@ export default function GymDashboard() {
                             {isExpired && (
                               <button
                                 onClick={() => sendWhatsAppReminder(member)}
-                                title="Send WhatsApp Fee & Direct UPI Link"
+                                title="Send WhatsApp UPI Link"
                                 className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg transition"
                               >
                                 <Send className="w-3.5 h-3.5" />
