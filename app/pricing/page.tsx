@@ -1,437 +1,435 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import {
   ArrowRight,
+  ArrowUpRight,
   Check,
-  Fingerprint,
   Menu,
   X,
-  ShieldCheck,
-  BarChart3,
-  Users,
-  CreditCard,
-  MessageCircle,
-  Sparkles,
-  QrCode,
-  Zap,
-  Clock,
   PhoneCall,
+  MessageCircle,
 } from 'lucide-react';
-import { useState } from 'react';
 
 const WHATSAPP = '9569272339';
+const wa = (msg: string) =>
+  `https://wa.me/91${WHATSAPP}?text=${encodeURIComponent(msg)}`;
 
-const wa = (message: string) =>
-  `https://wa.me/91${WHATSAPP}?text=${encodeURIComponent(message)}`;
-
-export default function PricingLandingPage() {
+export default function GymLandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   return (
-    <main className="min-h-screen bg-[#fafafa] text-neutral-900 font-sans selection:bg-emerald-500 selection:text-white">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white text-xs font-semibold tracking-wide py-2.5 px-4 text-center shadow-sm">
-        <span className="inline-flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 animate-pulse text-emerald-200" />
-          Flat 14-Day Free Trial for Gym Owners in India · No Credit Card Required
-        </span>
-      </div>
+    <main className="min-h-screen bg-[#FBFBFA] text-[#191919] selection:bg-[#191919] selection:text-[#FBFBFA] relative overflow-hidden">
+      {/* Editorial Top Border Accent */}
+      <div className="h-1.5 w-full bg-gradient-to-r from-emerald-600 via-teal-500 to-neutral-900" />
 
-      {/* NAVBAR */}
-      <header className="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-neutral-200/80 transition-all">
+      {/* TOP HEADER */}
+      <header className="border-b border-neutral-200/80 bg-[#FBFBFA]/90 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-black text-lg shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-lg bg-[#191919] text-[#FBFBFA] font-black text-xs flex items-center justify-center tracking-tighter">
               GF
-            </div>
-            <div>
-              <div className="font-extrabold text-lg tracking-tight text-neutral-900">
-                GlitchFiesta <span className="text-emerald-600">Gym OS</span>
-              </div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-neutral-600">
-                Smart Gym Management
-              </div>
+            </span>
+            <div className="leading-tight">
+              <span className="font-bold text-base tracking-tight block">GlitchFiesta Gym</span>
+              <span className="text-[10px] uppercase tracking-widest text-neutral-400 block font-medium">Management Suite</span>
             </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-neutral-600">
-            <a href="#features" className="hover:text-emerald-600 transition">Features</a>
-            <a href="#comparison" className="hover:text-emerald-600 transition">Why Us</a>
-            <a href="#pricing" className="hover:text-emerald-600 transition">Pricing Plans</a>
-            <Link href="/" className="hover:text-emerald-600 transition">Staff Dashboard</Link>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-neutral-600">
+            <a href="#features" className="hover:text-black transition">Features</a>
+            <a href="#flow" className="hover:text-black transition">How It Works</a>
+            <a href="#pricing" className="hover:text-black transition">Pricing</a>
+            <Link href="/" className="hover:text-black transition text-neutral-500">Live Dashboard</Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
             <a
-              href={wa('Hi Abhishek, I would like to schedule a quick demo of GlitchFiesta Gym OS.')}
+              href={wa('Hi Abhishek, I would like to see a quick demo of GlitchFiesta Gym software.')}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-full shadow-md shadow-emerald-600/20 hover:shadow-lg transition-all active:scale-95"
+              className="inline-flex items-center gap-2 bg-[#191919] hover:bg-neutral-800 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition"
             >
-              <MessageCircle className="w-4 h-4" />
-              Book Live Demo
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+              Schedule Demo
             </a>
           </div>
 
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 text-neutral-700 hover:text-neutral-900 rounded-xl"
+            className="md:hidden p-2 text-neutral-700"
             aria-label="Toggle menu"
           >
-            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
 
         {menuOpen && (
-          <div className="md:hidden bg-white border-b border-neutral-200 px-6 py-4 flex flex-col gap-4 shadow-xl">
-            <a href="#features" onClick={() => setMenuOpen(false)} className="font-medium text-neutral-700">Features</a>
-            <a href="#comparison" onClick={() => setMenuOpen(false)} className="font-medium text-neutral-700">Why Us</a>
-            <a href="#pricing" onClick={() => setMenuOpen(false)} className="font-medium text-neutral-700">Pricing</a>
+          <div className="md:hidden border-t border-neutral-200 bg-[#FBFBFA] px-6 py-5 flex flex-col gap-4 text-sm font-medium">
+            <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
+            <a href="#flow" onClick={() => setMenuOpen(false)}>How It Works</a>
+            <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
             <a
-              href={wa('Hi Abhishek, I want a demo of GlitchFiesta Gym OS.')}
+              href={wa('Hi Abhishek, I want to book a demo of GlitchFiesta Gym software.')}
               target="_blank"
               rel="noreferrer"
-              className="bg-emerald-600 text-white text-center py-2.5 rounded-xl font-bold text-sm shadow"
+              className="bg-[#191919] text-white text-center py-2.5 rounded-lg text-xs font-semibold"
             >
-              Book Live Demo
+              WhatsApp Support (+91 9569272339)
             </a>
           </div>
         )}
       </header>
 
-      {/* HERO SECTION WITH SUBTLE BACKGROUND GYM IMAGE */}
-      <section className="relative overflow-hidden pt-12 pb-24 border-b border-neutral-200/70">
-        {/* Soft Background Gym Photo with Gradient Masks */}
-        <div 
-          className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none opacity-[0.07] filter grayscale"
-          style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1920&auto=format&fit=crop')`,
-          }}
-        />
-        <div className="absolute inset-0 z-0 bg-gradient-to-b from-white via-transparent to-[#fafafa] pointer-events-none" />
+      {/* HERO: Graphic Silhouette & Asymmetric Composition */}
+      <section className="relative pt-16 pb-20 border-b border-neutral-200">
+        {/* Haikei Fluid Curvature Graphic Layer in composition */}
+        <div className="absolute right-0 top-0 bottom-0 w-full lg:w-1/2 pointer-events-none overflow-hidden opacity-90">
+          <svg
+            className="absolute -right-20 -top-12 w-[680px] h-[680px]"
+            viewBox="0 0 800 800"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M718.5 244.5C768 335.5 733.5 456 673 543C612.5 630 526 683.5 425 718C324 752.5 208.5 768 126 718C43.5 668 -6 552.5 2 443.5C10 334.5 75.5 232 158 152.5C240.5 73 340 16.5 444.5 10C549 3.5 669 153.5 718.5 244.5Z"
+              fill="#F0EFEA"
+            />
+            <path
+              d="M660 300C700 375 670 475 620 545C570 615 500 655 420 680C340 705 250 715 185 675C120 635 80 545 85 455C90 365 140 280 205 215C270 150 350 105 435 100C520 95 620 225 660 300Z"
+              fill="#E8F5E9"
+              fillOpacity="0.4"
+            />
+          </svg>
+        </div>
 
-        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-6 shadow-sm">
-            <Zap className="w-3.5 h-3.5 text-emerald-600" />
-            Designed for Gym Owners, Not IT Technicians
-          </div>
-
-          <h1 className="text-4xl sm:text-6xl font-black text-neutral-900 tracking-tight leading-[1.12] mb-6">
-            Manage your gym without <br className="hidden sm:inline" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700">
-              unpaid fees, fake check-ins & paperwork.
+        <div className="max-w-6xl mx-auto px-6 relative z-10">
+          <div className="max-w-2xl">
+            <span className="inline-block text-xs font-semibold text-emerald-800 bg-emerald-100/70 border border-emerald-300/60 px-3 py-1 rounded-md mb-6">
+              Complete Front-Desk & Gate Automation
             </span>
-          </h1>
 
-          <p className="text-neutral-600 text-base sm:text-xl max-w-2xl mx-auto font-normal leading-relaxed mb-10">
-            Smart QR and Biometric access control, automatic WhatsApp fee reminders with direct UPI payment links, and real-time attendance logs — all in one simple mobile-first app.
-          </p>
+            <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.08] text-[#151515]">
+              The effortless operating system for modern gyms.
+            </h1>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href={wa('Hi Abhishek, I want to start my 14-day free trial of GlitchFiesta Gym OS.')}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/25 hover:shadow-2xl transition-all text-base flex items-center justify-center gap-2.5 active:scale-95"
-            >
-              Start Free 14-Day Trial
-              <ArrowRight className="w-4 h-4" />
-            </a>
-
-            <Link
-              href="/scan"
-              target="_blank"
-              className="w-full sm:w-auto px-7 py-4 bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 font-bold rounded-2xl shadow-sm transition-all text-base flex items-center justify-center gap-2"
-            >
-              <QrCode className="w-4 h-4 text-emerald-600" />
-              Try Live Scanner Demo
-            </Link>
-          </div>
-
-          {/* Trust Highlights */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto mt-16 text-left">
-            {[
-              { title: 'Zero Per-SMS Cost', desc: 'WhatsApp reminders directly on members phones' },
-              { title: 'Anti-Proxy QR', desc: 'Auto-rotating 30s QR codes stop proxy attendance' },
-              { title: 'Direct UPI Pay', desc: '100% money in your bank, 0% gateway cuts' },
-              { title: 'Biometric Ready', desc: 'Plug and play with budget fingerprint hardware' },
-            ].map((item, idx) => (
-              <div key={idx} className="bg-white/80 backdrop-blur-sm border border-neutral-200/90 p-4 rounded-2xl shadow-sm">
-                <p className="text-xs font-bold text-emerald-700">{item.title}</p>
-                <p className="text-[11px] text-neutral-500 mt-1 leading-snug">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CORE WORKFLOW HIGHLIGHTS (PICTURE-BACKED CARD SECTION) */}
-      <section id="features" className="py-20 max-w-6xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="text-xs font-bold uppercase tracking-widest text-emerald-600">Complete Control</span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 tracking-tight mt-2">
-            Everything your gym needs on a single screen
-          </h2>
-          <p className="text-neutral-500 text-sm mt-3">
-            Replace notebooks, multiple WhatsApp groups, and clunky legacy software with one effortless workflow.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Card 1 */}
-          <div className="group relative bg-white border border-neutral-200 rounded-3xl p-7 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-6">
-                <QrCode className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-neutral-900 mb-2">Anti-Screenshot QR Pass</h3>
-              <p className="text-neutral-600 text-xs leading-relaxed">
-                Members scan their unique pass at the gate. The QR code automatically refreshes every 30 seconds so friends cannot screenshot and proxy entry.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-neutral-100 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-              <Check className="w-4 h-4" /> Blocks expired members at entry
-            </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="group relative bg-white border border-neutral-200 rounded-3xl p-7 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
-                <MessageCircle className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-neutral-900 mb-2">Automated WhatsApp Reminders</h3>
-              <p className="text-neutral-600 text-xs leading-relaxed">
-                Sends polite payment reminders 3 days before expiry with your UPI link, plus automatic motivational nudges to members absent for more than 5 days.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-neutral-100 flex items-center gap-1.5 text-xs font-semibold text-blue-600">
-              <Check className="w-4 h-4" /> Recovers 20-30% lost renewals
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="group relative bg-white border border-neutral-200 rounded-3xl p-7 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-6">
-                <BarChart3 className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-neutral-900 mb-2">Rush Hours & Cash Analytics</h3>
-              <p className="text-neutral-600 text-xs leading-relaxed">
-                Know exactly when your gym is packed (Morning vs Evening rush) and track all cash, UPI collections, and pending balances in one neat tab.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-neutral-100 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
-              <Check className="w-4 h-4" /> Owner-only lock with PIN protection
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* REAL COMPARISON TABLE (US VS FITBOAT / LEGACY) */}
-      <section id="comparison" className="py-20 bg-neutral-100/70 border-y border-neutral-200">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="text-center mb-14">
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-600">The Hard Truth</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 tracking-tight mt-2">
-              Why gym owners ditch legacy softwares
-            </h2>
-            <p className="text-neutral-500 text-sm mt-2">
-              See what you actually save compared to expensive SMS-based ERP tools like FitBoat.
+            <p className="mt-6 text-base sm:text-lg text-neutral-600 leading-relaxed font-normal">
+              Manage member enrollments, gate check-ins, automated WhatsApp renewal reminders, and tax billing from a single fast dashboard.
             </p>
-          </div>
 
-          <div className="bg-white rounded-3xl border border-neutral-200/90 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-200 bg-neutral-50/80 text-xs text-neutral-500 uppercase tracking-wider">
-                    <th className="py-4 px-6">Feature</th>
-                    <th className="py-4 px-6 text-emerald-700 font-bold bg-emerald-50/50">GlitchFiesta Gym OS</th>
-                    <th className="py-4 px-6 text-neutral-500">Traditional Software (FitBoat)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 text-neutral-700">
-                  <tr>
-                    <td className="py-4 px-6 font-semibold text-neutral-900">WhatsApp Notification Fees</td>
-                    <td className="py-4 px-6 bg-emerald-50/30 text-emerald-700 font-bold">₹0 (Zero cost direct pings)</td>
-                    <td className="py-4 px-6 text-neutral-500">₹0.35 to ₹0.60 per message</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 px-6 font-semibold text-neutral-900">Biometric Machine Cost</td>
-                    <td className="py-4 px-6 bg-emerald-50/30 text-emerald-700 font-bold">Affordable Pi/Optical Sensor</td>
-                    <td className="py-4 px-6 text-neutral-500">₹15,000 – ₹25,000 proprietary machines</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 px-6 font-semibold text-neutral-900">UPI Renewal Fees</td>
-                    <td className="py-4 px-6 bg-emerald-50/30 text-emerald-700 font-bold">0% Cut (Direct to your QR)</td>
-                    <td className="py-4 px-6 text-neutral-500">2% to 3% payment gateway charges</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 px-6 font-semibold text-neutral-900">Proxy Attendance Protection</td>
-                    <td className="py-4 px-6 bg-emerald-50/30 text-emerald-700 font-bold">Live 30-sec Rotating Passcode</td>
-                    <td className="py-4 px-6 text-neutral-500">Static codes easily shared on WhatsApp</td>
-                  </tr>
-                  <tr>
-                    <td className="py-4 px-6 font-semibold text-neutral-900">Inactive Member Retention</td>
-                    <td className="py-4 px-6 bg-emerald-50/30 text-emerald-700 font-bold">Auto 5-Day WhatsApp Nudges</td>
-                    <td className="py-4 px-6 text-neutral-500">Manual calls or no tracking</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 mt-8">
+              <a
+                href={wa('Hi Abhishek, I want to start a 14-day trial of GlitchFiesta Gym OS.')}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 bg-[#191919] hover:bg-neutral-800 text-white px-7 py-3.5 rounded-xl font-semibold text-sm transition shadow-sm"
+              >
+                <span>Start 14-Day Free Trial</span>
+                <ArrowRight className="w-4 h-4 text-emerald-400" />
+              </a>
+
+              <Link
+                href="/scan"
+                target="_blank"
+                className="inline-flex items-center justify-center gap-2 border border-neutral-300 hover:border-neutral-900 bg-white px-6 py-3.5 rounded-xl font-medium text-sm transition"
+              >
+                <span>Live Scanner View</span>
+                <ArrowUpRight className="w-4 h-4 text-neutral-400" />
+              </Link>
+            </div>
+
+            <div className="mt-10 pt-6 border-t border-neutral-200 grid grid-cols-3 gap-6 text-neutral-600 text-xs">
+              <div>
+                <p className="font-bold text-neutral-900 text-sm">30-Sec Pass</p>
+                <p className="text-neutral-500 mt-0.5">Anti-proxy digital QR</p>
+              </div>
+              <div>
+                <p className="font-bold text-neutral-900 text-sm">Direct UPI</p>
+                <p className="text-neutral-500 mt-0.5">No gateway fee deductions</p>
+              </div>
+              <div>
+                <p className="font-bold text-neutral-900 text-sm">Biometric</p>
+                <p className="text-neutral-500 mt-0.5">Hardware & turnstile ready</p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* PRICING PLANS */}
+      {/* SECTION 2: EDITORIAL FEATURES LIST (NO GENERIC CARDS) */}
+      <section id="features" className="py-20 max-w-6xl mx-auto px-6">
+        <div className="border-b border-neutral-300 pb-4 mb-12 flex justify-between items-end">
+          <div>
+            <span className="text-xs uppercase tracking-widest text-emerald-700 font-bold block mb-1">
+              Core Capabilities
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-neutral-900">
+              Built specifically for gym floor realities
+            </h2>
+          </div>
+          <span className="hidden sm:inline text-xs text-neutral-400 font-medium">01 — 04</span>
+        </div>
+
+        <div className="divide-y divide-neutral-200">
+          {/* Item 1 */}
+          <div className="py-10 grid md:grid-cols-12 gap-6 items-baseline">
+            <div className="md:col-span-1 text-sm font-bold text-neutral-400">01</div>
+            <div className="md:col-span-4">
+              <h3 className="text-xl font-bold text-neutral-900">Anti-Proxy Member QR Pass</h3>
+              <p className="text-xs text-emerald-700 font-medium mt-1">Stops shared screenshot entries</p>
+            </div>
+            <div className="md:col-span-7 text-sm text-neutral-600 leading-relaxed">
+              Members access their pass through their phone without installing heavy apps. The access token rotates dynamically every 30 seconds. Expired members are automatically blocked with a distinct alert chime at the reception.
+            </div>
+          </div>
+
+          {/* Item 2 */}
+          <div className="py-10 grid md:grid-cols-12 gap-6 items-baseline">
+            <div className="md:col-span-1 text-sm font-bold text-neutral-400">02</div>
+            <div className="md:col-span-4">
+              <h3 className="text-xl font-bold text-neutral-900">Automated WhatsApp Reminders</h3>
+              <p className="text-xs text-emerald-700 font-medium mt-1">Timely alerts without per-SMS bills</p>
+            </div>
+            <div className="md:col-span-7 text-sm text-neutral-600 leading-relaxed">
+              Your system sends automated payment reminders 3 days before membership expiration with your direct UPI payment link. When active members stay absent for 5 days, it automatically sends a friendly motivational check-in.
+            </div>
+          </div>
+
+          {/* Item 3 */}
+          <div className="py-10 grid md:grid-cols-12 gap-6 items-baseline">
+            <div className="md:col-span-1 text-sm font-bold text-neutral-400">03</div>
+            <div className="md:col-span-4">
+              <h3 className="text-xl font-bold text-neutral-900">Biometric & Turnstile Integration</h3>
+              <p className="text-xs text-emerald-700 font-medium mt-1">Compatible with physical gym gates</p>
+            </div>
+            <div className="md:col-span-7 text-sm text-neutral-600 leading-relaxed">
+              Connect biometric optical fingerprint sensors and turnstile gates seamlessly with our verification endpoints. Members can enter either using their digital QR pass or their enrolled fingerprint ID.
+            </div>
+          </div>
+
+          {/* Item 4 */}
+          <div className="py-10 grid md:grid-cols-12 gap-6 items-baseline">
+            <div className="md:col-span-1 text-sm font-bold text-neutral-400">04</div>
+            <div className="md:col-span-4">
+              <h3 className="text-xl font-bold text-neutral-900">Hourly Rush & Cash Analytics</h3>
+              <p className="text-xs text-emerald-700 font-medium mt-1">Protected with Owner PIN</p>
+            </div>
+            <div className="md:col-span-7 text-sm text-neutral-600 leading-relaxed">
+              View morning vs evening traffic heatmaps to optimize floor trainer allocation. Front-desk staff only see check-in flows, while financial collections and package editing remain locked under your private Owner PIN.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 3: HOW IT WORKS (SIMPLE TIMELINE) */}
+      <section id="flow" className="py-16 bg-[#F3F2EE] border-y border-neutral-200">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="max-w-xl mb-12">
+            <span className="text-xs uppercase tracking-widest text-neutral-500 font-bold block mb-1">
+              Onboarding
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-neutral-900">
+              Live in under 15 minutes
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white p-7 rounded-2xl border border-neutral-200/80 shadow-sm">
+              <span className="text-xs font-mono font-bold text-neutral-400 block mb-3">STEP 01</span>
+              <h3 className="text-base font-bold text-neutral-900 mb-2">Import Your Members</h3>
+              <p className="text-xs text-neutral-600 leading-relaxed">
+                Send us your member register or Excel sheet. We set up your gym details, member records, and packages immediately.
+              </p>
+            </div>
+
+            <div className="bg-white p-7 rounded-2xl border border-neutral-200/80 shadow-sm">
+              <span className="text-xs font-mono font-bold text-neutral-400 block mb-3">STEP 02</span>
+              <h3 className="text-base font-bold text-neutral-900 mb-2">Place Your Front Kiosk</h3>
+              <p className="text-xs text-neutral-600 leading-relaxed">
+                Open the scanner page on any tablet, old laptop, or desk monitor. Members can immediately begin checking in.
+              </p>
+            </div>
+
+            <div className="bg-white p-7 rounded-2xl border border-neutral-200/80 shadow-sm">
+              <span className="text-xs font-mono font-bold text-neutral-400 block mb-3">STEP 03</span>
+              <h3 className="text-base font-bold text-neutral-900 mb-2">Autopilot Collections</h3>
+              <p className="text-xs text-neutral-600 leading-relaxed">
+                Renewals, WhatsApp reminders, and receipts run automatically while you focus on training and acquiring new members.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 4: PRICING (HONEST & MINIMAL) */}
       <section id="pricing" className="py-24 max-w-6xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="text-xs font-bold uppercase tracking-widest text-emerald-600">Transparent Pricing</span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 tracking-tight mt-2">
-            Affordable monthly plans. Cancel anytime.
-          </h2>
-          <p className="text-neutral-500 text-sm mt-2">
-            No hidden setup fees, no per-member penalties, no annual locked contracts.
-          </p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6 border-b border-neutral-200 pb-6">
+          <div>
+            <span className="text-xs uppercase tracking-widest text-emerald-700 font-bold block mb-1">
+              Subscriptions
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900">
+              Simple pricing for every gym stage
+            </h2>
+          </div>
+
+          <div className="flex items-center bg-neutral-200/70 p-1 rounded-lg text-xs font-semibold text-neutral-600">
+            <button
+              onClick={() => setBillingCycle('monthly')}
+              className={`px-3 py-1.5 rounded-md transition ${
+                billingCycle === 'monthly' ? 'bg-white text-neutral-900 shadow-sm' : ''
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingCycle('yearly')}
+              className={`px-3 py-1.5 rounded-md transition ${
+                billingCycle === 'yearly' ? 'bg-white text-neutral-900 shadow-sm' : ''
+              }`}
+            >
+              Yearly (Save 20%)
+            </button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 items-stretch">
-          {/* Plan 1 */}
-          <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm flex flex-col justify-between hover:border-neutral-300 transition-all">
+          {/* Starter Plan */}
+          <div className="border border-neutral-200 bg-white rounded-2xl p-7 flex flex-col justify-between">
             <div>
-              <h3 className="text-lg font-bold text-neutral-900">Starter Club</h3>
-              <p className="text-neutral-500 text-xs mt-1">For single-floor local gyms & fitness studios</p>
-              <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-4xl font-black text-neutral-900">₹799</span>
-                <span className="text-xs text-neutral-500 font-medium">/ month</span>
+              <h3 className="text-lg font-bold text-neutral-900">Starter Gym</h3>
+              <p className="text-xs text-neutral-500 mt-1">For single-floor clubs & boutique studios</p>
+              <div className="my-6">
+                <span className="text-4xl font-black text-neutral-900">
+                  ₹{billingCycle === 'monthly' ? '799' : '649'}
+                </span>
+                <span className="text-xs text-neutral-500"> /month</span>
               </div>
-              <ul className="mt-8 space-y-3.5 text-xs text-neutral-600">
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Up to 150 Active Members</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Dynamic Anti-Screenshot QR Scanner</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Member Self-Service Pass & UPI Portal</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Auto PDF Invoices & Receipts</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Receptionist vs Owner Staff PIN Mode</li>
+              <ul className="space-y-3 text-xs text-neutral-700">
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Up to 150 active members</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Dynamic QR kiosk scanner</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Member self-portal with instant pass</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> PDF billing & tax invoice generator</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Reception vs Owner access control</li>
               </ul>
             </div>
             <a
-              href={wa('Hi Abhishek, I would like to get started with the Starter Gym OS plan (₹799/mo).')}
+              href={wa('Hi Abhishek, I would like to get started with the Starter Gym plan.')}
               target="_blank"
               rel="noreferrer"
-              className="mt-8 w-full py-3.5 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-bold text-xs rounded-xl text-center transition"
+              className="mt-8 w-full py-3 rounded-xl border border-neutral-300 hover:border-neutral-900 text-neutral-900 font-semibold text-xs text-center transition"
             >
-              Choose Starter
+              Get Started
             </a>
           </div>
 
-          {/* Plan 2 - POPULAR */}
-          <div className="relative bg-white border-2 border-emerald-500 rounded-3xl p-8 shadow-xl shadow-emerald-500/10 flex flex-col justify-between scale-105 z-10">
-            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[10px] uppercase font-black tracking-widest px-3.5 py-1 rounded-full shadow-md">
+          {/* Pro Plan (Standard Recommended) */}
+          <div className="border-2 border-[#191919] bg-white rounded-2xl p-7 flex flex-col justify-between shadow-xl relative">
+            <span className="absolute -top-3 left-6 bg-[#191919] text-white text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded">
               Most Popular
             </span>
             <div>
               <h3 className="text-lg font-bold text-neutral-900">Pro Fitness OS</h3>
-              <p className="text-neutral-500 text-xs mt-1">Complete automated retention & hardware control</p>
-              <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-4xl font-black text-emerald-600">₹1,499</span>
-                <span className="text-xs text-neutral-500 font-medium">/ month</span>
+              <p className="text-xs text-neutral-500 mt-1">Full access automation & retention</p>
+              <div className="my-6">
+                <span className="text-4xl font-black text-emerald-700">
+                  ₹{billingCycle === 'monthly' ? '1,499' : '1,199'}
+                </span>
+                <span className="text-xs text-neutral-500"> /month</span>
               </div>
-              <ul className="mt-8 space-y-3.5 text-xs text-neutral-700 font-medium">
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> <strong>Unlimited Members</strong></li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Auto WhatsApp 3-Day Expiry Alerts</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> 5-Day Inactive Member Retention Nudges</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Raspberry Pi Biometric Fingerprint API</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Peak Hour Rush Analytics & Heatmap</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Leads CRM & Inquiry Follow-ups</li>
+              <ul className="space-y-3 text-xs text-neutral-800 font-medium">
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> <strong>Unlimited member records</strong></li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Automated 3-day advance WhatsApp expiry alerts</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> 5-day inactive member retention pings</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Biometric optical scanner integration</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Peak-hour traffic breakdown analytics</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Inquiry & lead CRM management</li>
               </ul>
             </div>
             <a
-              href={wa('Hi Abhishek, I want to activate the Pro Fitness OS plan (₹1,499/mo).')}
+              href={wa('Hi Abhishek, I would like to deploy the Pro Fitness OS plan.')}
               target="_blank"
               rel="noreferrer"
-              className="mt-8 w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl text-center shadow-lg shadow-emerald-600/25 transition active:scale-95"
+              className="mt-8 w-full py-3 rounded-xl bg-[#191919] hover:bg-neutral-800 text-white font-semibold text-xs text-center transition"
             >
-              Start 14-Day Free Trial
+              Start 14-Day Free Pilot
             </a>
           </div>
 
-          {/* Plan 3 */}
-          <div className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm flex flex-col justify-between hover:border-neutral-300 transition-all">
+          {/* Multi-Gym Plan */}
+          <div className="border border-neutral-200 bg-white rounded-2xl p-7 flex flex-col justify-between">
             <div>
               <h3 className="text-lg font-bold text-neutral-900">Franchise & Multi-Gym</h3>
-              <p className="text-neutral-500 text-xs mt-1">For multi-branch gym owners and chains</p>
-              <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-4xl font-black text-neutral-900">₹3,499</span>
-                <span className="text-xs text-neutral-500 font-medium">/ month</span>
+              <p className="text-xs text-neutral-500 mt-1">For multi-branch gym owners</p>
+              <div className="my-6">
+                <span className="text-4xl font-black text-neutral-900">
+                  ₹{billingCycle === 'monthly' ? '3,499' : '2,899'}
+                </span>
+                <span className="text-xs text-neutral-500"> /month</span>
               </div>
-              <ul className="mt-8 space-y-3.5 text-xs text-neutral-600">
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Up to 5 Branch Locations</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Multi-turnstile Gate Access Support</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Custom Gym Logo & Receipts Branding</li>
-                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Priority Onboarding & Phone Support</li>
+              <ul className="space-y-3 text-xs text-neutral-700">
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Up to 5 gym branch locations</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Multi-turnstile entry management</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Custom branding & receipts</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600 shrink-0" /> Priority telephone onboarding</li>
               </ul>
             </div>
             <a
               href={wa('Hi Abhishek, I want to discuss the Franchise Multi-Gym setup.')}
               target="_blank"
               rel="noreferrer"
-              className="mt-8 w-full py-3.5 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-bold text-xs rounded-xl text-center transition"
+              className="mt-8 w-full py-3 rounded-xl border border-neutral-300 hover:border-neutral-900 text-neutral-900 font-semibold text-xs text-center transition"
             >
-              Talk to Sales
+              Contact Solutions
             </a>
           </div>
         </div>
       </section>
 
-      {/* FINAL CALL TO ACTION CARD */}
-      <section className="py-20 max-w-5xl mx-auto px-6">
-        <div className="relative rounded-3xl bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 text-white p-10 sm:p-14 overflow-hidden shadow-2xl">
-          {/* Subtle gym background inside CTA card */}
-          <div 
-            className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none opacity-15"
-            style={{
-              backgroundImage: `url('https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1920&auto=format&fit=crop')`,
-            }}
-          />
-          <div className="relative z-10 max-w-xl">
-            <span className="text-xs uppercase tracking-widest font-bold text-emerald-400">Ready to Upgrade?</span>
-            <h2 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight mt-3">
-              Upgrade your gym setup in less than 10 minutes.
+      {/* FINAL DIRECT CTA */}
+      <section className="py-16 max-w-6xl mx-auto px-6">
+        <div className="bg-[#191919] text-white rounded-3xl p-8 sm:p-12 flex flex-col sm:flex-row items-center justify-between gap-8">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Ready to simplify your gym desk?
             </h2>
-            <p className="text-neutral-400 text-sm sm:text-base mt-4 leading-relaxed">
-              No tech knowledge required. We help you set up your packages, members, and QR gate scanner over a 15-minute WhatsApp call.
+            <p className="text-neutral-400 text-xs sm:text-sm mt-2 max-w-md">
+              Speak directly with our team. We set up your entire gym list and test the scanner with you over WhatsApp.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3.5 mt-8">
-              <a
-                href={wa('Hi Abhishek, I want to set up GlitchFiesta Gym OS for my gym.')}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-sm px-7 py-3.5 rounded-2xl shadow-lg shadow-emerald-500/25 transition active:scale-95"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Chat on WhatsApp Directly
-              </a>
-              <a
-                href="tel:+919569272339"
-                className="inline-flex items-center justify-center gap-2 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white font-bold text-sm px-6 py-3.5 rounded-2xl transition"
-              >
-                <PhoneCall className="w-4 h-4" />
-                Call Founder
-              </a>
-            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <a
+              href={wa('Hi Abhishek, I want to set up GlitchFiesta Gym software for my gym.')}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-xs px-6 py-3.5 rounded-xl transition"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Chat on WhatsApp
+            </a>
+            <a
+              href="tel:+919569272339"
+              className="inline-flex items-center justify-center gap-2 border border-neutral-700 hover:border-neutral-500 text-white font-medium text-xs px-5 py-3.5 rounded-xl transition"
+            >
+              <PhoneCall className="w-4 h-4" />
+              Call +91 9569272339
+            </a>
           </div>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className="border-t border-neutral-200 py-10 bg-white">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500">
-          <p>© 2026 GlitchFiesta Technologies · Built with pride in India for modern gyms</p>
+      <footer className="border-t border-neutral-200 py-8 text-neutral-500 text-xs">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p>© 2026 GlitchFiesta Technologies · Gym Management Platform</p>
           <div className="flex items-center gap-6">
             <Link href="/" className="hover:text-neutral-900 transition">Gym Dashboard</Link>
             <Link href="/scan" className="hover:text-neutral-900 transition">Kiosk Scanner</Link>
-            <a href={wa('Hi, I need support.')} target="_blank" rel="noreferrer" className="hover:text-neutral-900 transition">Support</a>
+            <a href={wa('Hi Abhishek, I need support.')} target="_blank" rel="noreferrer" className="hover:text-neutral-900 transition">
+              Direct Support
+            </a>
           </div>
         </div>
       </footer>
