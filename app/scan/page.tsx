@@ -158,6 +158,17 @@ export default function GymScanner() {
                 await supabase.from('attendances').insert([
                   { member_id: member.id, method: 'qr_geofence', status: 'granted' },
                 ]);
+
+                // Fire WhatsApp Check-in Notification in background
+                fetch('/api/notifications/checkin', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    name: member.full_name,
+                    phone: member.phone,
+                    timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                  }),
+                }).catch((err) => console.error('Check-in trigger failed:', err));
               }
             }
           } catch {
