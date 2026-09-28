@@ -18,11 +18,14 @@ export default function GymScanner() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  
   const isProcessingRef = useRef(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const lastScannedTokenRef = useRef<string>('');
+  const lastScannedTimeRef = useRef<number>(0);
+  const autoResetTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize Audio Context on first interaction
   function getAudioContext() {
     if (!audioCtxRef.current) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -44,16 +47,14 @@ export default function GymScanner() {
       gain.connect(ctx.destination);
 
       if (type === 'success') {
-        // High upbeat 2-tone chime
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.3, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.4);
       } else {
-        // Double warning buzz
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(150, ctx.currentTime);
         gain.gain.setValueAtTime(0.4, ctx.currentTime);
@@ -66,8 +67,14 @@ export default function GymScanner() {
     }
   }
 
+  function resetScanner() {
+    if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current);
+    setResult(null);
+    setVerifying(false);
+    isProcessingRef.current = false;
+  }
+
   useEffect(() => {
-    // Unlock audio context on any first touch/click anywhere on screen
     function unlockAudio() {
       getAudioContext();
       window.removeEventListener('click', unlockAudio);
@@ -89,43 +96,61 @@ export default function GymScanner() {
         { facingMode: 'environment' },
         config,
         async (decodedText) => {
+          // 1. Agar abhi result display ho raha hai to camera frames ignore karo
           if (isProcessingRef.current) return;
+
+          const now = Date.now();
+          // 2. Same pass repeat scan rokne ke liye 8s cooldown
+          if (
+            lastScannedTokenRef.current === decodedText &&
+            now - lastScannedTimeRef.current < 8000
+          ) {
+            return;
+          }
+
           isProcessingRef.current = true;
+          lastScannedTokenRef.current = decodedText;
+          lastScannedTimeRef.current = now;
           setVerifying(true);
 
           try {
-            const rawJson = atob(decodedText);
-            const payload = JSON.parse(rawJson);
-            const { id, t, ph } = payload;
+            // Support both Base64 JSON and plain token (GF:phone:t)
+            let memberId = '';
+            let phoneLookup = '';
 
-            const currentWindow = Math.floor(Date.now() / 30000);
-            const isTimeValid = Math.abs(currentWindow - t) <= 1;
-
-            if (!isTimeValid) {
-              playSound('denied');
-              setResult({
-                allowed: false,
-                name: 'Unknown Member',
-                phone: ph || 'N/A',
-                expiry: 'N/A',
-                reason: 'Expired QR Code! Screenshots are not allowed.',
-              });
-              setVerifying(false);
-              return;
+            if (decodedText.startsWith('GF:')) {
+              const parts = decodedText.split(':');
+              phoneLookup = parts[1] || '';
+            } else {
+              try {
+                const rawJson = atob(decodedText);
+                const payload = JSON.parse(rawJson);
+                memberId = payload.id || '';
+                phoneLookup = payload.ph || '';
+              } catch {
+                phoneLookup = decodedText.replace(/[^0-9]/g, '');
+              }
             }
 
-            const { data: member, error } = await supabase
-              .from('members')
-              .select('*')
-              .eq('id', id)
-              .maybeSingle();
+            const rawDigits = phoneLookup.replace(/[^0-9]/g, '');
+            const phone10 = rawDigits.length >= 10 ? rawDigits.slice(-10) : rawDigits;
+
+            // Direct match query
+            let query = supabase.from('members').select('*');
+            if (memberId) {
+              query = query.or(`id.eq.${memberId},phone.ilike.%${phone10}%`);
+            } else {
+              query = query.or(`phone.ilike.%${phone10}%,phone.eq.${phone10}`);
+            }
+
+            const { data: member, error } = await query.maybeSingle();
 
             if (error || !member) {
               playSound('denied');
               setResult({
                 allowed: false,
                 name: 'Not Found',
-                phone: ph,
+                phone: phone10 || 'N/A',
                 expiry: 'N/A',
                 reason: 'Member record does not exist in database.',
               });
@@ -143,7 +168,7 @@ export default function GymScanner() {
                 });
 
                 await supabase.from('attendances').insert([
-                  { member_id: member.id, method: 'qr_geofence', status: 'blocked_expired' },
+                  { member_id: member.id, method: 'qr_kiosk', status: 'blocked_expired' },
                 ]);
               } else {
                 playSound('success');
@@ -156,10 +181,10 @@ export default function GymScanner() {
                 });
 
                 await supabase.from('attendances').insert([
-                  { member_id: member.id, method: 'qr_geofence', status: 'granted' },
+                  { member_id: member.id, method: 'qr_kiosk', status: 'granted' },
                 ]);
 
-                // Fire WhatsApp Check-in Notification in background
+                // Background notification ping
                 fetch('/api/notifications/checkin', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -168,7 +193,7 @@ export default function GymScanner() {
                     phone: member.phone,
                     timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                   }),
-                }).catch((err) => console.error('Check-in trigger failed:', err));
+                }).catch(() => {});
               }
             }
           } catch {
@@ -182,6 +207,10 @@ export default function GymScanner() {
             });
           } finally {
             setVerifying(false);
+            // 3. 5 second baad automatically ready hoga agle scan ke liye
+            autoResetTimerRef.current = setTimeout(() => {
+              resetScanner();
+            }, 5000);
           }
         },
         () => {}
@@ -194,16 +223,12 @@ export default function GymScanner() {
     return () => {
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
+      if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current);
       if (scannerRef.current && scannerRef.current.isScanning) {
         scannerRef.current.stop().catch(console.error);
       }
     };
   }, []);
-
-  function resetScanner() {
-    setResult(null);
-    isProcessingRef.current = false;
-  }
 
   return (
     <div 
