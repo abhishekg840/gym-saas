@@ -83,7 +83,6 @@ export default function GymDashboard() {
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  // 1. Check Session & Load Gym Profile
   useEffect(() => {
     const raw = typeof window !== 'undefined' ? localStorage.getItem('gym_session') : null;
     if (!raw) {
@@ -102,7 +101,7 @@ export default function GymDashboard() {
     } catch {
       router.push('/login');
     }
-  }, []);
+  }, [router]);
 
   async function fetchPlans(tenantId?: string) {
     let query = supabase.from('plans').select('id, name, duration_days, price');
@@ -123,7 +122,6 @@ export default function GymDashboard() {
       .select('*, plans(name)')
       .order('created_at', { ascending: false });
 
-    // Strict multi-tenant isolation: filter members by logged-in tenant
     if (tenantId) {
       query = query.eq('tenant_id', tenantId);
     }
@@ -265,7 +263,7 @@ export default function GymDashboard() {
   function sendWhatsAppReminder(member: Member) {
     const cleanPhone = member.phone.replace(/[^0-9]/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const gymTitle = encodeURIComponent(session?.tenantName || 'GlitchFiesta Fitness');
+    const gymTitle = encodeURIComponent(session?.tenantName || 'Fitness Club');
     const upiPayLink = `upi://pay?pa=paytmqr@paytm&pn=${gymTitle}&am=${member.amount_paid || 1500}&cu=INR`;
 
     const message = encodeURIComponent(
@@ -373,7 +371,7 @@ export default function GymDashboard() {
         </div>
       )}
 
-      {/* Header with Gym Identity */}
+      {/* Header with Dynamic Gym Identity */}
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-6 mb-8 gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
@@ -381,7 +379,9 @@ export default function GymDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">Gym Command Center</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {session?.tenantName || 'Gym'} Command Center
+              </h1>
               <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5" />
                 {session?.tenantName || 'Fitness Club'}
