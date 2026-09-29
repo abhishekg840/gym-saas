@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { isUuid, readTenantCookie } from '@/lib/session';
+import { isUuid, normalizePhone10, readTenantCookie } from '@/lib/session';
 
 /**
  * POST /api/membership/actions
@@ -19,6 +19,7 @@ type Action = (typeof ACTIONS)[number];
 const STATUS_BY_SQLSTATE: Record<string, number> = {
   '22023': 400, // invalid parameter (bad date, bad phone)
   '22P02': 400, // invalid text representation (bad uuid)
+  '22008': 400, // datetime field value out of range (e.g. 2026-13-45)
   P0002: 404, // no data found -> member is not in this gym
   '45001': 409, // already frozen / not frozen / already transferred
   '45002': 422, // nothing left to transfer
@@ -56,7 +57,9 @@ export async function POST(request: Request) {
 
   /**
    * Dates arrive as optional YYYY-MM-DD strings. Returns { value, invalid } so a
-   * malformed value is a clean 400 instead of a Postgres cast error.
+   * malformed value is a clean 400 instead of a Postgres cast error. The shape
+   * check alone is not enough: "2026-13-45" matches the pattern but is not a
+   * real day, so the round-trip catches it before Postgres sees it.
    */
   const optionalDate = (
     key: string
@@ -66,7 +69,16 @@ export async function POST(request: Request) {
       return { value: null, invalid: false };
     }
     const text = String(value);
-    return /^\d{4}-\d{2}-\d{2}$/.test(text)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      return { value: null, invalid: true };
+    }
+    const [year, month, day] = text.split('-').map(Number);
+    const probe = new Date(Date.UTC(year, month - 1, day));
+    const isRealDay =
+      probe.getUTCFullYear() === year &&
+      probe.getUTCMonth() === month - 1 &&
+      probe.getUTCDate() === day;
+    return isRealDay
       ? { value: text, invalid: false }
       : { value: null, invalid: true };
   };
@@ -92,9 +104,13 @@ export async function POST(request: Request) {
       });
     } else {
       const toName = String(payload.to_name ?? '').trim();
-      const toPhone = String(payload.to_phone ?? '').replace(/[^0-9]/g, '');
+      // Same rule the Postgres function applies: keep the trailing 10 digits so
+      // "+91 90000 00013" and "9000000013" mean the same person.
+      const toPhone = normalizePhone10(String(payload.to_phone ?? ''));
       if (!toName) return bad('to_name is required for a transfer.');
-      if (!/^\d{10}$/.test(toPhone)) return bad('to_phone must be a 10-digit number.');
+      if (!/^\d{10}$/.test(toPhone)) {
+        return bad('to_phone must contain a 10-digit mobile number.');
+      }
 
       const rawPlan = payload.to_plan_id;
       const toPlanId = typeof rawPlan === 'string' && isUuid(rawPlan) ? rawPlan : null;
