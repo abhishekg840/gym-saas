@@ -5,11 +5,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   Dumbbell, 
-  ShieldCheck, 
   Lock, 
   ArrowRight, 
-  UserCheck, 
-  Sparkles,
   Phone
 } from 'lucide-react';
 import Link from 'next/link';
@@ -26,36 +23,47 @@ export default function LoginPage() {
     setLoading(true);
     setErrorMsg('');
 
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const phone10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const cleanDigits = phone.replace(/[^0-9]/g, '');
+    const phone10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
 
     try {
-      // 1. Check gym_users for super_admin, owner, receptionist
-      const { data: user, error } = await supabase
+      // 1. Fetch user from gym_users
+      const { data: users, error } = await supabase
         .from('gym_users')
-        .select('*, tenants(name, subscription_status, subscription_tier)')
-        .or(`phone.eq.${phone10},phone.ilike.%${phone10}%`)
-        .eq('pin_code', pin.trim())
-        .maybeSingle();
+        .select('*');
 
-      if (user) {
-        // Save session locally
+      if (error) throw error;
+
+      const matchedUser = (users || []).find((u) => {
+        const uPhoneDigits = (u.phone || '').replace(/[^0-9]/g, '');
+        const uPhone10 = uPhoneDigits.length >= 10 ? uPhoneDigits.slice(-10) : uPhoneDigits;
+        return uPhone10 === phone10;
+      });
+
+      if (matchedUser) {
+        // Verify PIN (default fallback 1234 agar null ho)
+        const userPin = matchedUser.pin_code || '1234';
+        if (pin.trim() !== userPin.trim()) {
+          setErrorMsg('Incorrect PIN! Default PIN for owner is 1234.');
+          setLoading(false);
+          return;
+        }
+
+        // Store session
         localStorage.setItem(
           'gym_session',
           JSON.stringify({
-            userId: user.id,
-            role: user.role,
-            name: user.full_name,
-            phone: user.phone,
-            tenantId: user.tenant_id,
-            tenantName: user.tenants?.name || 'GlitchFiesta Cloud',
-            status: user.tenants?.subscription_status || 'active',
+            userId: matchedUser.id,
+            role: matchedUser.role,
+            name: matchedUser.full_name,
+            phone: matchedUser.phone,
+            tenantId: matchedUser.tenant_id,
           })
         );
 
-        if (user.role === 'super_admin') {
+        if (matchedUser.role === 'super_admin') {
           router.push('/super-admin');
-        } else if (user.role === 'owner') {
+        } else if (matchedUser.role === 'owner') {
           router.push('/');
         } else {
           router.push('/scan');
@@ -63,30 +71,30 @@ export default function LoginPage() {
         return;
       }
 
-      // 2. If not staff, check if member wants to open their pass
-      const { data: member } = await supabase
-        .from('members')
-        .select('id, full_name, phone')
-        .or(`phone.eq.${phone10},phone.ilike.%${phone10}%`)
-        .maybeSingle();
+      // 2. Member lookup fallback
+      const { data: members } = await supabase.from('members').select('id, full_name, phone');
+      const matchedMember = (members || []).find((m) => {
+        const mPhoneDigits = (m.phone || '').replace(/[^0-9]/g, '');
+        return mPhoneDigits.slice(-10) === phone10;
+      });
 
-      if (member) {
+      if (matchedMember) {
         localStorage.setItem(
           'gym_session',
           JSON.stringify({
-            userId: member.id,
+            userId: matchedMember.id,
             role: 'member',
-            name: member.full_name,
-            phone: member.phone,
+            name: matchedMember.full_name,
+            phone: matchedMember.phone,
           })
         );
         router.push('/member');
         return;
       }
 
-      setErrorMsg('Invalid phone number or PIN. Contact desk if you are an active member.');
+      setErrorMsg('No account found for phone: ' + phone10);
     } catch (err: unknown) {
-      setErrorMsg('Login failed: ' + (err instanceof Error ? err.message : 'Network error'));
+      setErrorMsg('Login failed: ' + (err instanceof Error ? err.message : 'Database error'));
     } finally {
       setLoading(false);
     }
@@ -123,7 +131,7 @@ export default function LoginPage() {
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="e.g. 9569272339"
+                placeholder="6394550174 or 9569272339"
                 className="w-full bg-[#0C0D0E] border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono text-white focus:outline-none"
               />
             </div>
@@ -141,11 +149,10 @@ export default function LoginPage() {
                 maxLength={6}
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="**** (e.g. 9999 for master)"
+                placeholder="**** (Owner: 1234 | Super: 9999)"
                 className="w-full bg-[#0C0D0E] border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono text-white focus:outline-none tracking-widest"
               />
             </div>
-            <p className="text-[10px] text-neutral-500 mt-1">Super admin PIN: <strong>9999</strong> | Staff PIN: <strong>1234</strong></p>
           </div>
 
           <button
