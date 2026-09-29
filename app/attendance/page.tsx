@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isUuid, readSession } from '@/lib/session';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -31,13 +32,27 @@ export default function AttendanceLogsPage() {
   const [logs, setLogs] = useState<AttendanceRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [scopeError, setScopeError] = useState<string | null>(null);
 
   async function fetchLogs() {
     setLoading(true);
+
+    // The ledger is tenant-scoped. Without a gym linked to this session we show
+    // an error instead of an unscoped query, which would list every gym's punches.
+    const tenantId = readSession()?.tenantId ?? null;
+    if (!isUuid(tenantId)) {
+      setLogs([]);
+      setScopeError('Sign in again to load this gym\'s attendance ledger.');
+      setLoading(false);
+      return;
+    }
+    setScopeError(null);
+
     // Fetch logs with joined member details
     const { data: attendances, error } = await supabase
       .from('attendances')
       .select('id, punch_time, method, status, member_id, members(full_name, phone, biometric_id)')
+      .eq('tenant_id', tenantId)
       .order('punch_time', { ascending: false })
       .limit(100);
 
@@ -121,7 +136,13 @@ export default function AttendanceLogsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800 font-mono">
-              {loading ? (
+              {scopeError ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-rose-400 font-sans">
+                    {scopeError}
+                  </td>
+                </tr>
+              ) : loading ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-neutral-500">
                     Loading attendance entries...

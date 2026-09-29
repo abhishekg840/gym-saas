@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { writeSession, type GymSession } from '@/lib/session';
 import { 
   Dumbbell, 
   Lock, 
@@ -23,79 +23,43 @@ export default function LoginPage() {
     setLoading(true);
     setErrorMsg('');
 
-    const cleanDigits = phone.replace(/[^0-9]/g, '');
-    const phone10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
-
     try {
-      // 1. Fetch user from gym_users
-      const { data: users, error } = await supabase
-        .from('gym_users')
-        .select('*');
-
-      if (error) throw error;
-
-      const matchedUser = (users || []).find((u) => {
-        const uPhoneDigits = (u.phone || '').replace(/[^0-9]/g, '');
-        const uPhone10 = uPhoneDigits.length >= 10 ? uPhoneDigits.slice(-10) : uPhoneDigits;
-        return uPhone10 === phone10;
+      // Credentials go to the server, which verifies the PIN and answers with just
+      // this account's session. The client never sees other gyms' users or PINs.
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ phone, pin }),
       });
 
-      if (matchedUser) {
-        // Verify PIN (default fallback 1234 agar null ho)
-        const userPin = matchedUser.pin_code || '1234';
-        if (pin.trim() !== userPin.trim()) {
-          setErrorMsg('Incorrect PIN! Default PIN for owner is 1234.');
-          setLoading(false);
-          return;
-        }
+      const result = (await response.json()) as {
+        ok?: boolean;
+        reason?: string;
+        session?: GymSession;
+      };
 
-        // Store session
-        localStorage.setItem(
-          'gym_session',
-          JSON.stringify({
-            userId: matchedUser.id,
-            role: matchedUser.role,
-            name: matchedUser.full_name,
-            phone: matchedUser.phone,
-            tenantId: matchedUser.tenant_id,
-          })
-        );
-
-        if (matchedUser.role === 'super_admin') {
-          router.push('/super-admin');
-        } else if (matchedUser.role === 'owner') {
-          router.push('/');
-        } else {
-          router.push('/scan');
-        }
+      if (!result.ok || !result.session) {
+        setErrorMsg(result.reason || 'Sign-in failed. Please check your details.');
+        setLoading(false);
         return;
       }
 
-      // 2. Member lookup fallback
-      const { data: members } = await supabase.from('members').select('id, full_name, phone');
-      const matchedMember = (members || []).find((m) => {
-        const mPhoneDigits = (m.phone || '').replace(/[^0-9]/g, '');
-        return mPhoneDigits.slice(-10) === phone10;
-      });
+      // writeSession also mirrors the tenant id into a cookie so server-side gate
+      // routes (/api/scan/verify, /api/biometric/verify) can scope their lookups.
+      writeSession(result.session);
 
-      if (matchedMember) {
-        localStorage.setItem(
-          'gym_session',
-          JSON.stringify({
-            userId: matchedMember.id,
-            role: 'member',
-            name: matchedMember.full_name,
-            phone: matchedMember.phone,
-          })
-        );
+      if (result.session.role === 'super_admin') {
+        router.push('/super-admin');
+      } else if (result.session.role === 'owner') {
+        router.push('/');
+      } else if (result.session.role === 'member') {
         router.push('/member');
-        return;
+      } else {
+        router.push('/scan');
       }
-
-      setErrorMsg('No account found for phone: ' + phone10);
-    } catch (err: unknown) {
-      setErrorMsg('Login failed: ' + (err instanceof Error ? err.message : 'Database error'));
-    } finally {
+    } catch {
+      setErrorMsg('Sign-in failed: could not reach the server.');
       setLoading(false);
     }
   }

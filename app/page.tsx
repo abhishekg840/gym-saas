@@ -24,9 +24,18 @@ import {
   Target, 
   Fingerprint, 
   Building2, 
-  LogOut 
+  LogOut,
+  Snowflake,
+  ArrowRightLeft 
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+  freezeMembership,
+  unfreezeMembership,
+  transferMembership,
+  type MembershipResult,
+} from '@/lib/membership';
+import { clearSession, readSession } from '@/lib/session';
 
 interface Plan {
   id: string;
@@ -46,6 +55,10 @@ interface Member {
   status: string;
   amount_paid?: number;
   tenant_id?: string | null;
+  is_frozen?: boolean;
+  freeze_start_date?: string | null;
+  freeze_end_date?: string | null;
+  total_freeze_days?: number | null;
   plans?: {
     name: string;
   } | null;
@@ -56,8 +69,8 @@ interface GymSession {
   role: string;
   name: string;
   phone: string;
-  tenantId?: string;
-  tenantName?: string;
+  tenantId?: string | null;
+  tenantName?: string | null;
 }
 
 export default function GymDashboard() {
@@ -66,7 +79,13 @@ export default function GymDashboard() {
   const [members, setMembers] = useState<Member[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterTab, setFilterTab] = useState<'all' | 'active' | 'expired'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'active' | 'expired' | 'frozen'>('all');
+
+  // Membership transfer modal: null = closed. Owner-only action.
+  const [transferTarget, setTransferTarget] = useState<Member | null>(null);
+  const [transferName, setTransferName] = useState('');
+  const [transferPhone, setTransferPhone] = useState('');
+  const [transferBusy, setTransferBusy] = useState(false);
   
   const [currentRole, setCurrentRole] = useState<'owner' | 'reception'>('owner');
   const [pinPrompt, setPinPrompt] = useState(false);
@@ -84,26 +103,21 @@ export default function GymDashboard() {
   const [actionId, setActionId] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = typeof window !== 'undefined' ? localStorage.getItem('gym_session') : null;
-    if (!raw) {
+    const parsed = readSession();
+    if (!parsed) {
       router.push('/login');
       return;
     }
 
-    try {
-      const parsed: GymSession = JSON.parse(raw);
-      setSession(parsed);
-      if (parsed.role === 'receptionist') {
-        setCurrentRole('reception');
-      }
-      fetchPlans(parsed.tenantId);
-      fetchMembers(parsed.tenantId);
-    } catch {
-      router.push('/login');
+    setSession(parsed);
+    if (parsed.role === 'receptionist') {
+      setCurrentRole('reception');
     }
+    fetchPlans(parsed.tenantId);
+    fetchMembers(parsed.tenantId);
   }, [router]);
 
-  async function fetchPlans(tenantId?: string) {
+  async function fetchPlans(tenantId?: string | null) {
     let query = supabase.from('plans').select('id, name, duration_days, price');
     if (tenantId) {
       query = query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
@@ -116,23 +130,27 @@ export default function GymDashboard() {
     }
   }
 
-  async function fetchMembers(tenantId?: string) {
-    let query = supabase
-      .from('members')
-      .select('*, plans(name)')
-      .order('created_at', { ascending: false });
-
-    if (tenantId) {
-      query = query.eq('tenant_id', tenantId);
+  async function fetchMembers(tenantId?: string | null) {
+    // Never run this unscoped: with no gym on the session the query would return
+    // every tenant's members. The dashboard is always a single-gym view.
+    if (!tenantId) {
+      setMembers([]);
+      console.warn('Member list not loaded: no gym is linked to this session.');
+      return;
     }
 
-    const { data, error } = await query;
+    const { data, error } = await supabase
+      .from('members')
+      .select('*, plans(name)')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
     if (data) setMembers(data as unknown as Member[]);
     if (error) console.error('Fetch error:', error.message);
   }
 
   function handleLogout() {
-    localStorage.removeItem('gym_session');
+    clearSession();
     router.push('/login');
   }
 
@@ -244,6 +262,87 @@ export default function GymDashboard() {
     setActionId(null);
   }
 
+  /**
+   * Freeze / unfreeze / transfer are delegated to /api/membership/actions, which
+   * runs the tenant-checked Postgres functions. The dashboard never edits the
+   * membership columns directly, so the freeze day maths lives in exactly one
+   * place and cannot drift from what the gate enforces.
+   */
+  function requireTenant(): string {
+    const tenantId = session?.tenantId ?? '';
+    if (!tenantId) throw new Error('No gym is linked to this session. Sign in again.');
+    return tenantId;
+  }
+
+  function reportFailure(res: MembershipResult) {
+    alert(res.error || 'The gym server rejected this action.');
+  }
+
+  async function freezeMember(member: Member) {
+    if (!confirm(`Freeze ${member.full_name}'s membership? Gate access stops immediately.`)) return;
+
+    setActionId(member.id);
+    try {
+      const res = await freezeMembership(member.id, requireTenant());
+      if (!res.ok) reportFailure(res);
+      else fetchMembers(session?.tenantId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Freeze failed');
+    }
+    setActionId(null);
+  }
+
+  async function unfreezeMember(member: Member) {
+    setActionId(member.id);
+    try {
+      const res = await unfreezeMembership(member.id, requireTenant());
+      if (!res.ok) reportFailure(res);
+      else fetchMembers(session?.tenantId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Unfreeze failed');
+    }
+    setActionId(null);
+  }
+
+  function openTransferModal(member: Member) {
+    if (currentRole !== 'owner') {
+      alert('Only Owner role can transfer a membership to another person.');
+      return;
+    }
+    setTransferTarget(member);
+    setTransferName('');
+    setTransferPhone('');
+  }
+
+  async function submitTransfer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!transferTarget) return;
+
+    setTransferBusy(true);
+    try {
+      const res = await transferMembership({
+        memberId: transferTarget.id,
+        tenantId: requireTenant(),
+        toName: transferName,
+        toPhone: transferPhone,
+      });
+
+      if (!res.ok) {
+        reportFailure(res);
+      } else {
+        alert(
+          `Transferred ${transferTarget.full_name} to ${res.to_name ?? transferName} — ` +
+            `${res.transferred_days ?? 0} days carried over.`
+        );
+        setTransferTarget(null);
+        fetchMembers(session?.tenantId);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Transfer failed');
+    }
+    setTransferBusy(false);
+  }
+
   async function viewLatestInvoice(memberId: string) {
     const { data } = await supabase
       .from('invoices')
@@ -284,7 +383,7 @@ export default function GymDashboard() {
       `"${m.biometric_id || 'N/A'}"`,
       `"${m.plans?.name || 'Custom'}"`,
       `"${m.membership_end}"`,
-      `"${new Date(m.membership_end) < new Date() ? 'Expired' : 'Active'}"`,
+      `"${m.is_frozen ? 'Frozen' : new Date(m.membership_end) < new Date() ? 'Expired' : 'Active'}"`,
       `"${m.amount_paid || 0}"`
     ]);
 
@@ -317,8 +416,15 @@ export default function GymDashboard() {
     }
   }
 
-  const activeCount = members.filter(m => new Date(m.membership_end) >= new Date()).length;
-  const expiredCount = members.length - activeCount;
+  // A frozen pass is neither active nor expired, so count it separately to keep
+  // the summary tiles from double-counting the same member.
+  const frozenCount = members.filter((m) => m.is_frozen).length;
+  const activeCount = members.filter(
+    (m) => !m.is_frozen && new Date(m.membership_end) >= new Date()
+  ).length;
+  const expiredCount = members.filter(
+    (m) => !m.is_frozen && new Date(m.membership_end) < new Date()
+  ).length;
 
   const filteredMembers = members.filter(member => {
     const isExpired = new Date(member.membership_end) < new Date();
@@ -328,13 +434,71 @@ export default function GymDashboard() {
       (member.biometric_id && member.biometric_id.toString().includes(searchTerm));
 
     if (!matchesSearch) return false;
-    if (filterTab === 'active') return !isExpired;
-    if (filterTab === 'expired') return isExpired;
+    // Frozen is its own bucket: a frozen pass must not read as merely active.
+    if (filterTab === 'frozen') return Boolean(member.is_frozen);
+    if (filterTab === 'active') return !isExpired && !member.is_frozen;
+    if (filterTab === 'expired') return isExpired && !member.is_frozen;
     return true;
   });
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
+      {transferTarget && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form
+            onSubmit={submitTransfer}
+            className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl w-full max-w-md"
+          >
+            <h3 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-amber-400" /> Transfer Membership
+            </h3>
+            <p className="text-xs text-neutral-400 mb-5 leading-relaxed">
+              {transferTarget.full_name}&apos;s remaining valid days move onto a new member profile.
+              The current profile is closed as <span className="text-neutral-200">transferred</span>.
+            </p>
+
+            <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+              Recipient Name
+            </label>
+            <input
+              autoFocus
+              value={transferName}
+              onChange={(e) => setTransferName(e.target.value)}
+              placeholder="Full name"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 mb-4"
+            />
+
+            <label className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+              Recipient Phone (10 digits)
+            </label>
+            <input
+              value={transferPhone}
+              onChange={(e) => setTransferPhone(e.target.value)}
+              placeholder="9876543210"
+              inputMode="numeric"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-mono mb-6"
+            />
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTransferTarget(null)}
+                className="flex-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 py-2 rounded-xl text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={transferBusy}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-black py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition disabled:opacity-50"
+              >
+                {transferBusy ? 'Transferring...' : 'Confirm Transfer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {pinPrompt && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl w-full max-w-xs text-center">
@@ -463,7 +627,7 @@ export default function GymDashboard() {
       </div>
 
       {/* Metrics */}
-      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center gap-4">
           <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl">
             <Users className="w-6 h-6" />
@@ -491,6 +655,16 @@ export default function GymDashboard() {
           <div>
             <p className="text-xs text-neutral-400">Expired (Blocked)</p>
             <p className="text-2xl font-bold text-rose-400">{expiredCount}</p>
+          </div>
+        </div>
+
+        <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center gap-4">
+          <div className="p-3 bg-sky-500/10 text-sky-400 rounded-xl">
+            <Snowflake className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-neutral-400">Frozen (On Hold)</p>
+            <p className="text-2xl font-bold text-sky-400">{frozenCount}</p>
           </div>
         </div>
       </div>
@@ -611,6 +785,14 @@ export default function GymDashboard() {
               >
                 Expired ({expiredCount})
               </button>
+              <button
+                onClick={() => setFilterTab('frozen')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  filterTab === 'frozen' ? 'bg-sky-500/20 text-sky-400' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Frozen ({frozenCount})
+              </button>
             </div>
 
             <div className="relative w-full sm:w-60">
@@ -646,6 +828,7 @@ export default function GymDashboard() {
                 ) : (
                   filteredMembers.map(member => {
                     const isExpired = new Date(member.membership_end) < new Date();
+                    const isFrozen = Boolean(member.is_frozen);
                     const isProcessing = actionId === member.id;
 
                     return (
@@ -668,7 +851,11 @@ export default function GymDashboard() {
                         </td>
                         <td className="px-4 py-4 font-mono text-xs">{member.membership_end}</td>
                         <td className="px-4 py-4">
-                          {isExpired ? (
+                          {isFrozen ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-mono rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-bold">
+                              <Snowflake className="w-3 h-3" /> FROZEN
+                            </span>
+                          ) : isExpired ? (
                             <span className="px-2.5 py-0.5 text-[10px] font-mono rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">
                               BLOCKED
                             </span>
@@ -697,6 +884,38 @@ export default function GymDashboard() {
                               <RotateCw className={`w-3 h-3 text-emerald-400 ${isProcessing ? 'animate-spin' : ''}`} />
                               +30D
                             </button>
+
+                            {isFrozen ? (
+                              <button
+                                disabled={isProcessing}
+                                onClick={() => unfreezeMember(member)}
+                                title={`Resume membership${member.freeze_end_date ? ` (frozen until ${member.freeze_end_date})` : ''}`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs rounded-lg transition disabled:opacity-50 font-mono"
+                              >
+                                <Unlock className={`w-3 h-3 ${isProcessing ? 'animate-spin' : ''}`} />
+                                Resume
+                              </button>
+                            ) : (
+                              <button
+                                disabled={isProcessing || isExpired}
+                                onClick={() => freezeMember(member)}
+                                title="Freeze Membership"
+                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 text-sky-400 rounded-lg transition disabled:opacity-50"
+                              >
+                                <Snowflake className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {currentRole === 'owner' && (
+                              <button
+                                disabled={isProcessing}
+                                onClick={() => openTransferModal(member)}
+                                title="Transfer Membership To Another Person"
+                                className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded-lg transition disabled:opacity-50"
+                              >
+                                <ArrowRightLeft className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
                             {isExpired && (
                               <button

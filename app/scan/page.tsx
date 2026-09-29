@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { supabase } from '@/lib/supabase';
 import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft, Volume2 } from 'lucide-react';
 import Link from 'next/link';
+import { readSession } from '@/lib/session';
 
 interface VerificationResult {
   allowed: boolean;
@@ -12,6 +12,7 @@ interface VerificationResult {
   phone: string;
   expiry: string;
   reason: string;
+  member_id?: string | null;
 }
 
 export default function GymScanner() {
@@ -114,83 +115,57 @@ export default function GymScanner() {
           setVerifying(true);
 
           try {
-            // Support both Base64 JSON and plain token (GF:phone:t)
-            let memberId = '';
-            let phoneLookup = '';
+            // The gate decision lives on the server: it scopes the member lookup to
+            // this gym's tenant and refuses frozen memberships. The kiosk only renders.
+            const response = await fetch('/api/scan/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                token: decodedText,
+                tenant_id: readSession()?.tenantId ?? null,
+              }),
+            });
 
-            if (decodedText.startsWith('GF:')) {
-              const parts = decodedText.split(':');
-              phoneLookup = parts[1] || '';
-            } else {
-              try {
-                const rawJson = atob(decodedText);
-                const payload = JSON.parse(rawJson);
-                memberId = payload.id || '';
-                phoneLookup = payload.ph || '';
-              } catch {
-                phoneLookup = decodedText.replace(/[^0-9]/g, '');
-              }
-            }
+            const verdict = (await response.json()) as {
+              allowed?: boolean;
+              reason?: string;
+              name?: string;
+              phone?: string;
+              expiry?: string | null;
+              member_id?: string | null;
+            };
 
-            const rawDigits = phoneLookup.replace(/[^0-9]/g, '');
-            const phone10 = rawDigits.length >= 10 ? rawDigits.slice(-10) : rawDigits;
-
-            // Direct match query
-            let query = supabase.from('members').select('*');
-            if (memberId) {
-              query = query.or(`id.eq.${memberId},phone.ilike.%${phone10}%`);
-            } else {
-              query = query.or(`phone.ilike.%${phone10}%,phone.eq.${phone10}`);
-            }
-
-            const { data: member, error } = await query.maybeSingle();
-
-            if (error || !member) {
+            if (typeof verdict.allowed !== 'boolean') {
               playSound('denied');
               setResult({
                 allowed: false,
-                name: 'Not Found',
-                phone: phone10 || 'N/A',
+                name: verdict.name || 'Rejected',
+                phone: verdict.phone || '',
                 expiry: 'N/A',
-                reason: 'Member record does not exist in database.',
+                reason: verdict.reason || `Gate rejected the scan (HTTP ${response.status}).`,
               });
             } else {
-              const isExpired = new Date(member.membership_end) < new Date();
+              playSound(verdict.allowed ? 'success' : 'denied');
+              setResult({
+                allowed: verdict.allowed,
+                name: verdict.name || 'Unknown',
+                phone: verdict.phone || 'N/A',
+                expiry: verdict.expiry || 'N/A',
+                reason:
+                  verdict.reason ||
+                  (verdict.allowed ? 'Access Approved. Welcome!' : 'Access Denied.'),
+                member_id: verdict.member_id ?? null,
+              });
 
-              if (isExpired) {
-                playSound('denied');
-                setResult({
-                  allowed: false,
-                  name: member.full_name,
-                  phone: member.phone,
-                  expiry: member.membership_end,
-                  reason: 'Membership expired! Fee renewal required.',
-                });
-
-                await supabase.from('attendances').insert([
-                  { member_id: member.id, method: 'qr_kiosk', status: 'blocked_expired' },
-                ]);
-              } else {
-                playSound('success');
-                setResult({
-                  allowed: true,
-                  name: member.full_name,
-                  phone: member.phone,
-                  expiry: member.membership_end,
-                  reason: 'Access Approved. Welcome!',
-                });
-
-                await supabase.from('attendances').insert([
-                  { member_id: member.id, method: 'qr_kiosk', status: 'granted' },
-                ]);
-
-                // Background notification ping
+              // Attendance is already recorded server-side; this only pings the feed.
+              if (verdict.allowed && verdict.member_id) {
                 fetch('/api/notifications/checkin', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    name: member.full_name,
-                    phone: member.phone,
+                    name: verdict.name,
+                    phone: verdict.phone,
                     timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                   }),
                 }).catch(() => {});
@@ -200,10 +175,10 @@ export default function GymScanner() {
             playSound('denied');
             setResult({
               allowed: false,
-              name: 'Invalid QR',
+              name: 'Gate Unreachable',
               phone: '',
               expiry: '',
-              reason: 'Unrecognized QR code structure.',
+              reason: 'Could not reach the gate service. Check the network and retry.',
             });
           } finally {
             setVerifying(false);
