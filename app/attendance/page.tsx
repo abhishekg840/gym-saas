@@ -82,6 +82,8 @@ export default function AttendanceLogsPage() {
   }
 
   useEffect(() => {
+    // Load-on-mount, not render-derived state: the setStates land after the await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLogs();
   }, []);
 

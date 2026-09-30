@@ -26,7 +26,8 @@ import {
   Building2, 
   LogOut,
   Snowflake,
-  ArrowRightLeft 
+  ArrowRightLeft,
+  ServerCog
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -109,6 +110,9 @@ export default function GymDashboard() {
       return;
     }
 
+    // The session lives in localStorage, which only exists in the browser, so it
+    // can only be read after hydration — this setState is the effect's whole job.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSession(parsed);
     if (parsed.role === 'receptionist') {
       setCurrentRole('reception');
@@ -603,6 +607,15 @@ export default function GymDashboard() {
           >
             <Calendar className="w-4 h-4 text-blue-400" /> Logs
           </Link>
+          {(currentRole === 'owner' || session?.role === 'super_admin') && (
+            <Link
+              href="/hardware"
+              title="Terminals, machine keys and the gym geofence"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"
+            >
+              <ServerCog className="w-4 h-4 text-emerald-400" /> Hardware
+            </Link>
+          )}
           <button
             onClick={exportToCSV}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"

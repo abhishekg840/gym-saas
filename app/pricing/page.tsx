@@ -260,7 +260,7 @@ export default function HaikeiGymLanding() {
                 <span className="font-mono text-xs text-[#111215]/40 block mb-6">MODULE 02</span>
                 <h3 className="text-xl font-black uppercase tracking-tight mb-3">Automated WhatsApp Alert</h3>
                 <p className="text-sm text-[#111215]/70 leading-relaxed font-normal">
-                  Sends friendly renewal alerts 3 days prior with your direct UPI payment link. Also sends automatic motivational nudges to members who haven't checked in for 5 consecutive days to prevent churn.
+                  Sends friendly renewal alerts 3 days prior with your direct UPI payment link. Also sends automatic motivational nudges to members who haven&apos;t checked in for 5 consecutive days to prevent churn.
                 </p>
               </div>
               <span className="mt-8 font-mono text-[11px] text-emerald-800 font-bold block">
