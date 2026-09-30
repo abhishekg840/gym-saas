@@ -30,6 +30,7 @@ export type GeofenceState =
   | 'inside'
   | 'outside'
   | 'unconfigured'
+  | 'unavailable'
   | 'not_enforced'
   | 'awaiting_fix';
 
@@ -45,6 +46,8 @@ export interface GeofenceVerdict {
 }
 
 export const DEFAULT_GEOFENCE_RADIUS = 100;
+
+import { isPassWindowCurrent, type PassTokenClaims } from './passtoken';
 
 /** Mean Earth radius in metres (IUGG). Good to well under a metre at gym scale. */
 const EARTH_RADIUS_METERS = 6_371_008.8;
@@ -113,6 +116,7 @@ export function geolocationErrorMessage(code: number): string {
  *   inside radius            -> unlocked
  *   outside radius + enforce -> locked, with the distance spelled out
  *   no coordinates saved     -> unlocked, geofencing is simply not configured
+ *   no config object at all  -> locked (the phone never learned the rules)
  *   enforce on but no fix    -> locked (fail closed)
  */
 export function evaluateGeofence(
@@ -127,7 +131,22 @@ export function evaluateGeofence(
     radius_meters: radius,
   };
 
-  if (!gym || gym.latitude === null || gym.longitude === null) {
+  // Two very different situations share the phrase "no coordinates". A gym that
+  // was never marked is a choice: geofencing is simply off, so the pass works
+  // anywhere. A null config object means the phone never learned this gym's
+  // rules at all, and unlocking on that would turn a failed request into a hole
+  // in the fence — so that one fails closed.
+  if (!gym) {
+    return {
+      ...base,
+      state: 'unavailable',
+      unlocked: false,
+      message:
+        'This gym’s location rules could not be loaded, so the pass stays locked. Tap Retry, or ask the front desk to scan you in.',
+    };
+  }
+
+  if (gym.latitude === null || gym.longitude === null) {
     return {
       ...base,
       state: 'unconfigured',
@@ -181,4 +200,46 @@ export function evaluateGeofence(
     unlocked: false,
     message: `Outside Gym Radius (${formatDistance(distance)} away). Gate pass unlocks when you are inside the gym facility.`,
   };
+}
+
+/**
+ * The gate's half of the same decision, run in `/api/scan/verify`.
+ *
+ * Hiding the QR on the phone is only a UI affordance — a screenshot, a dev-tools
+ * console or a stale tab can still hand over the string — so the kiosk re-runs
+ * the fence from the coordinates the phone recorded at mint time. Returns null
+ * when the scan may proceed, otherwise the sentence the kiosk shows.
+ *
+ * The radius compared against is the gym's CURRENT one, not the one baked into
+ * the token, so tightening the fence invalidates every pass minted under the old
+ * rule the moment it is saved.
+ *
+ * GPS accuracy is deliberately not used as a tolerance: the phone compares
+ * `distance <= radius` with no allowance either, and a gate that disagreed with
+ * the screen would lock out members who are visibly standing at the door.
+ */
+export function passGeofenceDenial(
+  claims: PassTokenClaims | null,
+  gymLatitude: number | null,
+  gymLongitude: number | null,
+  radiusMeters: number
+): string | null {
+  if (!claims) {
+    return 'This pass carries no location proof, so the gym fence cannot be verified. Please use the front desk.';
+  }
+  if (!isPassWindowCurrent(claims.t)) {
+    return 'This QR code has expired. Ask the member to reopen their pass.';
+  }
+  if (!claims.geo) {
+    return 'This pass was unlocked without a GPS fix. Stand inside the gym, reopen the pass, then scan again.';
+  }
+  if (gymLatitude === null || gymLongitude === null) {
+    return 'This gym has no saved coordinates, so the fence cannot be verified. Please use the front desk.';
+  }
+
+  const distance = haversineMeters(claims.geo.lat, claims.geo.lon, gymLatitude, gymLongitude);
+  if (distance > radiusMeters) {
+    return `Pass was unlocked ${Math.round(distance)} m from the gym — outside the ${radiusMeters} m gate radius.`;
+  }
+  return null;
 }

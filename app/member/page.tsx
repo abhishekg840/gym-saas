@@ -7,9 +7,14 @@ import { supabase } from '@/lib/supabase';
 import {
   evaluateGeofence,
   formatDistance,
+  geolocationErrorMessage,
   type GeoFix,
+  type GeofenceVerdict,
   type GymGeofence,
 } from '@/lib/geofence';
+import { encodePassToken, PASS_WINDOW_MS, type PassGeoProof } from '@/lib/passtoken';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import {
   Dumbbell,
   ShieldCheck,
@@ -64,15 +69,46 @@ interface PassLock {
   warn: boolean;
 }
 
-const QR_WINDOW_MS = 30_000;
+const QR_WINDOW_MS = PASS_WINDOW_MS;
 
 /**
  * The token the kiosk at the gate already knows how to read: base64 JSON with the
  * member id, the 30-second window it was minted in, and the phone. The window is
  * what makes yesterday's screenshot useless at the turnstile.
  */
-function mintPass(member: PassMember, windowIndex: number): string {
-  return btoa(JSON.stringify({ id: member.id, t: windowIndex, ph: member.phone }));
+/**
+ * The kiosk only ever sees base64 JSON, so the geofence proof has to be minted
+ * here. Returns null when the verdict is not `unlocked`, which means a locked
+ * screen cannot produce a scannable string even if the JSX gate above it were
+ * wrong — the lock and the credential are then the same decision.
+ */
+function mintPass(
+  member: PassMember,
+  windowIndex: number,
+  verdict: GeofenceVerdict,
+  fix: Fix | null
+): string | null {
+  if (!verdict.unlocked) return null;
+
+  // Only present when we actually measured a distance; the server re-runs the
+  // fence maths from these coordinates rather than trusting our arithmetic.
+  const geo: PassGeoProof | undefined =
+    fix && verdict.distance_meters !== null
+      ? {
+          lat: fix.lat,
+          lon: fix.lon,
+          accuracy_meters: fix.accuracy,
+          distance_meters: verdict.distance_meters,
+          radius_meters: verdict.radius_meters,
+        }
+      : undefined;
+
+  return encodePassToken({
+    id: member.id,
+    ph: member.phone,
+    t: windowIndex,
+    ...(geo ? { geo } : {}),
+  });
 }
 
 export default function MemberSelfServicePortal() {
@@ -92,6 +128,8 @@ export default function MemberSelfServicePortal() {
   const [fix, setFix] = useState<Fix | null>(null);
 
   const watchIdRef = useRef<number | null>(null);
+  /** Set when the watch runs through the Capacitor plugin, which uses string ids. */
+  const pluginWatchIdRef = useRef<string | null>(null);
 
   // --- Sign in: one server call, which also brings the gym's geofence config.
   async function handleLogin(e: React.FormEvent) {
@@ -140,42 +178,89 @@ export default function MemberSelfServicePortal() {
   }
 
   // --- Location: ask once, then keep a live fix so walking in unlocks itself.
-  const locate = useCallback(() => {
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-      setLocStatus('error');
-      setLocMessage('This browser has no location support. Use the front desk scanner.');
-      return;
-    }
+  const locate = useCallback(async () => {
+    if (typeof window === 'undefined') return;
 
     setLocStatus('locating');
     setLocMessage(null);
 
+    // Drop any watch from the previous attempt so a Retry cannot leave two
+    // competing watchers fighting over the same state.
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (pluginWatchIdRef.current !== null) {
+      const stale = pluginWatchIdRef.current;
+      pluginWatchIdRef.current = null;
+      void Geolocation.clearWatch({ id: stale }).catch(() => undefined);
+    }
+
+    const accept = (latitude: number, longitude: number, accuracy: number, at: number) => {
+      setFix({
+        lat: latitude,
+        lon: longitude,
+        accuracy: Number.isFinite(accuracy) ? accuracy : null,
+        at: at || Date.now(),
+      });
+      setLocStatus('ready');
+      setLocMessage(null);
+    };
+
+    const fail = (message: string) => {
+      setLocStatus('error');
+      setLocMessage(message);
+    };
+
+    // On Android the WebView's geolocation is gated behind a runtime permission
+    // that only the Capacitor plugin can request. Without it watchPosition is
+    // refused immediately with PERMISSION_DENIED, and a member standing in the
+    // lobby would never be able to unlock. The plugin also checks the
+    // ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION entries in the manifest.
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const status = await Geolocation.requestPermissions();
+        if (status.location === 'denied' || status.coarseLocation === 'denied') {
+          fail(geolocationErrorMessage(1));
+          return;
+        }
+
+        pluginWatchIdRef.current = await Geolocation.watchPosition(
+          { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 },
+          (pos, err) => {
+            if (err) {
+              fail(
+                typeof err.code === 'number'
+                  ? geolocationErrorMessage(err.code)
+                  : err.message || geolocationErrorMessage(2)
+              );
+              return;
+            }
+            if (!pos) return;
+            accept(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.timestamp);
+          }
+        );
+      } catch (error) {
+        // Location services switched off, or the prompt was refused outright.
+        // Fail closed: the pass stays locked and the reason is shown.
+        fail(
+          error instanceof Error && error.message
+            ? error.message
+            : geolocationErrorMessage(2)
+        );
+      }
+      return;
+    }
+
+    // Browser / desktop path: plain geolocation, which the browser gates itself.
+    if (!('geolocation' in navigator)) {
+      fail('This browser has no location support. Use the front desk scanner.');
+      return;
+    }
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        setFix({
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null,
-          at: pos.timestamp || Date.now(),
-        });
-        setLocStatus('ready');
-        setLocMessage(null);
-      },
-      (err) => {
-        setLocStatus('error');
-        setLocMessage(
-          err.code === err.PERMISSION_DENIED
-            ? 'Location permission was blocked. Allow it for this site, then tap Retry.'
-            : err.code === err.POSITION_UNAVAILABLE
-              ? 'No GPS fix right now — step outside or check your phone location settings.'
-              : 'Taking too long to get a fix. Tap Retry.'
-        );
-      },
+      (pos) => accept(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.timestamp),
+      (err) => fail(geolocationErrorMessage(err.code)),
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 }
     );
   }, []);
@@ -191,6 +276,11 @@ export default function MemberSelfServicePortal() {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
+      }
+      if (pluginWatchIdRef.current !== null) {
+        const id = pluginWatchIdRef.current;
+        pluginWatchIdRef.current = null;
+        void Geolocation.clearWatch({ id }).catch(() => undefined);
       }
     };
   }, [member, locate]);
@@ -208,7 +298,24 @@ export default function MemberSelfServicePortal() {
       const windowIndex = Math.floor(Date.now() / QR_WINDOW_MS);
       if (windowIndex !== lastWindow) {
         lastWindow = windowIndex;
-        setQrPayload(mintPass(member, windowIndex));
+        // The same verdict that hides the QR also stops the credential existing,
+        // so a locked screen holds no scannable string in state at all — one
+        // decision instead of two that could drift apart.
+        const reading: GeoFix | null = fix
+          ? { latitude: fix.lat, longitude: fix.lon, accuracy_meters: fix.accuracy, taken_at: fix.at }
+          : null;
+        const verdict = evaluateGeofence(geofence, reading);
+        const armed = Boolean(
+          geofence?.enforce_geofence &&
+            geofence.latitude !== null &&
+            geofence.longitude !== null
+        );
+        const mintable =
+          verdict.unlocked &&
+          !member.is_frozen &&
+          !member.is_expired &&
+          !(armed && locStatus === 'error');
+        setQrPayload(mintable ? (mintPass(member, windowIndex, verdict, fix) ?? '') : '');
       }
       const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
       setCountdown(remaining);
@@ -217,7 +324,7 @@ export default function MemberSelfServicePortal() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [member]);
+  }, [member, geofence, fix, locStatus]);
 
   // --- The verdict. All the maths lives in lib/geofence.ts and is shared with the
   // console, so the pass screen and the gate can never disagree about the radius.
@@ -228,13 +335,42 @@ export default function MemberSelfServicePortal() {
 
     const verdict = evaluateGeofence(geofence, fixReading);
 
-    if (!verdict.unlocked) {
-      // Amber while the phone is still deciding, red when the gym is out of reach.
-      const awaiting = verdict.state === 'awaiting_fix';
+    // Only a fence that is actually armed needs a location to be believed. With
+    // enforcement off (or never configured) a denied permission must not lock a
+    // member out — there is nothing to enforce.
+    const armed = Boolean(
+      geofence?.enforce_geofence && geofence.latitude !== null && geofence.longitude !== null
+    );
+
+    // A denied or unavailable permission is not "still checking". The fence
+    // cannot be proved, so the pass locks with the reason spelled out rather
+    // than quietly staying open behind a stale fix.
+    if (armed && locStatus === 'error') {
       return {
         geo: verdict,
         lock: {
-          title: awaiting ? 'WAITING FOR GPS' : 'OUTSIDE GYM RADIUS',
+          title: 'LOCATION REQUIRED TO UNLOCK PASS',
+          message: locMessage ?? geolocationErrorMessage(2),
+          warn: false,
+        },
+      };
+    }
+
+    if (!verdict.unlocked) {
+      // Amber while the phone is still deciding, red when the gym is out of reach.
+      const awaiting = verdict.state === 'awaiting_fix';
+      const title =
+        verdict.state === 'outside'
+          ? 'OUT OF RANGE'
+          : verdict.state === 'unavailable'
+            ? 'GYM LOCATION UNKNOWN'
+            : awaiting
+              ? 'WAITING FOR GPS'
+              : 'LOCATION REQUIRED TO UNLOCK PASS';
+      return {
+        geo: verdict,
+        lock: {
+          title,
           message: verdict.message,
           warn: awaiting,
         },
@@ -267,7 +403,7 @@ export default function MemberSelfServicePortal() {
     }
 
     return { geo: verdict, lock: null as PassLock | null };
-  }, [geofence, fix, member]);
+  }, [geofence, fix, member, locStatus, locMessage]);
 
 
   // One line of plain English about where the phone thinks the member is.

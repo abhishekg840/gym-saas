@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { isUuid, readTenantCookie } from '@/lib/session';
+import { parseCoordinate, parseRadius, passGeofenceDenial } from '@/lib/geofence';
+import { decodePassToken, isPassWindowCurrent, type PassTokenClaims } from '@/lib/passtoken';
 
 /**
  * POST /api/scan/verify
@@ -11,11 +13,19 @@ import { isUuid, readTenantCookie } from '@/lib/session';
  *
  * Body: { token: string, tenant_id?: string }
  *   - tenant_id falls back to the forgeos_tenant cookie set at login.
+ *
+ * Geofence: hiding the QR on the phone is only a UI affordance, so this route
+ * re-runs the fence decision instead of trusting it. When the gym is armed the
+ * token must carry a fix recorded at mint time, must be fresh, and must still
+ * measure inside the CURRENT radius — a screenshot taken on the pavement, or one
+ * from before the owner tightened the radius, is refused here.
  */
 
 interface ParsedToken {
   memberId: string;
   phone10: string;
+  /** Decoded base64 claims, or null for legacy `GF:` / bare-digit codes. */
+  claims: PassTokenClaims | null;
 }
 
 /** Mirrors the token formats the member app emits: base64 JSON, "GF:phone:t", or raw digits. */
@@ -26,8 +36,16 @@ function parseQrToken(raw: string): ParsedToken | null {
   let memberId = '';
   let phoneLookup = '';
 
+  // decodePassToken is the single reader for our own format: it is what carries
+  // the window index and the geofence proof, so it must not be re-implemented
+  // here with a looser idea of what a valid token looks like.
+  const claims = decodePassToken(text);
+
   if (text.startsWith('GF:')) {
     phoneLookup = text.split(':')[1] ?? '';
+  } else if (claims) {
+    memberId = claims.id;
+    phoneLookup = claims.ph;
   } else {
     try {
       const payload = JSON.parse(atob(text)) as { id?: string; ph?: string };
@@ -42,7 +60,7 @@ function parseQrToken(raw: string): ParsedToken | null {
   const phone10 = digits.length >= 10 ? digits.slice(-10) : digits;
 
   if (!memberId && phone10.length < 6) return null;
-  return { memberId, phone10 };
+  return { memberId, phone10, claims };
 }
 
 /** Strips the DB row down to what the kiosk is allowed to see. */
@@ -136,6 +154,54 @@ export async function POST(request: Request) {
         { tenant_id: tenantId, member_id: member.id as string, method: 'qr_kiosk', status: 'blocked_expired' },
       ]);
       return NextResponse.json(present(member, false, 'Membership expired. Renewal required.'));
+    }
+
+    // --- Geofence. Hiding the QR on the phone is only a UI affordance; this is
+    // the check that actually decides whether the turnstile opens.
+    const { data: tenantRow, error: tenantError } = await supabase
+      .from('tenants')
+      .select('latitude, longitude, geofence_radius_meters, enforce_geofence')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (tenantError) {
+      // We cannot tell whether this gym is armed, so a pass is not waved through.
+      return NextResponse.json(
+        present(member, false, 'Could not verify this gym’s geofence settings. Ask the front desk.')
+      );
+    }
+
+    const tenant = (tenantRow ?? {}) as Record<string, unknown>;
+    const gymLatitude = parseCoordinate(tenant.latitude);
+    const gymLongitude = parseCoordinate(tenant.longitude);
+    const armed =
+      Boolean(tenant.enforce_geofence) && gymLatitude !== null && gymLongitude !== null;
+
+    // A token we minted must be fresh even when the fence is off: the window is
+    // the only thing that makes an hour-old screenshot useless. Legacy `GF:` and
+    // bare-digit codes carry no window, so they are left to the membership checks.
+    if (parsed.claims && !isPassWindowCurrent(parsed.claims.t)) {
+      await supabase.from('attendances').insert([
+        { tenant_id: tenantId, member_id: member.id as string, method: 'qr_kiosk', status: 'blocked_stale' },
+      ]);
+      return NextResponse.json(
+        present(member, false, 'This QR code has expired. Ask the member to reopen their pass.')
+      );
+    }
+
+    if (armed) {
+      const denial = passGeofenceDenial(
+        parsed.claims,
+        gymLatitude,
+        gymLongitude,
+        parseRadius(tenant.geofence_radius_meters)
+      );
+      if (denial) {
+        await supabase.from('attendances').insert([
+          { tenant_id: tenantId, member_id: member.id as string, method: 'qr_geofence', status: 'blocked_geofence' },
+        ]);
+        return NextResponse.json(present(member, false, denial));
+      }
     }
 
     await supabase.from('attendances').insert([
