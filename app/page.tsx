@@ -27,7 +27,8 @@ import {
   LogOut,
   Snowflake,
   ArrowRightLeft,
-  ServerCog
+  ServerCog,
+  ShoppingBag
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -36,6 +37,7 @@ import {
   transferMembership,
   type MembershipResult,
 } from '@/lib/membership';
+import { convertLead, takeEnrollPrefill } from '@/lib/crm';
 import { clearSession, readSession } from '@/lib/session';
 
 interface Plan {
@@ -103,6 +105,11 @@ export default function GymDashboard() {
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
 
+  // Set when the enrolment was started from a card on /leads: the lead id rides
+  // along so a successful enrolment can convert that card too.
+  const [enrollLeadId, setEnrollLeadId] = useState<string | null>(null);
+  const [enrollBanner, setEnrollBanner] = useState<string | null>(null);
+
   useEffect(() => {
     const parsed = readSession();
     if (!parsed) {
@@ -119,7 +126,26 @@ export default function GymDashboard() {
     }
     fetchPlans(parsed.tenantId);
     fetchMembers(parsed.tenantId);
+    // A card on /leads can hand a prospect over to this form. The payload sits
+    // in localStorage rather than the URL, so a phone number never lands in
+    // browser history, and takeEnrollPrefill clears it on read.
+    applyEnrollPrefill();
   }, [router]);
+
+  /**
+   * Fills the enrolment form from the Lead Pipeline hand-off and remembers which
+   * lead it came from, so submitting can flip that card to Converted.
+   */
+  function applyEnrollPrefill() {
+    const prefill = takeEnrollPrefill();
+    if (!prefill) return;
+
+    setName(prefill.name);
+    setPhone(prefill.phone);
+    setEmail(prefill.email ?? '');
+    setEnrollLeadId(prefill.leadId);
+    setEnrollBanner(prefill.name);
+  }
 
   async function fetchPlans(tenantId?: string | null) {
     let query = supabase.from('plans').select('id, name, duration_days, price');
@@ -211,6 +237,29 @@ export default function GymDashboard() {
       setEmail('');
       setEmergencyPhone('');
       setBiometricId('');
+
+      // When the enrolment began on a pipeline card, link the lead to the member
+      // we just created and flip it to Converted. convertLead refuses a second
+      // conversion, so a re-submitted form cannot mint a duplicate membership.
+      if (enrollLeadId) {
+        const linked = await convertLead({
+          tenantId: session?.tenantId ?? null,
+          leadId: enrollLeadId,
+          memberId: memberData.id,
+          planId: selectedPlanId || null,
+          amountPaid: feeAmount,
+        });
+
+        if (!linked.ok) {
+          alert(
+            linked.error ||
+              'The member was enrolled, but the lead could not be marked converted. Convert it from the pipeline.'
+          );
+        }
+        setEnrollLeadId(null);
+        setEnrollBanner(null);
+      }
+
       fetchMembers(session?.tenantId);
     } else {
       alert(memberError?.message || 'Error enrolling member');
@@ -596,6 +645,18 @@ export default function GymDashboard() {
             <Target className="w-4 h-4 text-amber-400" /> Leads CRM
           </Link>
           <Link
+            href="/trainers"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"
+          >
+            <Dumbbell className="w-4 h-4 text-cyan-400" /> Trainers
+          </Link>
+          <Link
+            href="/store"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"
+          >
+            <ShoppingBag className="w-4 h-4 text-rose-400" /> Store
+          </Link>
+          <Link
             href="/plans"
             className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"
           >
@@ -688,6 +749,15 @@ export default function GymDashboard() {
           <h2 className="text-base font-semibold mb-4 flex items-center gap-2">
             <Plus className="w-4 h-4 text-emerald-400" /> New Member Enrollment
           </h2>
+          {enrollBanner && (
+            <div className="mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-[11px] leading-relaxed text-amber-200">
+              <Target className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>
+                Enrolling <strong>{enrollBanner}</strong> from the Lead Pipeline. Submitting this form
+                also moves that lead card to Converted.
+              </span>
+            </div>
+          )}
           <form onSubmit={addMember} className="space-y-3.5">
             <div>
               <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">Full Name</label>
@@ -707,6 +777,16 @@ export default function GymDashboard() {
                 onChange={e => setPhone(e.target.value)}
                 placeholder="10-digit Phone"
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 text-white font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">Email (optional)</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Optional"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 text-white"
               />
             </div>
             <div>
