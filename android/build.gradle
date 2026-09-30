@@ -1,0 +1,38 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.2'
+        classpath 'com.google.gms:google-services:4.4.2'
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    // Cordova/AndroidX pull in an older kotlin-stdlib-jdk7 and kotlin-stdlib-jdk8
+    // (1.6.21) while everything else resolves kotlin-stdlib to 1.8.22, which makes
+    // :app:checkDebugDuplicateClasses fail. Since Kotlin 1.8 the -jdk7 and -jdk8
+    // artifacts are empty shims whose classes live in kotlin-stdlib, so pinning all
+    // four coordinates to one version removes the duplicate classes entirely.
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+    }
+
+
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

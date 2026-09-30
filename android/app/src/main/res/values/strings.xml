@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ForgeOS</string>
+    <string name="title_activity_main">ForgeOS</string>
+    <string name="package_name">in.glitchfiesta.forgeos</string>
+    <string name="custom_url_scheme">in.glitchfiesta.forgeos</string>
+</resources>
