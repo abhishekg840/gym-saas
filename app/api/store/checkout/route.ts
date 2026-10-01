@@ -78,6 +78,11 @@ export async function POST(request: Request) {
 
   const paymentMethod = String(body.payment_method ?? body.paymentMethod ?? '').trim().slice(0, MAX_METHOD);
 
+  // Branch the sale into (Module 11.2). Validated against the tenant so a
+  // hand-edited session cannot stamp another gym's branch on this receipt.
+  const rawBranch = body.branch_id ?? body.branchId;
+  const branchId = isUuid(rawBranch) ? rawBranch : null;
+
   const { data, error } = await supabase.rpc('fn_store_checkout', {
     p_tenant_id: tenantId,
     p_items: lines,
@@ -87,5 +92,49 @@ export async function POST(request: Request) {
 
   if (error) return databaseError(error, 'Could not complete this sale.');
 
-  return NextResponse.json({ ok: true, receipt: data }, { status: 201 });
+  const receipt = (data ?? {}) as Record<string, unknown>;
+  const orderId = typeof receipt.order_id === 'string' ? receipt.order_id : null;
+  const invoiceId = typeof receipt.invoice_id === 'string' ? receipt.invoice_id : null;
+
+  // Freeze the sold lines onto the invoice so the receipt (Module 9.1) shows
+  // product names and prices even after the catalogue changes, and tag both
+  // rows with the branch the till was selling from. Failure here must never
+  // undo a sale that already moved stock — it is a best-effort enrichment.
+  const invoiceItems = Array.isArray(receipt.items)
+    ? (receipt.items as Array<Record<string, unknown>>).map((line) => ({
+        name: String(line.name ?? line.product_name ?? 'Item'),
+        qty: Number(line.quantity ?? line.qty ?? 1),
+        unit_price: Number(line.unit_price ?? line.price ?? 0),
+        total: Number(line.total ?? line.line_total ?? 0),
+      }))
+    : null;
+
+  if (invoiceId) {
+    await supabase
+      .from('invoices')
+      .update({
+        items: invoiceItems,
+        payment_reference: orderId,
+      })
+      .eq('id', invoiceId)
+      .eq('tenant_id', tenantId);
+  }
+
+  if (branchId && orderId) {
+    const { data: branchRow } = await supabase
+      .from('branches')
+      .select('id')
+      .eq('id', branchId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (branchRow) {
+      await supabase.from('orders').update({ branch_id: branchId }).eq('id', orderId);
+      if (invoiceId) {
+        await supabase.from('invoices').update({ branch_id: branchId }).eq('id', invoiceId);
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true, receipt }, { status: 201 });
 }

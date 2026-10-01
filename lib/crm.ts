@@ -92,6 +92,7 @@ export type LeadStage =
   | 'contacted'
   | 'trial_booked'
   | 'trial_completed'
+  | 'negotiation'
   | 'converted'
   | 'lost';
 
@@ -163,6 +164,13 @@ export const PIPELINE_STAGES: readonly StageMeta[] = [
     hint: 'They trained. The fee conversation is next.',
   },
   {
+    key: 'negotiation',
+    label: 'Negotiation',
+    badge: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
+    lane: 'border-orange-500/20',
+    hint: 'Pricing, plan and objections are on the table.',
+  },
+  {
     key: 'converted',
     label: 'Converted',
     badge: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
@@ -192,7 +200,11 @@ export function leadStageLabel(stage: string): string {
 export function nextStage(stage: LeadStage): LeadStage | null {
   if (stage === 'converted' || stage === 'lost') return null;
   const index = STAGE_KEYS.indexOf(stage);
-  return index >= 0 && index < 4 ? (STAGE_KEYS[index + 1] as LeadStage) : null;
+  // Walks the list rather than hard-coding a length, so inserting a lane
+  // (Negotiation, Phase 8) cannot silently strand the stage before it.
+  return index >= 0 && index < STAGE_KEYS.length - 1
+    ? (STAGE_KEYS[index + 1] as LeadStage)
+    : null;
 }
 
 /**

@@ -149,7 +149,7 @@ export async function POST(request: Request) {
   const statusRaw = body.status ?? 'new';
   if (!isLeadStage(statusRaw)) {
     return badRequest(
-      'status must be one of: new, contacted, trial_booked, trial_completed, converted, lost.'
+      'status must be one of: new, contacted, trial_booked, trial_completed, negotiation, converted, lost.'
     );
   }
 
@@ -226,7 +226,7 @@ export async function PATCH(request: Request) {
   if (body.status !== undefined) {
     if (!isLeadStage(body.status)) {
       return badRequest(
-        'status must be one of: new, contacted, trial_booked, trial_completed, converted, lost.'
+        'status must be one of: new, contacted, trial_booked, trial_completed, negotiation, converted, lost.'
       );
     }
     patch.status = body.status;
