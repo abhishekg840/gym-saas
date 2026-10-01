@@ -7,7 +7,6 @@ import {
   ArrowLeft, 
   TrendingUp, 
   IndianRupee, 
-  Users, 
   UserX, 
   Clock, 
   Calendar 
@@ -128,27 +127,27 @@ export default function AnalyticsPage() {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
             <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
               <span>Total Revenue</span>
               <IndianRupee className="w-4 h-4 text-emerald-400" />
             </div>
-            <p className="text-3xl font-black text-emerald-400 font-mono">
+            <p className="text-3xl font-extrabold tracking-tight text-emerald-400">
               ₹{stats.totalRevenue.toLocaleString()}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-1">Direct lifetime collection</p>
+            <p className="text-[11px] text-zinc-500 mt-1">Total collection to date</p>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
             <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
               <span>Today Check-ins</span>
               <Calendar className="w-4 h-4 text-blue-400" />
             </div>
             <p className="text-3xl font-black text-white font-mono">{stats.todayCheckins}</p>
-            <p className="text-[11px] text-neutral-500 mt-1">Footfall recorded today</p>
+            <p className="text-[11px] text-zinc-400 font-medium mt-1">Footfall recorded today</p>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
             <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
               <span>Active Retention</span>
               <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -159,9 +158,9 @@ export default function AnalyticsPage() {
             <p className="text-[11px] text-emerald-500 mt-1">{stats.activeMembers} of {stats.totalMembers} active</p>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
             <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
-              <span>Membership Churn</span>
+              <span>Inactive Members</span>
               <UserX className="w-4 h-4 text-rose-400" />
             </div>
             <p className="text-3xl font-black text-rose-400 font-mono">{churnRate}%</p>
@@ -170,7 +169,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Peak Hours Rush Breakdown */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
+        <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-2 mb-6">
             <Clock className="w-5 h-5 text-amber-400" />
             <h2 className="text-base font-bold">Gym Traffic Distribution (Today)</h2>

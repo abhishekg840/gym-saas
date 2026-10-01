@@ -596,8 +596,8 @@ export default function GymDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">
-                {session?.tenantName || 'Gym'} Command Center
+              <h1 className="text-2xl font-extrabold tracking-tight">
+                {session?.tenantName || 'Gym'} Dashboard
               </h1>
               <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5" />

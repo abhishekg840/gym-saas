@@ -370,7 +370,7 @@ export default function TrainersPayoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0C0D0E] text-white font-sans">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans">
       {/* Header */}
       <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">

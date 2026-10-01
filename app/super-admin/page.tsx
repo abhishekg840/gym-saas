@@ -130,7 +130,7 @@ export default function SuperAdminPortal() {
   );
 
   return (
-    <main className="min-h-screen bg-[#0C0D0E] text-white p-6 sm:p-12 font-sans">
+    <main className="min-h-screen bg-zinc-950 text-white p-6 sm:p-12 font-sans">
       {/* Create Gym Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

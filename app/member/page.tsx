@@ -422,9 +422,9 @@ export default function MemberSelfServicePortal() {
   const lockTitle = lock?.warn ? 'text-amber-300' : 'text-rose-300';
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-4 sm:p-8 flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-zinc-950 text-white p-4 sm:p-8 flex flex-col items-center justify-center">
       {!member ? (
-        <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl">
+        <div className="w-full max-w-sm bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-2xl">
           <div className="flex items-center gap-2 mb-4 text-emerald-400">
             <Dumbbell className="w-6 h-6" />
             <h1 className="text-lg font-bold text-white">Member Smart Pass</h1>
@@ -465,7 +465,7 @@ export default function MemberSelfServicePortal() {
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-black font-bold py-2.5 rounded-xl transition text-sm"
+              className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-black font-bold py-2.5 rounded-xl transition-all duration-150 active:scale-95 text-sm"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
               Open My Pass
@@ -473,11 +473,11 @@ export default function MemberSelfServicePortal() {
           </form>
         </div>
       ) : (
-        <div className="w-full max-w-sm space-y-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 shadow-2xl">
+        <div className="w-full max-w-sm space-y-4 pb-24">
+          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-medium">
                   {geofence?.tenant_name ?? member.tenant_name} · Smart Pass
                 </p>
                 <h2 className="text-xl font-black leading-tight">{member.full_name}</h2>
@@ -551,7 +551,7 @@ export default function MemberSelfServicePortal() {
             ) : (
               <div className={`border rounded-2xl p-5 text-center ${lockWrap}`}>
                 <Lock className={`w-11 h-11 mx-auto mb-2 ${lockTitle}`} />
-                <h3 className={`text-base font-black tracking-wide ${lockTitle}`}>{lock.title}</h3>
+                <h3 className={`text-base font-extrabold tracking-tight ${lockTitle}`}>{lock.title}</h3>
                 <p className="text-xs text-neutral-300 mt-1.5 leading-relaxed">{lock.message}</p>
 
                 {geo.distance_meters !== null && geofence && (
@@ -564,9 +564,9 @@ export default function MemberSelfServicePortal() {
 
                 <button
                   onClick={locate}
-                  className="mt-4 flex items-center justify-center gap-2 w-full bg-neutral-100 hover:bg-white text-black font-bold py-2.5 rounded-xl transition text-sm"
+                  className="mt-4 flex items-center justify-center gap-2 w-full bg-neutral-100 hover:bg-white text-black font-bold py-2.5 rounded-xl transition-all duration-150 active:scale-95 text-sm"
                 >
-                  <Navigation className="w-4 h-4" /> I moved — check again
+                  <Navigation className="w-4 h-4" /> Recalculate Location
                 </button>
               </div>
             )}

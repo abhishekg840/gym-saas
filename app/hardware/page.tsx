@@ -61,10 +61,22 @@ const TYPE_ICONS: Record<HardwareDeviceType, typeof Fingerprint> = {
 const REFRESH_MS = 4_000;
 
 const STATUS_DOT: Record<HardwareDevice['status'], string> = {
-  online: 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]',
-  offline: 'bg-neutral-600',
+  online: 'bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]',
+  offline: 'bg-zinc-600',
   error: 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)]',
   maintenance: 'bg-amber-400',
+};
+
+/**
+ * The stored status (`offline`, `maintenance`) is a database value, so it is
+ * translated into the three words an owner actually acts on: Online, Ready and
+ * Syncing. `error` is the one case worth spelling out, because it needs a human.
+ */
+const STATUS_PILL: Record<HardwareDevice['status'], { label: string; tone: string }> = {
+  online: { label: 'Online', tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
+  offline: { label: 'Offline', tone: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30' },
+  error: { label: 'Needs Attention', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+  maintenance: { label: 'Ready', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
 };
 
 function emptyGeofenceForm() {
@@ -398,14 +410,14 @@ export default function HardwareConsole() {
   // --- Render -----------------------------------------------------------------
   if (!session) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-6">
-        <div className="max-w-sm bg-neutral-900 border border-neutral-800 rounded-3xl p-6 text-center">
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
+        <div className="max-w-sm bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center">
           <ShieldAlert className="w-9 h-9 text-rose-400 mx-auto mb-3" />
           <h1 className="text-base font-bold mb-1">Sign in required</h1>
           <p className="text-xs text-neutral-400 mb-4">
             The hardware console is scoped to one gym, so it needs your operator session.
           </p>
-          <Link href="/" className="inline-block bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-sm px-4 py-2 rounded-xl">
+          <Link href="/" className="inline-block bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-xl active:scale-95 transition-all duration-150">
             Back to sign in
           </Link>
         </div>
@@ -424,12 +436,12 @@ export default function HardwareConsole() {
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
             </Link>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2">
               <ServerCog className="w-6 h-6 text-emerald-400" />
-              Hardware &amp; Geofence — {session.tenantName ?? 'Command Center'}
+              Gate Access & Security — {session.tenantName ?? 'Gate Access'}
             </h1>
             <p className="text-xs text-neutral-500 mt-1">
-              Live terminal health, machine keys, and the gym radius that locks a member pass.
+              Live gate status, connected readers, and the gym radius that unlocks a member pass.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -498,7 +510,7 @@ export default function HardwareConsole() {
             <h2 className="text-sm font-bold mb-1">No terminals registered yet</h2>
             <p className="text-xs text-neutral-500 max-w-md mx-auto">
               Register the turnstile relay, fingerprint reader, RFID pad or the browser kiosk at the
-              door. Each one gets a machine key shown once — paste that into the device firmware and
+              door. Each one gets an access key shown once — paste that into the reader software and
               it will check in here every 30 seconds.
             </p>
             {canManage && (
@@ -543,9 +555,11 @@ export default function HardwareConsole() {
                         </span>
                       </div>
                     </div>
-                    <span className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wide text-neutral-400 shrink-0">
-                      <span className={`w-2 h-2 rounded-full ${STATUS_DOT[device.status]}`} />
-                      {device.status}
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${STATUS_PILL[device.status].tone}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[device.status]}`} />
+                      {STATUS_PILL[device.status].label}
                     </span>
                   </div>
 
@@ -554,13 +568,13 @@ export default function HardwareConsole() {
                     <dd className={`text-right font-mono ${live ? 'text-emerald-400' : 'text-neutral-300'}`}>
                       {formatSince(seconds)}
                     </dd>
-                    <dt className="text-neutral-500">IP address</dt>
+                    <dt className="text-neutral-500">Network</dt>
                     <dd className="text-right font-mono text-neutral-300 truncate">
                       {device.ip_address ?? '—'}
                     </dd>
-                    <dt className="text-neutral-500">Firmware</dt>
+                    <dt className="text-neutral-500">Software</dt>
                     <dd className="text-right font-mono text-neutral-300">{device.firmware_version}</dd>
-                    <dt className="text-neutral-500">Machine key</dt>
+                    <dt className="text-neutral-500">Access key</dt>
                     <dd className="text-right font-mono text-neutral-400 truncate">
                       {device.api_key_masked}
                     </dd>
@@ -591,7 +605,7 @@ export default function HardwareConsole() {
                         className="flex items-center gap-1 flex-1 justify-center text-[11px] px-2 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition"
                       >
                         <Copy className="w-3 h-3 text-blue-400" />
-                        {copiedId === device.id ? 'Copied' : 'Copy key'}
+                        {copiedId === device.id ? 'Copied' : 'Copy access key'}
                       </button>
                       <button
                         onClick={() => void handlePing(device)}
@@ -625,7 +639,7 @@ export default function HardwareConsole() {
 
         {/* ---- Geofence + gate test ---------------------------------------- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-          <form onSubmit={handleSaveGeofence} className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <form onSubmit={handleSaveGeofence} className="rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md p-5">
             <div className="flex items-center gap-2 mb-1">
               <MapPin className="w-4 h-4 text-emerald-400" />
               <h2 className="text-sm font-bold">Gym Geofence</h2>
@@ -743,14 +757,14 @@ export default function HardwareConsole() {
             )}
           </form>
 
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <div className="rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md p-5">
             <div className="flex items-center gap-2 mb-1">
               <ScanLine className="w-4 h-4 text-emerald-400" />
               <h2 className="text-sm font-bold">Gate Test Panel</h2>
             </div>
             <p className="text-[11px] text-neutral-500 mb-4">
-              Exactly what an ESP32 sends: a machine key plus a fingerprint slot or a card serial.
-              <span className="text-neutral-400"> fn_hardware_punch </span>
+              A gate reader sends: an access key plus a fingerprint slot or a card serial.
+              the gate check
               decides — freeze, expiry, attendance row and heartbeat included.
             </p>
 
@@ -776,7 +790,7 @@ export default function HardwareConsole() {
 
               <div>
                 <label htmlFor="punch-key" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
-                  Machine key
+                  Access key
                 </label>
                 <div className="relative">
                   <KeyRound className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-2.5" />
@@ -791,7 +805,7 @@ export default function HardwareConsole() {
                   />
                 </div>
                 <p className="text-[10px] text-neutral-600 mt-1">
-                  The console cannot read a stored key back — paste the one you saved on the device,
+                  Saved keys cannot be shown again — paste the one you saved on the device,
                   or register a new terminal to have this field filled in.
                 </p>
               </div>
@@ -871,8 +885,8 @@ export default function HardwareConsole() {
         </div>
 
         <p className="text-[11px] text-neutral-600 mb-8">
-          A terminal is called online while its last heartbeat is under {ONLINE_WINDOW_SECONDS} seconds
-          old. Firmware should POST /api/hardware/heartbeat every 30 seconds and
+          A reader shows Online while its last heartbeat is under {ONLINE_WINDOW_SECONDS} seconds
+          old. A reader should ping /api/hardware/heartbeat every 30 seconds and
           /api/hardware/punch on every scan — the punch itself counts as a heartbeat, so a reader that
           punches but stops punching shows up red here within a minute.
         </p>
@@ -889,7 +903,7 @@ export default function HardwareConsole() {
               <div>
                 <h2 className="text-base font-bold">Register a terminal</h2>
                 <p className="text-[11px] text-neutral-500 mt-0.5">
-                  A new machine key is generated and shown once. Copy it into the device firmware.
+                  A new device key is generated and shown once. Copy it into the reader software.
                 </p>
               </div>
               <button
@@ -942,7 +956,7 @@ export default function HardwareConsole() {
 
               <div>
                 <label htmlFor="reg-fw" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
-                  Firmware version
+                  Software version
                 </label>
                 <input
                   id="reg-fw"
@@ -992,7 +1006,7 @@ export default function HardwareConsole() {
             </div>
 
             <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2 mb-4">
-              Copy this key into the device firmware now. The console can only show a masked form of it
+              Copy this code into the reader software now. The console can only show a masked form of it
               afterwards — a lost key means registering the terminal again.
             </p>
 
@@ -1005,7 +1019,7 @@ export default function HardwareConsole() {
               <dd className="text-right">
                 {DEVICE_TYPE_META[issued.device_type]?.label ?? issued.device_type}
               </dd>
-              <dt className="text-neutral-500">Firmware</dt>
+              <dt className="text-neutral-500">Software</dt>
               <dd className="text-right font-mono">{issued.firmware_version}</dd>
               <dt className="text-neutral-500">Device id</dt>
               <dd className="text-right font-mono truncate">{issued.id}</dd>
@@ -1018,14 +1032,14 @@ export default function HardwareConsole() {
                   setIssued(null);
                   flash(
                     ok
-                      ? 'Key copied — paste it into the device firmware now.'
+                      ? 'Key copied — paste it into the reader software now.'
                       : 'Key dismissed — copy it from the field before it disappears next time.',
                     ok ? 'ok' : 'bad'
                   );
                 }}
                 className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black font-semibold text-xs transition"
               >
-                <Copy className="w-3.5 h-3.5" /> Copy key and close
+                <Copy className="w-3.5 h-3.5" /> Copy access key and close
               </button>
               <button
                 onClick={() => setIssued(null)}
