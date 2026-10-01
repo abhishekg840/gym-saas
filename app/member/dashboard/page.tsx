@@ -1,37 +1,34 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
-import { Capacitor } from '@capacitor/core';
-import { Geolocation } from '@capacitor/geolocation';
 import {
   Bell,
+  ChevronRight,
   Dumbbell,
+  Flame,
   Home,
   Loader2,
-  Lock,
-  MapPin,
+  LogOut,
   MessageCircle,
-  Navigation,
   Package,
   Phone,
+  Plus,
+  RefreshCw,
   ShoppingBag,
   Store,
   Timer,
+  TrendingDown,
+  TrendingUp,
   User,
+  Utensils,
 } from 'lucide-react';
 import { readSession, clearSession, type GymSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
-import {
-  evaluateGeofence,
-  geolocationErrorMessage,
-  type GeofenceVerdict,
-  type GymGeofence,
-} from '@/lib/geofence';
 import { encodePassToken, PASS_WINDOW_MS } from '@/lib/passtoken';
 import {
+  EMPTY_STREAK,
   WORKOUT_SPLITS,
   SPLIT_SUGGESTIONS,
   cancelReservation,
@@ -43,7 +40,9 @@ import {
   logWorkout,
   reserveProduct,
   rushLevel,
+  setUsername,
   splitVolume,
+  streakHeadline,
   timeAgo,
   weightSparkPath,
   weightTrend,
@@ -51,6 +50,9 @@ import {
   type WorkoutSplit,
 } from '@/lib/companion';
 
+// =============================================================================
+// Shell constants — the whole member app is one light surface
+// =============================================================================
 type TabId = 'home' | 'health' | 'training' | 'store';
 
 const TABS: { id: TabId; label: string; icon: typeof Home }[] = [
@@ -60,26 +62,44 @@ const TABS: { id: TabId; label: string; icon: typeof Home }[] = [
   { id: 'store', label: 'Store', icon: Store },
 ];
 
-/** Shared surface for every card on the app: the layered dark slate the whole
- *  product now uses, instead of the flat #000000 block it replaced. */
-const CARD = 'rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md';
+/** Every card in the app: white, soft border, barely-there shadow. */
+const CARD = 'bg-white rounded-2xl border border-slate-200 shadow-sm';
 
-/** Tactile feedback for every pressable, per the Phase 1 interaction spec. */
-const TAP = 'transition-all duration-150 active:scale-95';
+/** The one button style members press: solid teal, white text. */
+const PRIMARY =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold disabled:opacity-60';
+
+/** Tactile feedback for every pressable. */
+const TAP = 'transition-all duration-150 active:scale-[0.97]';
+
+const INPUT =
+  'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15';
 
 /** The member-facing name for a reservation's state. */
-const RESERVATION_LABEL: Record<string, { label: string; tone: string }> = {
-  pending: { label: 'Waiting at the desk', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/25' },
-  picked_up: { label: 'Collected', tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25' },
-  cancelled: { label: 'Cancelled', tone: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/25' },
+const RESERVATION_LABEL: Record<string, { label: string; tone: string; hint: string }> = {
+  pending: {
+    label: 'Waiting at Desk',
+    tone: 'bg-amber-50 text-amber-700 border-amber-200',
+    hint: 'Show this screen at the counter to collect it.',
+  },
+  picked_up: {
+    label: 'Picked Up',
+    tone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    hint: 'Handed over and billed at the desk.',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    tone: 'bg-slate-100 text-slate-500 border-slate-200',
+    hint: 'This reservation was closed.',
+  },
 };
 
-/** Store categories with the icon the catalogue groups them under. */
+/** Store categories, with the icon the catalogue groups them under. */
 const CATEGORY_META: Record<string, { label: string; icon: typeof Package }> = {
   protein: { label: 'Protein', icon: Package },
   supplements: { label: 'Supplements', icon: Package },
   merchandise: { label: 'Gear', icon: ShoppingBag },
-  beverages: { label: 'Drinks', icon: Package },
+  beverages: { label: 'Drinks', icon: Utensils },
   gear: { label: 'Gear', icon: ShoppingBag },
 };
 
@@ -91,44 +111,44 @@ interface StoreItem {
   stock_quantity: number;
 }
 
-/** What /api/member/pass returns; the Home tab needs the gym's fence config to
- *  decide whether the QR may be shown at all. */
+/** What /api/member/pass returns for the signed-in member. */
 interface PassMember {
   id: string;
   full_name: string;
   phone: string;
+  username: string | null;
   tenant_id: string | null;
   tenant_name: string;
+  upi_id: string | null;
   membership_end: string | null;
+  status: string;
   is_frozen: boolean;
   freeze_end_date: string | null;
   is_expired: boolean;
 }
-
-interface Fix {
-  lat: number;
-  lon: number;
-  accuracy: number | null;
-  at: number;
-}
-
-type LocStatus = 'idle' | 'locating' | 'ready' | 'error';
 
 interface TabProps {
   data: CompanionData;
   onFlash: (message: string, kind?: 'ok' | 'bad') => void;
   onSaved: () => Promise<void>;
 }
+
+/** Why the gate pass cannot be shown, in member-facing words. Null = show it. */
+interface PassLock {
+  title: string;
+  message: string;
+  /** The tailwind tone for the card that replaces the QR code. */
+  tone: string;
+}
+
 /**
  * A clock that only runs while `active`.
  *
- * Reading the wall clock during render is an impure operation, and React has no
- * reason to re-render when a second passes — so time is modelled as state that an
- * interval advances. The first reading lands on a macrotask rather than
- * synchronously in the effect body, which keeps the component from cascading a
- * render before it has anything to show.
- *
- * @param active when false the interval is torn down and the value is frozen
+ * Reading the wall clock during render is impure and React has no reason to
+ * re-render when a second passes, so time is modelled as state an interval
+ * advances. The first reading lands on a macrotask rather than synchronously in
+ * the effect body, which keeps the component from cascading a render before it
+ * has anything to show.
  */
 function useClock(active: boolean, intervalMs = 1000): number {
   const [now, setNow] = useState(0);
@@ -150,49 +170,61 @@ function useClock(active: boolean, intervalMs = 1000): number {
   return now;
 }
 
+function greeting(now: Date): string {
+  const hour = now.getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+// =============================================================================
+// The app shell
+// =============================================================================
+
 export default function MemberDashboard() {
   const router = useRouter();
 
   /**
-   * The session, read once on mount.
-   *
-   * `null` covers both "still hydrating" and "not a member", which is why the
-   * redirect lives in an effect below rather than as a render-time branch: the
-   * gate cannot tell those two apart before localStorage is readable.
+   * The session, read once on mount. `null` covers both "still hydrating" and
+   * "not signed in", which is why the redirect lives in an effect below: the gate
+   * cannot tell those two apart before localStorage is readable.
    */
   const [session, setSession] = useState<GymSession | null>(null);
+  const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<TabId>('home');
   const [data, setData] = useState<CompanionData | null>(null);
   const [pass, setPass] = useState<PassMember | null>(null);
-  const [geofence, setGeofence] = useState<GymGeofence | null>(null);
-  const [fix, setFix] = useState<Fix | null>(null);
-  const [locStatus, setLocStatus] = useState<LocStatus>('idle');
-  const [locMessage, setLocMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeKind, setNoticeKind] = useState<'ok' | 'bad'>('ok');
   const [insideNow, setInsideNow] = useState(0);
+  const [qrToken, setQrToken] = useState<string | null>(null);
+  const [qrSeconds, setQrSeconds] = useState<number | null>(null);
 
-  /**
-   * The live GPS subscription, tracked by platform because the two hand back
-   * different id types. A single `string | number | null` would need a type
-   * check at every teardown site; two named slots keep each one obvious.
-   */
-  const watchRef = useRef<{ plugin: string | null; browser: number | null }>({
-    plugin: null,
-    browser: null,
-  });
+  /** The 30-second window the last minted token belongs to. */
+  const lastWindow = useRef(-1);
+  /** The greeting is decided once per mount, so it cannot flip mid-session. */
+  const [greetingAt] = useState(() => new Date());
 
   const memberId = session?.role === 'member' ? session.userId : null;
-
-  // Held as its own binding: the loaders below depend on the phone number, and
-  // reading `session?.phone` inside their dependency lists defeats the compiler's
-  // memoisation check.
   const memberPhone = session?.phone ?? '';
 
   function flash(message: string, kind: 'ok' | 'bad' = 'ok') {
     setNotice(message);
     setNoticeKind(kind);
   }
+
+  /** Reads the stored session once, then leaves routing to the effect below. */
+  useEffect(() => {
+    // localStorage is an external store, so reading it belongs in an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSession(readSession());
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!session || session.role !== 'member') router.replace('/login');
+  }, [ready, session, router]);
 
   /** Reloads the four tabs' bundle. */
   const refresh = useCallback(async () => {
@@ -206,55 +238,40 @@ export default function MemberDashboard() {
   }, [memberId]);
 
   /**
-   * The pass lookup also returns the gym's fence config, which decides whether the
-   * QR may be rendered — so it is fetched alongside the bundle rather than on its
-   * own, keeping the Home tab's first paint to a single round trip.
+   * The membership lookup behind the Gate Pass. It carries the gym name for the
+   * card header and the UPI id for the pay-at-the-desk shortcut.
    */
   const loadPass = useCallback(async () => {
-    if (!memberPhone) return;
-    const response = await fetch('/api/member/pass', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: memberPhone }),
-    });
-    if (!response.ok) return;
-    const body = (await response.json()) as {
-      ok: boolean;
-      member?: PassMember;
-      geofence?: GymGeofence | null;
-    };
-    if (body.ok && body.member) {
-      setPass(body.member);
-      setGeofence(body.geofence ?? null);
-    }
-  }, [memberPhone]);
+    if (!memberId && !memberPhone) return;
 
-  // --- Session gate ---------------------------------------------------------
-  useEffect(() => {
-    const stored = readSession();
-    if (!stored || stored.role !== 'member') {
-      router.replace('/login');
-      return;
+    try {
+      const response = await fetch('/api/member/pass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(memberId ? { member_id: memberId } : { phone: memberPhone }),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; member?: PassMember };
+      if (result.ok && result.member) setPass(result.member);
+    } catch {
+      // The pass card falls back to the bundle's own member row; a failed lookup
+      // is not worth an error banner across the whole screen.
     }
-    // Reading localStorage is a side effect by definition: the server render
-    // cannot know the session, so this lands one commit after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSession(stored);
-  }, [router]);
+  }, [memberId, memberPhone]);
 
   useEffect(() => {
     if (!memberId) return;
-    // Load-on-mount, not render-derived: the setStates land after the awaits.
-    (async () => {
-      await Promise.all([refresh(), loadPass()]);
-    })();
+    // Fetching on mount is an external subscription; the state it writes is the
+    // result of that fetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh();
+    void loadPass();
   }, [memberId, refresh, loadPass]);
 
-  // --- Live floor count for the rush indicator -----------------------------
-  // Deliberately a count, not the list: the Home tab needs "how busy", and
-  // reading one row per member would ship every member's name to the phone.
+  // --- Live floor count for the rush indicator -------------------------------
   const loadRush = useCallback(async () => {
-    const tenantId = pass?.tenant_id;
+    const tenantId = data?.tenant_id ?? pass?.tenant_id;
     if (!tenantId) return;
 
     const since = new Date(Date.now() - 90 * 60 * 1000).toISOString();
@@ -266,310 +283,127 @@ export default function MemberDashboard() {
       .gte('punch_time', since);
 
     if (!error && typeof count === 'number') setInsideNow(count);
-  }, [pass?.tenant_id]);
+  }, [data?.tenant_id, pass?.tenant_id]);
 
   useEffect(() => {
-    if (!pass?.tenant_id) return;
-    // Subscribing to an external source (the gym's check-in feed) is exactly what
-    // an effect is for; the state it writes is the poll result.
+    if (!data?.tenant_id && !pass?.tenant_id) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRush();
     const timer = window.setInterval(loadRush, 60_000);
     return () => window.clearInterval(timer);
-  }, [pass?.tenant_id, loadRush]);
+  }, [data?.tenant_id, pass?.tenant_id, loadRush]);
 
-  // --- GPS ------------------------------------------------------------------
-  const locate = useCallback(async () => {
-    setLocStatus('locating');
-    setLocMessage(null);
+  /**
+   * Membership-only pass state. Phase 5 removed every location rule: a frozen or
+   * expired membership is the only thing that can hide the QR code.
+   */
+  const passLock = useMemo((): PassLock | null => {
+    const live = pass ?? data?.member ?? null;
+    if (!live) return null;
 
-    // One teardown for both id shapes. The plugin hands back a string id, the
-    // browser API a number; missing either one leaks a live GPS subscription.
-    const stop = (pluginId: string | null, browserId: number | null) => {
-      if (pluginId !== null) {
-        void Geolocation.clearWatch({ id: pluginId }).catch(() => undefined);
-      }
-      if (browserId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.clearWatch(browserId);
-      }
-    };
-
-    // Drops the previous watch and parks a new one in `watchRef`, so a second tap
-    // of "Recalculate" replaces the first subscription rather than adding to it.
-    let pluginId: string | null = null;
-    let browserId: number | null = null;
-    stop(watchRef.current.plugin, watchRef.current.browser);
-
-    const accept = (
-      latitude: number,
-      longitude: number,
-      accuracy: number,
-      at: number
-    ) => {
-      setFix({
-        lat: latitude,
-        lon: longitude,
-        accuracy: Number.isFinite(accuracy) ? accuracy : null,
-        at: at || Date.now(),
-      });
-      setLocStatus('ready');
-      setLocMessage(null);
-    };
-
-    const fail = (message: string) => {
-      // Deliberately leaves `fix` null: the pass stays locked rather than
-      // falling back to an unverified position.
-      stop(pluginId, browserId);
-      setLocStatus('error');
-      setLocMessage(message);
-    };
-
-    // On Android the WebView's geolocation is gated behind a runtime permission
-    // that only the Capacitor plugin can request. Without it watchPosition is
-    // refused with PERMISSION_DENIED and a member in the lobby could never
-    // unlock. The plugin also checks the manifest's FINE/COARSE entries.
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const status = await Geolocation.requestPermissions();
-        if (status.location === 'denied' || status.coarseLocation === 'denied') {
-          fail(geolocationErrorMessage(1));
-          return;
-        }
-
-        pluginId = await Geolocation.watchPosition(
-          { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 },
-          (position, err) => {
-            if (err) {
-              fail(
-                typeof err.code === 'number'
-                  ? geolocationErrorMessage(err.code)
-                  : err.message || geolocationErrorMessage(2)
-              );
-              return;
-            }
-            if (!position) return;
-            accept(
-              position.coords.latitude,
-              position.coords.longitude,
-              position.coords.accuracy ?? 0,
-              position.timestamp
-            );
-          }
-        );
-
-        watchRef.current = { plugin: pluginId, browser: null };
-      } catch (error) {
-        // Location services switched off, or the prompt was refused outright.
-        fail(
-          error instanceof Error && error.message ? error.message : geolocationErrorMessage(2)
-        );
-      }
-      return;
-    }
-
-    // Browser / desktop path: plain geolocation, which the browser gates itself.
-    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      fail('This device cannot report a location, so the pass stays locked.');
-      return;
-    }
-
-    browserId = navigator.geolocation.watchPosition(
-      (position) =>
-        accept(
-          position.coords.latitude,
-          position.coords.longitude,
-          position.coords.accuracy ?? 0,
-          position.timestamp
-        ),
-      (err) => fail(geolocationErrorMessage(err.code)),
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 }
-    );
-    watchRef.current = { plugin: null, browser: browserId };
-  }, []);
-
-  useEffect(() => {
-    if (!memberId) return;
-    // Requesting a GPS fix is an external subscription, not derived state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    locate();
-
-    // Unmounting mid-request would otherwise leave a watch running and a GPS
-    // prompt on screen after the member has navigated away.
-    return () => {
-      const current = watchRef.current;
-      watchRef.current = { plugin: null, browser: null };
-      if (current.plugin !== null) {
-        void Geolocation.clearWatch({ id: current.plugin }).catch(() => undefined);
-      }
-      if (current.browser !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.clearWatch(current.browser);
-      }
-    };
-  }, [memberId, locate]);
-// --- The geofence decision ------------------------------------------------
-  // Geography only. Membership state (frozen / expired) is layered on below,
-  // because a frozen pass is locked for a different reason and needs its own
-  // sentence — and because the gate would refuse it even with a perfect fix.
-  const verdict: GeofenceVerdict = useMemo(
-    () =>
-      evaluateGeofence(
-        geofence,
-        fix
-          ? {
-              latitude: fix.lat,
-              longitude: fix.lon,
-              accuracy_meters: fix.accuracy,
-              taken_at: fix.at,
-            }
-          : null
-      ),
-    [geofence, fix]
-  );
-
-  /** Why the pass is locked, in member-facing words. Null means it may be shown. */
-  const passLock = useMemo((): { title: string; message: string; warn: boolean } | null => {
-    if (pass?.is_frozen) {
+    if (live.is_frozen) {
       return {
-        title: 'MEMBERSHIP PAUSED',
-        message: pass.freeze_end_date
-          ? `Your membership is paused until ${pass.freeze_end_date}. Ask the front desk to resume it.`
-          : 'Your membership is paused. Ask the front desk to resume it.',
-        warn: false,
+        title: 'Membership Paused',
+        message: live.freeze_end_date
+          ? `Your membership is paused until ${live.freeze_end_date}. Ask the desk to resume it and your pass returns instantly.`
+          : 'Your membership is paused. Ask the desk to resume it and your pass returns instantly.',
+        tone: 'bg-slate-50 border-slate-200 text-slate-700',
       };
     }
+
     if (pass?.is_expired) {
       return {
-        title: 'MEMBERSHIP EXPIRED',
-        message: 'This pass is locked because the membership has ended. Renew at the front desk to unlock the gate.',
-        warn: false,
+        title: 'Membership Expired',
+        message:
+          'Renew at the front desk to reopen your gate pass. Your training history is safe.',
+        tone: 'bg-rose-50 border-rose-200 text-rose-700',
       };
     }
-    if (!verdict.unlocked) {
-      // Amber while the phone is still deciding, red once it is out of reach.
-      const awaiting = verdict.state === 'awaiting_fix';
+
+    const status = live.status ?? 'active';
+    if (status !== 'active') {
       return {
-        title: awaiting
-          ? 'FINDING YOUR LOCATION'
-          : verdict.state === 'outside'
-            ? 'OUTSIDE GYM RANGE'
-            : verdict.state === 'unavailable'
-              ? 'GYM LOCATION UNKNOWN'
-              : verdict.state === 'unconfigured'
-                ? 'PASS READY'
-                : 'LOCATION REQUIRED TO UNLOCK PASS',
-        message: verdict.message,
-        warn: awaiting,
+        title: 'Membership Inactive',
+        message: `Your membership is marked "${status}". See the front desk to reactivate it.`,
+        tone: 'bg-amber-50 border-amber-200 text-amber-800',
       };
     }
+
     return null;
-  }, [pass, verdict]);
+  }, [pass, data?.member]);
 
   /**
-   * The QR window. One clock drives both the token and the countdown, so they
-   * cannot drift apart: the token re-mints exactly when the kiosk's window rolls
-   * over, which is what makes a screenshot useless within about 90 seconds.
+   * The rotating credential, re-minted on every 30-second window. Built from the
+   * member id and phone only: there is no location proof to attach any more, and
+   * the kiosk re-checks the membership itself when the code is scanned.
    */
-  const passVisible = passLock === null && pass !== null;
-  const now = useClock(passVisible, 1000);
+  useEffect(() => {
+    if (!memberId) return;
 
-  /** Seconds until the current frame expires; null while locked. */
-  const qrSeconds = passVisible
-    ? Math.ceil((PASS_WINDOW_MS - (now % PASS_WINDOW_MS)) / 1000)
-    : null;
+    const tick = () => {
+      const windowIndex = Math.floor(Date.now() / PASS_WINDOW_MS);
+      setQrSeconds(30 - (Math.floor(Date.now() / 1000) % 30));
 
-  /**
-   * The QR token, or null when the pass must not be drawn. Returning null IS the
-   * lock: there is no fallback branch that renders a code anyway.
-   */
-  const qrToken = useMemo(() => {
-    if (!pass || passLock !== null || now === 0) return null;
+      if (windowIndex === lastWindow.current) return;
+      lastWindow.current = windowIndex;
 
-    return encodePassToken({
-      id: pass.id,
-      ph: pass.phone,
-      t: Math.floor(now / PASS_WINDOW_MS),
-      geo:
-        fix && geofence && geofence.latitude !== null && geofence.longitude !== null
-          ? {
-              lat: fix.lat,
-              lon: fix.lon,
-              accuracy_meters: fix.accuracy,
-              distance_meters: verdict.distance_meters ?? 0,
-              radius_meters: geofence.geofence_radius_meters,
-            }
-          : undefined,
-    });
-  }, [pass, passLock, now, verdict.distance_meters, fix, geofence]);
+      setQrToken(
+        passLock ? null : encodePassToken({ id: memberId, ph: memberPhone, t: windowIndex })
+      );
+    };
+
+    const prime = window.setTimeout(tick, 0);
+    const interval = window.setInterval(tick, 1000);
+    return () => {
+      window.clearTimeout(prime);
+      window.clearInterval(interval);
+    };
+  }, [memberId, memberPhone, passLock]);
 
   function signOut() {
     clearSession();
     router.replace('/login');
   }
 
-  // `session === null` covers both "still reading localStorage" and "not a member
-  // being redirected", which are indistinguishable before the gate effect runs.
-  if (!memberId) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-        <div className={`${CARD} max-w-sm w-full p-6 text-center`}>
-          {session === null ? (
-            <>
-              <Loader2 className="w-7 h-7 mx-auto mb-3 animate-spin text-emerald-400" />
-              <h1 className="text-base font-bold mb-1">Loading your dashboard</h1>
-              <p className="text-xs text-zinc-400">One moment…</p>
-            </>
-          ) : (
-            <>
-              <Lock className="w-8 h-8 text-rose-400 mx-auto mb-3" />
-              <h1 className="text-base font-bold mb-1">Member sign-in required</h1>
-              <p className="text-xs text-zinc-400 mb-4">
-                This app is for gym members. Staff should use the staff dashboard.
+  const displayName = pass?.full_name ?? data?.member?.full_name ?? session?.name ?? 'Member';
+  const handle = pass?.username ?? data?.member?.username ?? session?.username ?? null;
+
+  const locked = qrToken === null;
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20 text-slate-900">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white">
+              <Dumbbell className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold tracking-tight">{displayName}</p>
+              <p className="truncate text-[11px] font-medium text-slate-500">
+                {handle ? `@${handle}` : pass?.tenant_name ?? 'Member app'}
               </p>
-              <Link
-                href="/login"
-                className={`inline-block bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-xl ${TAP}`}
-              >
-                Go to sign in
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-return (
-    <div className="min-h-screen bg-zinc-950 text-white pb-28">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/80 backdrop-blur-md">
-        <div className="max-w-md mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <Dumbbell className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold leading-tight truncate">
-              {data?.member?.full_name ?? pass?.full_name ?? 'Member'}
-            </p>
-            <p className="text-[11px] text-zinc-400 font-medium truncate">
-              {pass?.tenant_name ?? 'Your gym'}
-            </p>
+            </div>
           </div>
           <button
             onClick={signOut}
             title="Sign out"
-            className={`p-2 rounded-xl bg-white/5 border border-white/10 text-zinc-400 ${TAP}`}
+            aria-label="Sign out"
+            className={`rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:text-slate-900 ${TAP}`}
           >
-            <User className="w-4 h-4" />
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 py-4 space-y-4">
+      <main className="mx-auto max-w-md space-y-4 px-4 py-4">
         {notice && (
           <div
+            role="status"
             className={`rounded-xl border px-3 py-2.5 text-xs font-medium ${
               noticeKind === 'ok'
-                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
-                : 'bg-rose-500/10 border-rose-500/25 text-rose-200'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-rose-200 bg-rose-50 text-rose-800'
             }`}
           >
             {notice}
@@ -579,37 +413,27 @@ return (
         {tab === 'home' && (
           <HomeTab
             pass={pass}
-            verdict={verdict}
-            passLock={passLock}
-            locStatus={locStatus}
-            locMessage={locMessage}
+            data={data}
+            lock={passLock}
+            locked={locked}
             qrToken={qrToken}
             qrSeconds={qrSeconds}
             insideNow={insideNow}
-            data={data}
-            onLocate={locate}
+            displayName={displayName}
+            handle={handle}
+            now={greetingAt}
             onRefresh={refresh}
           />
         )}
-        {tab === 'health' && data && (
-          <HealthTab data={data} onFlash={flash} onSaved={refresh} />
-        )}
+        {tab === 'health' && data && <HealthTab data={data} onFlash={flash} onSaved={refresh} />}
         {tab === 'training' && data && (
           <TrainingTab data={data} onFlash={flash} onSaved={refresh} />
         )}
-        {tab === 'store' && data && (
-          <StoreTab
-            data={data}
-            tenantId={pass?.tenant_id ?? null}
-            onFlash={flash}
-            onSaved={refresh}
-          />
-        )}
+        {tab === 'store' && data && <StoreTab data={data} onFlash={flash} onSaved={refresh} />}
       </main>
 
-      {/* Bottom tab bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/10 bg-zinc-950/90 backdrop-blur-md">
-        <div className="max-w-md mx-auto grid grid-cols-4">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-md grid-cols-4">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = tab === id;
             return (
@@ -618,10 +442,10 @@ return (
                 onClick={() => setTab(id)}
                 aria-current={active ? 'page' : undefined}
                 className={`flex flex-col items-center gap-1 py-2.5 ${TAP} ${
-                  active ? 'text-emerald-400' : 'text-zinc-500'
+                  active ? 'text-teal-600' : 'text-slate-400'
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="h-5 w-5" />
                 <span className="text-[10px] font-semibold">{label}</span>
               </button>
             );
@@ -631,184 +455,192 @@ return (
     </div>
   );
 }
-// =============================================================================
-// Tab 1 — Home & Pass
-// =============================================================================
 
-interface PassLock {
-  title: string;
-  message: string;
-  /** Amber (still trying) rather than red (refused). */
-  warn: boolean;
-}
+// =============================================================================
+// Tab 1 — Home & Gate Pass
+// =============================================================================
 
 interface HomeTabProps {
   pass: PassMember | null;
-  verdict: GeofenceVerdict;
-  /** Decided once in the parent so the QR and the overlay cannot disagree. */
-  passLock: PassLock | null;
-  locStatus: LocStatus;
-  locMessage: string | null;
+  data: CompanionData | null;
+  /** Decided once in the parent so the QR and the notice cannot disagree. */
+  lock: PassLock | null;
+  locked: boolean;
   qrToken: string | null;
   qrSeconds: number | null;
   insideNow: number;
-  data: CompanionData | null;
-  onLocate: () => void;
+  displayName: string;
+  handle: string | null;
+  now: Date;
   onRefresh: () => Promise<void>;
 }
 
 function HomeTab({
   pass,
-  verdict,
-  passLock,
-  locStatus,
-  locMessage,
+  data,
+  lock,
+  locked,
   qrToken,
   qrSeconds,
   insideNow,
-  data,
-  onLocate,
+  displayName,
+  handle,
+  now,
   onRefresh,
 }: HomeTabProps) {
   const hours = gymOpenState();
   const rush = rushLevel(insideNow);
   const countdown = expiryCountdown(pass?.membership_end ?? data?.member?.membership_end ?? null);
+  const streak = data?.streak ?? EMPTY_STREAK;
+  const flame = streakHeadline(streak);
   const announcements = data?.announcements.slice(0, 3) ?? [];
-
-  const locked = qrToken === null;
-  const lockTone = passLock?.warn
-    ? 'bg-amber-500/10 border-amber-500/30'
-    : 'bg-rose-500/10 border-rose-500/30';
-  const lockIconTone = passLock?.warn ? 'text-amber-300' : 'text-rose-300';
-  const lockTextTone = passLock?.warn ? 'text-amber-200' : 'text-rose-200';
 
   return (
     <div className="space-y-4">
-      {/* Gym status strip */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className={`${CARD} p-3.5`}>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Gym</p>
-          <p
-            className={`mt-1.5 text-sm font-bold tracking-tight ${
-              hours.open ? 'text-emerald-300' : 'text-amber-300'
-            }`}
-          >
-            {hours.label}
-          </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 font-medium">5am – 11pm daily</p>
-        </div>
-        <div className={`${CARD} p-3.5`}>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
-            How busy
-          </p>
-          <span
-            className={`mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-bold ${rush.tone}`}
-          >
-            {rush.level}
-          </span>
-          <p className="mt-1 text-[11px] text-zinc-500 font-medium">
-            {insideNow} checked in recently
-          </p>
-        </div>
-      </div>
-
-      {/* The pass. The QR is rendered only when `qrToken` exists — there is no
-          else-branch that draws a placeholder code. */}
-      <div className={`${CARD} p-5`}>
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
-              Gate Pass
-            </p>
-            <h2 className="text-lg font-extrabold tracking-tight truncate">
-              {pass?.full_name ?? 'Member'}
-            </h2>
-          </div>
-          <span
-            className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${countdown.tone}`}
-          >
+      {/* Greeting + streak */}
+      <section className={`${CARD} p-5`}>
+        <p className="text-xs font-medium text-slate-500">
+          {greeting(now)}, {displayName.split(' ')[0]}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {handle && (
+            <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+              @{handle}
+            </span>
+          )}
+          <span className={`rounded-lg border px-2 py-0.5 text-xs font-semibold ${countdown.tone}`}>
             {countdown.label}
           </span>
         </div>
-<div className="flex flex-col items-center">
-          {!locked ? (
-            <>
-              <div className="rounded-2xl bg-white p-3">
-                <QRCodeSVG value={qrToken} size={180} level="M" />
-              </div>
-              <p className="mt-3 text-[11px] font-semibold text-zinc-400">
-                Refreshes in{' '}
-                <span className="text-emerald-400 tabular-nums">{qrSeconds ?? 0}s</span>
-              </p>
-            </>
-          ) : (
-            <div className={`w-full rounded-2xl border p-5 text-center ${lockTone}`}>
-              <Lock className={`w-10 h-10 mx-auto mb-2 ${lockIconTone}`} />
-              <h3 className={`text-sm font-extrabold tracking-tight ${lockTextTone}`}>
-                {passLock?.title ?? 'PASS LOCKED'}
-              </h3>
-              <p className="mt-1.5 text-xs text-zinc-300 leading-relaxed">
-                {passLock?.message ?? 'Your pass is locked right now.'}
-              </p>
 
-              {verdict.state === 'outside' && (
-                <p className="mt-2 text-[11px] text-zinc-400 font-medium">
-                  Walk within {verdict.radius_meters} m of the entrance and it unlocks on its own.
-                </p>
-              )}
-
-              <button
-                onClick={onLocate}
-                className={`mt-4 inline-flex items-center justify-center gap-2 w-full rounded-xl bg-white hover:bg-zinc-100 text-black font-bold py-2.5 text-xs ${TAP}`}
-              >
-                {locStatus === 'locating' ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Navigation className="w-3.5 h-3.5" />
-                )}
-                Recalculate Location
-              </button>
-
-              {locStatus === 'error' && locMessage && (
-                <p className="mt-2.5 text-[11px] text-amber-200 leading-relaxed">{locMessage}</p>
-              )}
+        <div className={`mt-4 flex items-center gap-3 rounded-2xl border px-4 py-3 ${flame.tone}`}>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70">
+            <Flame className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-base font-extrabold tracking-tight">
+              {flame.headline} <span aria-hidden>🔥</span>
+            </p>
+            <p className="text-[11px] font-medium opacity-80">{flame.detail}</p>
+          </div>
+          {streak.best > 0 && (
+            <div className="ml-auto text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Best</p>
+              <p className="text-sm font-bold tabular-nums">{streak.best}</p>
             </div>
           )}
         </div>
+      </section>
 
-        <p className="mt-3 flex items-start gap-1.5 text-[11px] text-zinc-500 font-medium leading-relaxed">
-          <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
-          {verdict.message}
-        </p>
-      </div>
+      {/* Gate pass */}
+      <section className={`${CARD} p-5`}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              Gate Pass
+            </p>
+            <h2 className="truncate text-lg font-extrabold tracking-tight">{displayName}</h2>
+            <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">
+              {pass?.tenant_name ?? 'Your gym'}
+            </p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
+              locked
+                ? 'border-slate-200 bg-slate-100 text-slate-500'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}
+          >
+            {locked ? 'Pass Unavailable' : 'Active Member'}
+          </span>
+        </div>
 
-      {/* Announcements */}
-      {announcements.length > 0 && (
-        <section className="space-y-2.5">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
-            <Bell className="w-3.5 h-3.5 text-violet-400" /> Pinned by your gym
-          </h3>
-          {announcements.map((item) => (
-            <div key={item.id} className={`${CARD} p-3.5`}>
-              <p className="text-xs font-bold text-white">{item.title}</p>
-              <p className="mt-1 text-[11px] text-zinc-400 leading-relaxed">{item.message}</p>
-              <p className="mt-1.5 text-[10px] text-zinc-600 font-medium">
-                {timeAgo(item.created_at)}
+        <div className="flex flex-col items-center">
+          {locked ? (
+            <div className={`w-full rounded-2xl border p-5 text-center ${lock?.tone ?? ''}`}>
+              <Bell className="mx-auto mb-2 h-9 w-9 opacity-60" />
+              <h3 className="text-sm font-extrabold tracking-tight">
+                {lock?.title ?? 'Pass Unavailable'}
+              </h3>
+              <p className="mt-1.5 text-xs leading-relaxed opacity-90">
+                {lock?.message ?? 'Ask the front desk to check your membership.'}
               </p>
             </div>
-          ))}
-        </section>
-      )}
+          ) : (
+            <>
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <QRCodeSVG value={qrToken ?? ''} size={188} level="M" />
+              </div>
+              <p className="mt-3 text-[11px] font-semibold text-slate-500">
+                Refreshes in{' '}
+                <span className="tabular-nums text-teal-600">{qrSeconds ?? 0}s</span>
+              </p>
+            </>
+          )}
+        </div>
 
-      <button
-        onClick={() => void onRefresh()}
-        className={`w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-semibold text-zinc-300 ${TAP}`}
-      >
-        Refresh
-      </button>
+        <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-500">Gym timing</span>
+            <span className="font-semibold tabular-nums text-slate-800">{hours.hours}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-500">Right now</span>
+            <span className={`font-semibold ${hours.open ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {hours.label}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-500">Floor</span>
+            <span className={`rounded-full border px-2 py-0.5 font-semibold ${rush.tone}`}>
+              {rush.level} · {insideNow} in
+            </span>
+          </div>
+        </div>
+
+        {pass?.upi_id && (
+          <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] font-medium text-slate-600">
+            Pay at the desk over UPI: <span className="font-semibold">{pass.upi_id}</span>
+          </p>
+        )}
+      </section>
+
+      {/* Gym notices */}
+      <section className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold tracking-tight">Gym Notices</h3>
+          <button
+            onClick={() => void onRefresh()}
+            className={`inline-flex items-center gap-1 text-[11px] font-semibold text-teal-600 ${TAP}`}
+          >
+            <RefreshCw className="h-3 w-3" /> Refresh
+          </button>
+        </div>
+
+        {announcements.length === 0 ? (
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            No notices from the gym today. Everything is running as usual.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {announcements.map((notice) => (
+              <li key={notice.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                <p className="text-xs font-bold text-slate-800">{notice.title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600">
+                  {notice.message}
+                </p>
+                <p className="mt-1 text-[10px] font-medium text-slate-400">
+                  {timeAgo(notice.created_at)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
+
 // =============================================================================
 // Tab 2 — Health & Profile
 // =============================================================================
@@ -816,19 +648,20 @@ function HomeTab({
 function HealthTab({ data, onFlash, onSaved }: TabProps) {
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
+  const [handleDraft, setHandleDraft] = useState('');
+  const [savingHandle, setSavingHandle] = useState(false);
 
   const trend = weightTrend(data.weights);
   const spark = weightSparkPath(data.weights);
-  const countdown = expiryCountdown(data.member?.membership_end ?? null);
   const trainer = data.trainer;
 
-  async function submit(event: React.FormEvent) {
+  async function submitWeight(event: React.FormEvent) {
     event.preventDefault();
     if (!data.member) return;
 
     const value = Number(weight);
-    if (!Number.isFinite(value) || value <= 0) {
-      onFlash('Enter your weight in kilograms.', 'bad');
+    if (!Number.isFinite(value) || value < 25 || value > 400) {
+      onFlash('Enter a weight between 25 and 400 kg.', 'bad');
       return;
     }
 
@@ -837,123 +670,157 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
     setSaving(false);
 
     if (!result.ok) {
-      onFlash(result.error ?? 'Could not save your weight.', 'bad');
+      onFlash(result.error ?? 'Could not save that weigh-in.', 'bad');
       return;
     }
 
     setWeight('');
-    onFlash('Weight saved.', 'ok');
+    onFlash('Weigh-in saved.', 'ok');
+    await onSaved();
+  }
+
+  async function submitHandle(event: React.FormEvent) {
+    event.preventDefault();
+    if (!data.member) return;
+
+    const next = handleDraft.trim();
+    if (!next) {
+      onFlash('Type the handle you want first.', 'bad');
+      return;
+    }
+
+    setSavingHandle(true);
+    const result = await setUsername(data.member.id, next);
+    setSavingHandle(false);
+
+    if (!result.ok) {
+      onFlash(result.error ?? 'Could not change your handle.', 'bad');
+      return;
+    }
+
+    setHandleDraft('');
+    onFlash(`Your handle is now @${result.username}.`, 'ok');
     await onSaved();
   }
 
   return (
     <div className="space-y-4">
-      {/* Plan */}
+      {/* Profile */}
       <section className={`${CARD} p-5`}>
-        <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
-          Your membership
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          My Profile
         </p>
-        <div className="mt-2 flex items-end justify-between gap-3">
-          <p className="text-3xl font-extrabold tracking-tight text-white">
-            {data.member?.full_name ?? 'Member'}
-          </p>
-          <span
-            className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${countdown.tone}`}
-          >
-            {countdown.label}
+        <h2 className="mt-1 text-lg font-extrabold tracking-tight">
+          {data.member?.full_name ?? 'Member'}
+        </h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+            @{data.member?.username ?? 'handle'}
           </span>
+          <span className="font-medium text-slate-500">{data.member?.phone ?? 'No number on file'}</span>
         </div>
-        <p className="mt-1.5 text-xs text-zinc-400 font-medium">
-          {data.member?.membership_end
-            ? `Renews ${new Date(data.member.membership_end).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })}`
-            : 'Ask the front desk to activate a plan.'}
-        </p>
-        {data.member?.is_frozen && data.member.freeze_end_date && (
-          <p className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/25 px-3 py-2 text-[11px] text-amber-200 font-medium">
-            Paused until {data.member.freeze_end_date}.
+
+        <form onSubmit={submitHandle} className="mt-4 border-t border-slate-100 pt-3">
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Change my @handle
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={handleDraft}
+              onChange={(event) => setHandleDraft(event.target.value)}
+              placeholder="rahul.kumar"
+              maxLength={24}
+              className={INPUT}
+            />
+            <button
+              type="submit"
+              disabled={savingHandle}
+              className={`shrink-0 px-4 py-2.5 text-xs ${PRIMARY} ${TAP}`}
+            >
+              {savingHandle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+            Use this handle, your phone number or your email to sign in.
           </p>
-        )}
+        </form>
       </section>
 
-      {/* Trainer */}
+      {/* Assigned trainer */}
       {trainer ? (
         <section className={`${CARD} p-5`}>
-          <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
-            Your trainer
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+            My Trainer
           </p>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/25 to-violet-500/20 text-sm font-bold text-white ring-1 ring-white/10">
-              {trainer.name
-                .split(' ')
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join('')
-                .toUpperCase()}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-white truncate">{trainer.name}</p>
-              <p className="text-[11px] text-zinc-400 font-medium truncate">
+          <div className="mt-2 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+              <Dumbbell className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold">{trainer.name}</p>
+              <p className="truncate text-[11px] font-medium text-slate-500">
                 {trainer.specialization ?? 'Strength & conditioning'}
               </p>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <a
-              href={`https://wa.me/91${trainer.phone.replace(/\D/g, '').slice(-10)}`}
+              href={`https://wa.me/91${trainer.phone.replace(/[^0-9]/g, '').slice(-10)}`}
               target="_blank"
               rel="noreferrer"
-              className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-black ${TAP}`}
+              className={`py-2.5 text-xs ${PRIMARY} ${TAP}`}
             >
-              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+              <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
             </a>
             <a
-              href={`tel:+91${trainer.phone.replace(/\D/g, '').slice(-10)}`}
-              className={`inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-semibold text-zinc-200 ${TAP}`}
+              href={`tel:${trainer.phone}`}
+              className={`border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 ${TAP} inline-flex items-center justify-center gap-2 rounded-xl`}
             >
-              <Phone className="w-3.5 h-3.5" /> Call
+              <Phone className="h-3.5 w-3.5" /> Call
             </a>
           </div>
         </section>
       ) : (
         <section className={`${CARD} p-5 text-center`}>
-          <p className="text-xs font-semibold text-zinc-400">
+          <p className="text-xs font-semibold text-slate-500">
             No trainer assigned yet. Ask the front desk to pair you with one.
           </p>
         </section>
       )}
-{/* Weight tracker */}
+
+      {/* Weight tracker */}
       <section className={`${CARD} p-5`}>
-        <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
-          Weight tracker
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          Weight Tracker
         </p>
 
         <div className="mt-3 flex items-end gap-3">
-          <p className="text-3xl font-extrabold tracking-tight text-white tabular-nums">
+          <p className="text-3xl font-extrabold tabular-nums tracking-tight text-slate-900">
             {trend.latest !== null ? trend.latest.toFixed(1) : '—'}
-            <span className="ml-1 text-base font-bold text-zinc-500">kg</span>
+            <span className="ml-1 text-base font-bold text-slate-400">kg</span>
           </p>
           {trend.delta !== null && trend.delta !== 0 && (
             <span
               className={`mb-1 inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-bold ${
                 trend.direction === 'up'
-                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
-                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
               }`}
             >
-              {trend.direction === 'up' ? '+' : ''}
+              {trend.direction === 'up' ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
+              {trend.delta > 0 ? '+' : ''}
               {trend.delta.toFixed(1)} kg
-              <span className="text-zinc-400 font-medium">since last</span>
+              <span className="font-medium text-slate-500">since last</span>
             </span>
           )}
         </div>
 
-        {/* Sparkline. Drawn from the readings rather than a chart library: a
-            fixed polyline in a 100x36 box is all this needs. */}
+        {/* Sparkline: a fixed polyline in a 100x36 box, drawn from the readings. */}
         {spark ? (
           <svg
             viewBox="0 0 100 36"
@@ -962,15 +829,21 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
             role="img"
             aria-label="Weight trend"
           >
-            <path d={spark} fill="none" stroke="#10B981" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            <path
+              d={spark}
+              fill="none"
+              stroke="#0D9488"
+              strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
+            />
           </svg>
         ) : (
-          <p className="mt-3 text-[11px] text-zinc-500 font-medium">
+          <p className="mt-3 text-[11px] font-medium text-slate-500">
             Log your first weigh-in to start the trend.
           </p>
         )}
 
-        <form onSubmit={submit} className="mt-4 flex gap-2">
+        <form onSubmit={submitWeight} className="mt-4 flex gap-2">
           <input
             type="number"
             inputMode="decimal"
@@ -980,14 +853,14 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
             value={weight}
             onChange={(event) => setWeight(event.target.value)}
             placeholder="Today's weight (kg)"
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/60"
+            className={INPUT}
           />
           <button
             type="submit"
             disabled={saving}
-            className={`shrink-0 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-black disabled:opacity-60 ${TAP}`}
+            className={`shrink-0 px-4 py-2.5 text-xs ${PRIMARY} ${TAP}`}
           >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save'}
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
           </button>
         </form>
 
@@ -996,12 +869,12 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
             {data.weights.slice(0, 6).map((entry) => (
               <li
                 key={entry.id}
-                className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2 text-xs"
+                className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs"
               >
-                <span className="font-bold text-white tabular-nums">
+                <span className="font-bold tabular-nums text-slate-800">
                   {entry.weight_kg.toFixed(1)} kg
                 </span>
-                <span className="text-zinc-500 font-medium">{timeAgo(entry.logged_at)}</span>
+                <span className="font-medium text-slate-500">{timeAgo(entry.logged_at)}</span>
               </li>
             ))}
           </ul>
@@ -1010,12 +883,13 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
     </div>
   );
 }
+
 // =============================================================================
-// Tab 3 — Workout Logger
+// Tab 3 — Training & Workout
 // =============================================================================
 
-/** Rest timer lengths, in seconds. Two options only, because the point is to
- *  start one between sets without thinking about it. */
+/** Rest timer lengths, in seconds. Two options only: the point is to start one
+ *  between sets without thinking about it. */
 const REST_PRESETS = [60, 90] as const;
 
 function TrainingTab({ data, onFlash, onSaved }: TabProps) {
@@ -1023,15 +897,15 @@ function TrainingTab({ data, onFlash, onSaved }: TabProps) {
   const [exercise, setExercise] = useState('');
   const [reps, setReps] = useState('');
   const [load, setLoad] = useState('');
+  const [sets, setSets] = useState('1');
   const [saving, setSaving] = useState(false);
+
   /**
- * Rest timer.
- *
- * Modelled as a deadline plus a clock rather than a stored countdown, so no
- * component has to write "seconds remaining" back into state on every tick. The
- * displayed value is derived, and it drops to null the moment the deadline has
- * passed.
- */
+   * Rest timer, modelled as a deadline plus a clock rather than a stored
+   * countdown, so no component writes "seconds remaining" back into state on
+   * every tick. The displayed value is derived and drops to null once the
+   * deadline passes.
+   */
   const [restUntil, setRestUntil] = useState(0);
   const resting = restUntil > 0;
   const restNow = useClock(resting, 250);
@@ -1041,11 +915,6 @@ function TrainingTab({ data, onFlash, onSaved }: TabProps) {
     : restNow >= restUntil
       ? null
       : Math.max(1, Math.ceil((restUntil - restNow) / 1000));
-
-  /** Arms the rest timer for `seconds` from now. Inlined at each call site rather
-   *  than wrapped in a helper: a component-scope function that reads the clock is
-   *  indistinguishable from one invoked during render, and the deadline has to be
-   *  stamped at press time, not at definition time. */
 
   const previous = lastPerformance(data.workouts, split, exercise);
   const suggestions = SPLIT_SUGGESTIONS[split];
@@ -1058,6 +927,8 @@ function TrainingTab({ data, onFlash, onSaved }: TabProps) {
 
     const repsValue = Number(reps);
     const loadValue = load.trim() === '' ? 0 : Number(load);
+    const setsValue = Number(sets) || 1;
+
     if (!Number.isFinite(repsValue) || repsValue < 1) {
       onFlash('Enter how many reps you did.', 'bad');
       return;
@@ -1072,7 +943,7 @@ function TrainingTab({ data, onFlash, onSaved }: TabProps) {
       memberId: data.member.id,
       split,
       exercise,
-      sets: 1,
+      sets: setsValue,
       reps: repsValue,
       weightUsed: loadValue,
     });
@@ -1090,11 +961,12 @@ function TrainingTab({ data, onFlash, onSaved }: TabProps) {
     onFlash('Set logged.', 'ok');
     await onSaved();
   }
-return (
+
+  return (
     <div className="space-y-4">
       {/* Split picker */}
       <section>
-        <h3 className="mb-2 text-xs font-bold text-zinc-300">Today&apos;s routine</h3>
+        <h3 className="mb-2 text-xs font-bold text-slate-600">Today&apos;s routine</h3>
         <div className="flex flex-wrap gap-2">
           {WORKOUT_SPLITS.map((option) => {
             const active = split === option;
@@ -1102,11 +974,11 @@ return (
               <button
                 key={option}
                 onClick={() => setSplit(option)}
-                className={`rounded-xl border px-3.5 py-2 text-xs font-bold ${
+                className={`rounded-xl border px-3.5 py-2 text-xs font-bold ${TAP} ${
                   active
-                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                    : 'border-white/10 bg-white/5 text-zinc-400'
-                } ${TAP}`}
+                    ? 'border-teal-600 bg-teal-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600'
+                }`}
               >
                 {option}
               </button>
@@ -1116,30 +988,50 @@ return (
       </section>
 
       {/* Volume headline + running rest clock */}
-      <div className={`${CARD} p-4 flex items-center justify-between`}>
+      <div className={`${CARD} flex items-center justify-between p-4`}>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
             {split} volume
           </p>
-          <p className="mt-0.5 text-2xl font-extrabold tracking-tight text-white tabular-nums">
+          <p className="mt-0.5 text-2xl font-extrabold tabular-nums tracking-tight text-slate-900">
             {volume.toLocaleString('en-IN')}
-            <span className="ml-1 text-xs font-bold text-zinc-500">kg</span>
+            <span className="ml-1 text-xs font-bold text-slate-400">kg</span>
+          </p>
+          <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+            Sets logged in the last two weeks
           </p>
         </div>
-        {restLeft !== null && (
+        {restLeft !== null ? (
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Rest</p>
-            <p className="mt-0.5 text-2xl font-extrabold tracking-tight text-amber-300 tabular-nums">
-              {restLeft}
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Rest</p>
+            <p className="mt-0.5 text-2xl font-extrabold tabular-nums text-amber-600">{restLeft}</p>
+            <p className="text-[10px] font-medium text-slate-400">seconds</p>
+          </div>
+        ) : (
+          <div className="text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Rest timer
             </p>
+            <div className="mt-1 flex gap-1.5">
+              {REST_PRESETS.map((seconds) => (
+                <button
+                  key={seconds}
+                  type="button"
+                  onClick={() => setRestUntil(Date.now() + seconds * 1000)}
+                  className={`rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 ${TAP}`}
+                >
+                  {seconds}s
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Logger */}
-      <form onSubmit={submit} className={`${CARD} p-5 space-y-3`}>
+      {/* Set logger */}
+      <form onSubmit={submit} className={`${CARD} space-y-3 p-5`}>
         <div>
-          <label className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
             Exercise
           </label>
           <input
@@ -1147,21 +1039,48 @@ return (
             onChange={(event) => setExercise(event.target.value)}
             placeholder="Bench Press"
             maxLength={80}
-            className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/60"
+            className={INPUT}
           />
-          {/* "Last time" is the single most useful thing on a logging screen:
-              what the member lifted in the previous session. */}
+          {/* "Last time" is the single most useful thing on a logging screen. */}
           {previous && (
-            <p className="mt-1.5 text-[11px] text-zinc-400 font-medium">
+            <p className="mt-1.5 text-[11px] font-medium text-slate-500">
               Last time: {previous.weight_used > 0 ? `${previous.weight_used} kg · ` : ''}
               {previous.reps} reps · {timeAgo(previous.logged_at)}
             </p>
           )}
+          {!previous && suggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {suggestions.slice(0, 4).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setExercise(name)}
+                  className={`rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600 ${TAP}`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Sets
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="20"
+              value={sets}
+              onChange={(event) => setSets(event.target.value)}
+              className={INPUT}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               Reps
             </label>
             <input
@@ -1172,11 +1091,11 @@ return (
               value={reps}
               onChange={(event) => setReps(event.target.value)}
               placeholder="8"
-              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/60"
+              className={INPUT}
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               Load (kg)
             </label>
             <input
@@ -1188,78 +1107,43 @@ return (
               value={load}
               onChange={(event) => setLoad(event.target.value)}
               placeholder="60"
-              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/60"
+              className={INPUT}
             />
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className={`w-full rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-black disabled:opacity-60 ${TAP}`}
-        >
-          {saving ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-          ) : (
-            'Log this set'
-          )}
+        <button type="submit" disabled={saving} className={`w-full py-3 text-sm ${PRIMARY} ${TAP}`}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Log Set
         </button>
-
-        {/* The timer starts automatically after a set, and can be re-armed by
-            hand when a member rests without logging. */}
-        <div className="grid grid-cols-2 gap-2">
-          {REST_PRESETS.map((seconds) => (
-            <button
-              key={seconds}
-              type="button"
-              onClick={() => setRestUntil(Date.now() + seconds * 1000)}
-              className={`inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-2 text-[11px] font-semibold text-zinc-300 ${TAP}`}
-            >
-              <Timer className="w-3.5 h-3.5" /> Rest {seconds}s
-            </button>
-          ))}
-        </div>
       </form>
-{/* Routine shortcuts */}
-      <section className={`${CARD} p-5`}>
-        <h3 className="text-xs font-bold text-zinc-300">Common {split.toLowerCase()} moves</h3>
-        <div className="mt-2.5 flex flex-wrap gap-2">
-          {suggestions.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => setExercise(name)}
-              className={`rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 ${TAP}`}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      </section>
 
       {/* Recent sets */}
       <section className={`${CARD} p-5`}>
-        <h3 className="mb-3 text-xs font-bold text-zinc-300">Recent sets</h3>
+        <div className="flex items-center gap-2">
+          <Timer className="h-4 w-4 text-teal-600" />
+          <h3 className="text-sm font-bold tracking-tight">Recent Sets</h3>
+        </div>
         {recent.length === 0 ? (
-          <p className="text-[11px] text-zinc-500 font-medium">
-            Nothing logged yet. Pick a split above and add your first set.
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            Nothing logged yet. Your first set starts the history.
           </p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="mt-3 space-y-1.5">
             {recent.map((entry) => (
               <li
                 key={entry.id}
-                className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs"
               >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-bold text-white">{entry.exercise_name}</p>
-                  <p className="text-[10px] text-zinc-500 font-medium">
-                    {entry.workout_split} · {timeAgo(entry.logged_at)}
-                  </p>
-                </div>
-                <span className="shrink-0 text-xs font-bold text-emerald-300 tabular-nums">
-                  {entry.weight_used > 0 ? `${entry.weight_used}kg ` : ''}
-                  <span className="text-zinc-400 font-semibold">× {entry.reps}</span>
+                <span className="min-w-0 truncate font-semibold text-slate-800">
+                  {entry.exercise_name}
+                </span>
+                <span className="shrink-0 font-medium tabular-nums text-slate-500">
+                  {entry.sets}×{entry.reps}
+                  {entry.weight_used > 0 ? ` · ${entry.weight_used} kg` : ' · bodyweight'}
+                </span>
+                <span className="shrink-0 text-[10px] text-slate-400">
+                  {timeAgo(entry.logged_at)}
                 </span>
               </li>
             ))}
@@ -1269,66 +1153,52 @@ return (
     </div>
   );
 }
+
 // =============================================================================
-// Tab 4 — Gym Store (member view)
+// Tab 4 — Store & Supplements
 // =============================================================================
 
-interface StoreTabProps extends TabProps {
-  tenantId: string | null;
-}
-
-function StoreTab({ data, tenantId, onFlash, onSaved }: StoreTabProps) {
-  const [catalogue, setCatalogue] = useState<StoreItem[]>([]);
-  const [loadedTenant, setLoadedTenant] = useState<string | null>(null);
+function StoreTab({ data, onFlash, onSaved }: TabProps) {
+  const tenantId = data.tenant_id;
+  const [items, setItems] = useState<StoreItem[]>([]);
+  const [category, setCategory] = useState<string>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  /** Derived rather than stored: no tenant means nothing to load, so the spinner
-   *  must not be waiting on a request that was never made. */
-  const loading = Boolean(tenantId) && loadedTenant !== tenantId;
+  const loadItems = useCallback(async () => {
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
 
-  // The catalogue is a plain read of `products`: unlike the four Phase 4 tables
-  // this one is not revoked (the POS needs it), and a member only ever sees the
-  // gym's own rows because the read is scoped to tenant_id.
-  useEffect(() => {
-    if (!tenantId) return;
+    const { data: rows } = await supabase
+      .from('products')
+      .select('id, name, category, selling_price, stock_quantity')
+      .eq('tenant_id', tenantId)
+      .order('name', { ascending: true })
+      .limit(200);
 
-    let cancelled = false;
-    (async () => {
-      const response = await fetch(`/api/store?tenant_id=${tenantId}`, { method: 'GET' });
-      const body = (await response.json()) as { products?: StoreItem[] };
-
-      if (cancelled) return;
-      setCatalogue(
-        (body.products ?? []).map((product) => ({
-          ...product,
-          selling_price: Number(product.selling_price) || 0,
-          stock_quantity: Number(product.stock_quantity) || 0,
-        }))
-      );
-      setLoadedTenant(tenantId);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    setItems((rows ?? []) as unknown as StoreItem[]);
+    setLoading(false);
   }, [tenantId]);
 
-  /** Everything this member already has waiting at the desk, keyed by product, so
-   *  a reserved card can say "2 waiting" instead of looking like a fresh item. */
-  const pendingByProduct = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const entry of data.reservations) {
-      if (entry.status !== 'pending') continue;
-      map.set(entry.product_id, (map.get(entry.product_id) ?? 0) + entry.quantity);
-    }
-    return map;
-  }, [data.reservations]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadItems();
+  }, [loadItems]);
 
-  async function reserve(product: StoreItem) {
+  const categories = useMemo(() => {
+    const seen = new Set(items.map((item) => item.category));
+    return ['all', ...Array.from(seen)];
+  }, [items]);
+
+  const visible = category === 'all' ? items : items.filter((item) => item.category === category);
+
+  async function reserve(item: StoreItem) {
     if (!data.member) return;
-    setBusyId(product.id);
 
-    const result = await reserveProduct(data.member.id, product.id, 1);
+    setBusyId(item.id);
+    const result = await reserveProduct(data.member.id, item.id, 1);
     setBusyId(null);
 
     if (!result.ok) {
@@ -1338,65 +1208,80 @@ function StoreTab({ data, tenantId, onFlash, onSaved }: StoreTabProps) {
 
     onFlash(
       result.merged
-        ? `${product.name} is waiting for you at the desk.`
-        : `${product.name} reserved. Collect it from the desk.`,
+        ? `${item.name}: quantity added to your existing pickup.`
+        : `${item.name} reserved. Collect it at the front desk.`,
       'ok'
     );
     await onSaved();
   }
 
-  async function cancel(reservationId: string) {
+  async function cancel(id: string, name: string) {
     if (!data.member) return;
-    const result = await cancelReservation(data.member.id, reservationId);
+
+    setBusyId(id);
+    const result = await cancelReservation(data.member.id, id);
+    setBusyId(null);
+
     if (!result.ok) {
       onFlash(result.error ?? 'Could not cancel that reservation.', 'bad');
       return;
     }
-    onFlash('Reservation cancelled.', 'ok');
+
+    onFlash(`Reservation for ${name} cancelled.`, 'ok');
     await onSaved();
   }
-return (
+
+  const pending = data.reservations.filter((entry) => entry.status === 'pending');
+  const history = data.reservations.filter((entry) => entry.status !== 'pending');
+
+  return (
     <div className="space-y-4">
-      {/* Reservation tracker */}
+      {/* Active pickups */}
       <section className={`${CARD} p-5`}>
-        <h3 className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
-          <ShoppingBag className="w-3.5 h-3.5 text-violet-400" /> Your desk pickups
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold tracking-tight">My Desk Pickups</h3>
+          {pending.length > 0 && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+              {pending.length} waiting
+            </span>
+          )}
+        </div>
 
         {data.reservations.length === 0 ? (
-          <p className="mt-2.5 text-[11px] text-zinc-500 font-medium">
-            Nothing reserved. Tap any item below to hold it at the desk.
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            Nothing reserved yet. Reserve a supplement below and collect it at the counter.
           </p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {data.reservations.slice(0, 6).map((entry) => {
+            {[...pending, ...history].slice(0, 6).map((entry) => {
               const meta = RESERVATION_LABEL[entry.status] ?? RESERVATION_LABEL.pending;
               return (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-white">{entry.product_name}</p>
+                <li key={entry.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-slate-800">
+                        {entry.product_name}
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                        Qty {entry.quantity} · reserved {timeAgo(entry.created_at)}
+                      </p>
+                    </div>
                     <span
-                      className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.tone}`}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.tone}`}
                     >
                       {meta.label}
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-[11px] font-bold text-zinc-400 tabular-nums">
-                      × {entry.quantity}
-                    </span>
-                    {entry.status === 'pending' && (
-                      <button
-                        onClick={() => void cancel(entry.id)}
-                        className={`rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-zinc-400 ${TAP}`}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
+                  <p className="mt-1.5 text-[11px] font-medium text-slate-500">{meta.hint}</p>
+                  {entry.status === 'pending' && (
+                    <button
+                      onClick={() => void cancel(entry.id, entry.product_name)}
+                      disabled={busyId === entry.id}
+                      className={`mt-2 text-[11px] font-semibold text-rose-600 ${TAP}`}
+                    >
+                      {busyId === entry.id ? 'Cancelling…' : 'Cancel reservation'}
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -1404,76 +1289,110 @@ return (
         )}
       </section>
 
-      {/* Catalogue */}
+      {/* Category filter */}
       <section>
-        <h3 className="mb-2 text-xs font-bold text-zinc-300">Gym store</h3>
-
-        {loading ? (
-          <div className={`${CARD} flex items-center justify-center gap-2 py-10 text-xs text-zinc-500`}>
-            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> Loading the shelf…
-          </div>
-        ) : catalogue.length === 0 ? (
-          <div className={`${CARD} py-10 text-center text-xs text-zinc-500`}>
-            Nothing on the shelf right now.
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {catalogue.map((item) => {
-              const meta = CATEGORY_META[item.category];
-              const Icon = meta?.icon ?? Package;
-              const pending = pendingByProduct.get(item.id) ?? 0;
-              const out = item.stock_quantity <= 0;
-              const busy = busyId === item.id;
-
-              return (
-                <div key={item.id} className={`${CARD} p-4`}>
-                  <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 shrink-0">
-                      <Icon className="w-4 h-4 text-violet-300" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-white truncate">{item.name}</p>
-                      <p className="mt-0.5 text-[11px] text-zinc-400 font-medium">
-                        {meta?.label ?? item.category}
-                        {out
-                          ? ' · Out of stock'
-                          : pending > 0
-                            ? ` · ${pending} waiting for you`
-                            : item.stock_quantity <= 5
-                              ? ` · only ${item.stock_quantity} left`
-                              : ''}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-sm font-extrabold tracking-tight text-emerald-300 tabular-nums">
-                      ₹{item.selling_price.toLocaleString('en-IN')}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => void reserve(item)}
-                    disabled={out || busy}
-                    className={`mt-3 w-full rounded-xl py-2.5 text-xs font-bold ${
-                      out
-                        ? 'border border-white/10 bg-white/5 text-zinc-500'
-                        : 'bg-violet-500 hover:bg-violet-400 text-white disabled:opacity-60'
-                    } ${TAP}`}
-                  >
-                    {busy ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-                    ) : out ? (
-                      'Out of stock'
-                    ) : pending > 0 ? (
-                      'Reserve one more'
-                    ) : (
-                      'Reserve for desk pickup'
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <h3 className="mb-2 text-xs font-bold text-slate-600">Shop</h3>
+        <div className="flex flex-wrap gap-2">
+          {categories.map((option) => {
+            const active = category === option;
+            const meta = CATEGORY_META[option];
+            return (
+              <button
+                key={option}
+                onClick={() => setCategory(option)}
+                className={`rounded-xl border px-3 py-1.5 text-[11px] font-bold ${TAP} ${
+                  active
+                    ? 'border-teal-600 bg-teal-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600'
+                }`}
+              >
+                {option === 'all' ? 'All' : meta?.label ?? option}
+              </button>
+            );
+          })}
+        </div>
       </section>
+
+      {/* Catalogue */}
+      {loading ? (
+        <p className={`${CARD} p-5 text-center text-xs font-medium text-slate-500`}>
+          Loading the store…
+        </p>
+      ) : visible.length === 0 ? (
+        <p className={`${CARD} p-5 text-center text-xs font-medium text-slate-500`}>
+          No products in this category yet.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {visible.map((item) => {
+            const meta = CATEGORY_META[item.category];
+            const Icon = meta?.icon ?? Package;
+            const soldOut = item.stock_quantity <= 0;
+            const low = !soldOut && item.stock_quantity <= 5;
+
+            return (
+              <li key={item.id} className={`${CARD} flex items-center gap-3 p-4`}>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                  <Icon className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900">{item.name}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="rounded-lg bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-700">
+                      ₹{Number(item.selling_price).toLocaleString('en-IN')}
+                    </span>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                        soldOut
+                          ? 'border-slate-200 bg-slate-100 text-slate-500'
+                          : low
+                            ? 'border-amber-200 bg-amber-50 text-amber-700'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      }`}
+                    >
+                      {soldOut
+                        ? 'Out of Stock'
+                        : low
+                          ? `Only ${item.stock_quantity} left`
+                          : 'In Stock'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => void reserve(item)}
+                  disabled={soldOut || busyId === item.id}
+                  className={`shrink-0 px-3 py-2 text-[11px] ${PRIMARY} ${TAP}`}
+                >
+                  {busyId === item.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  Reserve
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <p className="px-1 text-center text-[11px] font-medium text-slate-400">
+        Reservations are held at the front desk. Payment happens when you collect.
+      </p>
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+

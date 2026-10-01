@@ -869,6 +869,119 @@ export async function checkout(
   return { ok: result.ok, error: result.error, receipt: result.body.receipt as CheckoutReceipt | undefined };
 }
 
+// -----------------------------------------------------------------------------
+// Desk pickup queue (Phase 5)
+// -----------------------------------------------------------------------------
+
+/**
+ * One row of the counter's fulfilment queue: an item a member reserved in the
+ * companion app and has not collected yet.
+ */
+export interface PendingPickup {
+  id: string;
+  member_id: string | null;
+  member_name: string;
+  member_phone: string | null;
+  member_username: string | null;
+  product_id: string | null;
+  product_name: string;
+  product_category: string | null;
+  /** null when the product was deleted from the catalogue after the reservation. */
+  unit_price: number | null;
+  quantity: number;
+  total_amount: number;
+  stock_available: number | null;
+  waiting_minutes: number;
+  reserved_at: string;
+}
+
+/** A completed pickup is written as an order, so it reads back like a sale. */
+export interface PickupReceipt extends CheckoutReceipt {
+  reservation_id: string;
+  reservation_kind: string;
+  stock_updates?: unknown;
+}
+
+/** "waiting 3 min" / "waiting 2 hr" — how long the item has sat at the desk. */
+export function waitingLabel(minutes: number | null | undefined): string {
+  const value = Number(minutes);
+  if (!Number.isFinite(value) || value < 1) return 'just now';
+  if (value < 60) return `${Math.round(value)} min`;
+  const hours = Math.floor(value / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'}`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+/**
+ * Pending reservations for one gym, oldest first. Read through
+ * fn_store_pending_reservations because store_reservations has no anon grant.
+ */
+export async function listPendingPickups(
+  tenantId: string | null
+): Promise<{ ok: boolean; error?: string; pickups: PendingPickup[] }> {
+  const tenant = requireTenant(tenantId);
+  if (!tenant) return { ok: false, error: NO_GYM, pickups: [] };
+
+  const result = await callCrm(`/api/store/pickups?tenant_id=${tenant}`, { method: 'GET' });
+  if (!result.ok) return { ok: false, error: result.error, pickups: [] };
+
+  const rows = Array.isArray(result.body.pickups) ? result.body.pickups : [];
+  return { ok: true, pickups: rows as PendingPickup[] };
+}
+
+/**
+ * Hands the item over and bills it. Stock decrement, order row and revenue entry
+ * are all written by fn_store_complete_pickup in one transaction, so the shelf and
+ * the day's takings can never disagree.
+ */
+export async function completePickup(
+  tenantId: string | null,
+  reservationId: string,
+  paymentMethod = 'Cash/UPI'
+): Promise<{ ok: boolean; error?: string; receipt?: PickupReceipt }> {
+  const tenant = requireTenant(tenantId);
+  if (!tenant) return { ok: false, error: NO_GYM };
+  if (!isUuid(reservationId)) return { ok: false, error: 'That reservation id is not valid.' };
+
+  const result = await callCrm('/api/store/pickups', {
+    method: 'POST',
+    body: JSON.stringify({
+      tenant_id: tenant,
+      reservation_id: reservationId,
+      action: 'complete',
+      payment_method: paymentMethod,
+    }),
+  });
+
+  return {
+    ok: result.ok,
+    error: result.error,
+    receipt: result.body.receipt as PickupReceipt | undefined,
+  };
+}
+
+/** Closes a reservation the member never collected. The history is kept. */
+export async function cancelPickup(
+  tenantId: string | null,
+  reservationId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const tenant = requireTenant(tenantId);
+  if (!tenant) return { ok: false, error: NO_GYM };
+  if (!isUuid(reservationId)) return { ok: false, error: 'That reservation id is not valid.' };
+
+  const result = await callCrm('/api/store/pickups', {
+    method: 'POST',
+    body: JSON.stringify({
+      tenant_id: tenant,
+      reservation_id: reservationId,
+      action: 'cancel',
+    }),
+  });
+
+  return { ok: result.ok, error: result.error };
+}
+
 /** Local date (not UTC) so a late-night shift does not file the month early. */
 export function monthStartIso(reference = new Date()): string {
   const offset = reference.getTimezoneOffset() * 60_000;

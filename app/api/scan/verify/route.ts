@@ -1,24 +1,24 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { isUuid, readTenantCookie } from '@/lib/session';
-import { parseCoordinate, parseRadius, passGeofenceDenial } from '@/lib/geofence';
 import { decodePassToken, isPassWindowCurrent, type PassTokenClaims } from '@/lib/passtoken';
 
 /**
- * POST /api/scan/verify
- *
- * Server-side gate check for the QR kiosk. Replaces the old client-side query,
- * which scanned every gym's members table. A scan is now resolved inside the
- * scanning gym's tenant only, and a frozen membership is refused at the gate.
+ * POST /api/scan/verify — the gate's half of a QR scan.
  *
  * Body: { token: string, tenant_id?: string }
- *   - tenant_id falls back to the forgeos_tenant cookie set at login.
+ *   - tenant_id falls back to the forgeos_tenant cookie set at sign-in.
  *
- * Geofence: hiding the QR on the phone is only a UI affordance, so this route
- * re-runs the fence decision instead of trusting it. When the gym is armed the
- * token must carry a fix recorded at mint time, must be fresh, and must still
- * measure inside the CURRENT radius — a screenshot taken on the pavement, or one
- * from before the owner tightened the radius, is refused here.
+ * The scan is resolved inside the scanning gym's tenant only, and the only things
+ * that can refuse a pass are membership facts: a frozen membership, an expired
+ * membership, a pass minted outside its rotating window, or a member id that does
+ * not belong to this gym.
+ *
+ * Phase 5 removed the geofence re-check from this route on purpose. Neither the
+ * phone nor the gate proves a location any more: the kiosk stands at the entrance,
+ * so the person scanning is physically present by definition. A location check
+ * that refuses a member standing at the door is a support ticket, not a security
+ * control.
  */
 
 interface ParsedToken {
@@ -28,7 +28,7 @@ interface ParsedToken {
   claims: PassTokenClaims | null;
 }
 
-/** Mirrors the token formats the member app emits: base64 JSON, "GF:phone:t", or raw digits. */
+/** Mirrors the token formats the member app has emitted: base64 JSON, "GF:phone:t", or raw digits. */
 function parseQrToken(raw: string): ParsedToken | null {
   const text = (raw ?? '').trim();
   if (!text) return null;
@@ -36,9 +36,8 @@ function parseQrToken(raw: string): ParsedToken | null {
   let memberId = '';
   let phoneLookup = '';
 
-  // decodePassToken is the single reader for our own format: it is what carries
-  // the window index and the geofence proof, so it must not be re-implemented
-  // here with a looser idea of what a valid token looks like.
+  // decodePassToken is the single reader for our own format, so it must not be
+  // re-implemented here with a looser idea of what a valid token looks like.
   const claims = decodePassToken(text);
 
   if (text.startsWith('GF:')) {
@@ -79,6 +78,7 @@ function present(member: Record<string, unknown>, allowed: boolean, reason: stri
   };
 }
 
+
 export async function POST(request: Request) {
   let payload: Record<string, unknown>;
   try {
@@ -90,46 +90,48 @@ export async function POST(request: Request) {
   const tenantId = String(payload.tenant_id ?? '') || readTenantCookie(request);
   if (!tenantId || !isUuid(tenantId)) {
     return NextResponse.json(
-      { allowed: false, reason: 'This scanner is not linked to a gym. Sign in again.' },
+      { allowed: false, reason: 'No gym selected. Sign in at the kiosk first.' },
       { status: 403 }
     );
   }
 
-  const parsed = parseQrToken(String(payload.token ?? ''));
+  const parsed = parseQrToken(String(payload.token ?? payload.qr ?? ''));
   if (!parsed) {
-    return NextResponse.json({ allowed: false, reason: 'Unreadable QR code.' }, { status: 400 });
+    return NextResponse.json(
+      { allowed: false, reason: 'That is not a gym pass. Ask the member to open their QR code.' },
+      { status: 400 }
+    );
   }
 
   try {
-    // Tenant filter is applied first, so a QR from Gym B never resolves at Gym A's gate.
+    // One lookup, scoped to this gym: a pass from another gym is simply not found.
     let query = supabase
       .from('members')
-      .select('id, full_name, phone, membership_end, status, is_frozen, freeze_end_date, tenant_id')
+      .select('id, full_name, phone, membership_end, is_frozen, freeze_end_date, status')
       .eq('tenant_id', tenantId);
 
-    query = parsed.memberId
-      ? query.or(`id.eq.${parsed.memberId},phone.eq.${parsed.phone10}`)
-      : query.or(`phone.eq.${parsed.phone10},phone.ilike.%${parsed.phone10}%`);
+    query =
+      parsed.memberId && isUuid(parsed.memberId)
+        ? query.eq('id', parsed.memberId)
+        : query.like('phone', `%${parsed.phone10}`);
 
-    const { data, error } = await query.limit(2).maybeSingle();
+    const { data, error } = await query.limit(1).maybeSingle();
 
     if (error) {
-      return NextResponse.json({ allowed: false, reason: 'Gate database unavailable.' }, { status: 500 });
+      return NextResponse.json(
+        { allowed: false, reason: 'Could not verify this pass. Please use the front desk.' },
+        { status: 500 }
+      );
     }
 
-    // maybeSingle() yields null when the OR filter matched more than one member.
     if (!data) {
-      const { data: candidates } = await (parsed.memberId
-        ? supabase.from('members').select('id').eq('tenant_id', tenantId).or(`id.eq.${parsed.memberId},phone.eq.${parsed.phone10}`)
-        : supabase.from('members').select('id').eq('tenant_id', tenantId).or(`phone.eq.${parsed.phone10},phone.ilike.%${parsed.phone10}%`));
-
-      if (candidates && candidates.length > 1) {
-        return NextResponse.json({ allowed: false, reason: 'Ambiguous code — ask the member to reopen their pass.' }, { status: 409 });
-      }
-
+      await supabase.from('attendances').insert([
+        { tenant_id: tenantId, member_id: null, method: 'qr_kiosk', status: 'blocked_unknown' },
+      ]);
       return NextResponse.json({
         allowed: false,
-        reason: 'No member of this gym matches that code.',
+        reason: 'This pass does not belong to this gym. See the front desk.',
+        member_id: null,
         name: 'Not Found',
         phone: parsed.phone10 || 'N/A',
         expiry: null,
@@ -141,67 +143,50 @@ export async function POST(request: Request) {
     // Freeze beats expiry: a frozen pass must read "frozen", not "expired".
     if (member.is_frozen) {
       await supabase.from('attendances').insert([
-        { tenant_id: tenantId, member_id: member.id as string, method: 'qr_kiosk', status: 'blocked_frozen' },
+        {
+          tenant_id: tenantId,
+          member_id: member.id as string,
+          method: 'qr_kiosk',
+          status: 'blocked_frozen',
+        },
       ]);
       return NextResponse.json(
-        present(member, false, `Membership frozen${member.freeze_end_date ? ` until ${member.freeze_end_date}` : ''}. See the front desk.`),
+        present(
+          member,
+          false,
+          `Membership frozen${member.freeze_end_date ? ` until ${member.freeze_end_date}` : ''}. See the front desk.`
+        ),
         { status: 200 }
       );
     }
 
     if (!member.membership_end || new Date(member.membership_end as string) < new Date()) {
       await supabase.from('attendances').insert([
-        { tenant_id: tenantId, member_id: member.id as string, method: 'qr_kiosk', status: 'blocked_expired' },
+        {
+          tenant_id: tenantId,
+          member_id: member.id as string,
+          method: 'qr_kiosk',
+          status: 'blocked_expired',
+        },
       ]);
       return NextResponse.json(present(member, false, 'Membership expired. Renewal required.'));
     }
 
-    // --- Geofence. Hiding the QR on the phone is only a UI affordance; this is
-    // the check that actually decides whether the turnstile opens.
-    const { data: tenantRow, error: tenantError } = await supabase
-      .from('tenants')
-      .select('latitude, longitude, geofence_radius_meters, enforce_geofence')
-      .eq('id', tenantId)
-      .maybeSingle();
-
-    if (tenantError) {
-      // We cannot tell whether this gym is armed, so a pass is not waved through.
-      return NextResponse.json(
-        present(member, false, 'Could not verify this gym’s geofence settings. Ask the front desk.')
-      );
-    }
-
-    const tenant = (tenantRow ?? {}) as Record<string, unknown>;
-    const gymLatitude = parseCoordinate(tenant.latitude);
-    const gymLongitude = parseCoordinate(tenant.longitude);
-    const armed =
-      Boolean(tenant.enforce_geofence) && gymLatitude !== null && gymLongitude !== null;
-
-    // A token we minted must be fresh even when the fence is off: the window is
-    // the only thing that makes an hour-old screenshot useless. Legacy `GF:` and
-    // bare-digit codes carry no window, so they are left to the membership checks.
+    // A token we minted must be fresh: the rotating window is what makes last
+    // hour's screenshot useless. Legacy `GF:` and bare-digit codes carry no
+    // window, so they are left to the membership checks above.
     if (parsed.claims && !isPassWindowCurrent(parsed.claims.t)) {
       await supabase.from('attendances').insert([
-        { tenant_id: tenantId, member_id: member.id as string, method: 'qr_kiosk', status: 'blocked_stale' },
+        {
+          tenant_id: tenantId,
+          member_id: member.id as string,
+          method: 'qr_kiosk',
+          status: 'blocked_stale',
+        },
       ]);
       return NextResponse.json(
         present(member, false, 'This QR code has expired. Ask the member to reopen their pass.')
       );
-    }
-
-    if (armed) {
-      const denial = passGeofenceDenial(
-        parsed.claims,
-        gymLatitude,
-        gymLongitude,
-        parseRadius(tenant.geofence_radius_meters)
-      );
-      if (denial) {
-        await supabase.from('attendances').insert([
-          { tenant_id: tenantId, member_id: member.id as string, method: 'qr_geofence', status: 'blocked_geofence' },
-        ]);
-        return NextResponse.json(present(member, false, denial));
-      }
     }
 
     await supabase.from('attendances').insert([

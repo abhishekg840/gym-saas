@@ -9,22 +9,28 @@ import {
   PAYMENT_METHODS,
   PRODUCT_CATEGORIES,
   PRODUCT_CATEGORY_META,
+  cancelPickup,
   cartTotal,
   categoryLabel,
   checkout,
+  completePickup,
   createProduct,
   deleteProduct,
   formatRupees,
   formatStamp,
   isLowStock,
   listOrders,
+  listPendingPickups,
   listProducts,
   marginPercent,
   restockProduct,
   updateProduct,
+  waitingLabel,
   type CartLine,
   type CheckoutReceipt,
   type Order,
+  type PendingPickup,
+  type PickupReceipt,
   type Product,
   type ProductCategory,
 } from '@/lib/crm';
@@ -33,6 +39,7 @@ import {
   ArrowLeft,
   Boxes,
   CheckCircle2,
+  ClipboardList,
   IndianRupee,
   Loader2,
   Minus,
@@ -94,7 +101,7 @@ export default function GymStorePage() {
   const [memberId, setMemberId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
   const [selling, setSelling] = useState(false);
-  const [receipt, setReceipt] = useState<CheckoutReceipt | null>(null);
+  const [receipt, setReceipt] = useState<CheckoutReceipt | PickupReceipt | null>(null);
 
   /** null = closed, '' = adding, otherwise the product id being edited. */
   const [productFormId, setProductFormId] = useState<string | null>(null);
@@ -104,6 +111,12 @@ export default function GymStorePage() {
   const [restockId, setRestockId] = useState<string | null>(null);
   const [restockQty, setRestockQty] = useState('10');
   const [restocking, setRestocking] = useState(false);
+
+  /** Items members reserved in the companion app and have not collected yet. */
+  const [pickups, setPickups] = useState<PendingPickup[]>([]);
+  const [pickupBusyId, setPickupBusyId] = useState<string | null>(null);
+  /** How the desk is taking the money when it hands a reservation over. */
+  const [pickupMethod, setPickupMethod] = useState(PAYMENT_METHODS[0]);
 
   const tenantId = isUuid(session?.tenantId) ? (session?.tenantId as string) : null;
 
@@ -129,6 +142,11 @@ export default function GymStorePage() {
         .filter((order) => isToday(order.created_at))
         .reduce((sum, order) => sum + Number(order.total_amount), 0),
     [orders]
+  );
+  /** What is already paid for but still sitting behind the counter. */
+  const pickupValue = useMemo(
+    () => pickups.reduce((sum, entry) => sum + Number(entry.total_amount), 0),
+    [pickups]
   );
 
   /** Catalogue after the search box and the category chips have had their say. */
@@ -165,6 +183,20 @@ export default function GymStorePage() {
     setOrders(result.orders);
   }, []);
 
+  /**
+   * The pickup queue is read through fn_store_pending_reservations rather than a
+   * table read: store_reservations has no anon grant, so the only door is the
+   * function, which is scoped to this gym.
+   */
+  const loadPickups = useCallback(async (tenant: string | null) => {
+    const result = await listPendingPickups(tenant);
+    if (!result.ok) {
+      flash(result.error ?? 'Could not load the desk pickup queue.', 'bad');
+      return;
+    }
+    setPickups(result.pickups);
+  }, []);
+
   useEffect(() => {
     const parsed = readSession();
     if (!parsed) {
@@ -186,7 +218,8 @@ export default function GymStorePage() {
 
     loadAll(parsed.tenantId ?? null);
     loadSales(parsed.tenantId ?? null);
-  }, [router, loadAll, loadSales]);
+    loadPickups(parsed.tenantId ?? null);
+  }, [router, loadAll, loadSales, loadPickups]);
 
   // The till can attach a sale to a member. This read goes straight to
   // PostgREST like the dashboard's member table; the sale itself is written by
@@ -215,6 +248,7 @@ export default function GymStorePage() {
   function refresh() {
     loadAll(tenantId);
     loadSales(tenantId);
+    loadPickups(tenantId);
   }
 
   // ---- Cart ----------------------------------------------------------------
@@ -338,6 +372,75 @@ export default function GymStorePage() {
     );
   }
 
+
+  // ---- Desk pickups (Phase 5) ----------------------------------------------
+
+  /**
+   * Hands a reserved item over the desk and bills it. The shelf decrement, the
+   * order row and the revenue entry all happen inside fn_store_complete_pickup, so
+   * the queue, the stock and the day's takings can never drift apart.
+   */
+  async function handOverPickup(entry: PendingPickup) {
+    setPickupBusyId(entry.id);
+    const result = await completePickup(tenantId, entry.id, pickupMethod);
+    setPickupBusyId(null);
+
+    if (!result.ok || !result.receipt) {
+      flash(result.error ?? 'Could not complete this pickup.', 'bad');
+      loadPickups(tenantId);
+      loadAll(tenantId);
+      return;
+    }
+
+    const sale = result.receipt;
+
+    // The receipt is authoritative, exactly as in a counter sale: mirror the
+    // decrement locally rather than guessing what the shelf now holds.
+    setProducts((prev) =>
+      prev.map((product) => {
+        const sold = sale.items.find((item) => item.product_id === product.id);
+        if (!sold) return product;
+        return { ...product, stock_quantity: Math.max(product.stock_quantity - sold.quantity, 0) };
+      })
+    );
+
+    setOrders((prev) => [
+      {
+        id: sale.order_id,
+        member_id: sale.member_id,
+        total_amount: sale.total_amount,
+        payment_method: sale.payment_method,
+        items: sale.items,
+        created_at: sale.created_at,
+        member_name: sale.member_name,
+      },
+      ...prev,
+    ]);
+
+    setPickups((prev) => prev.filter((row) => row.id !== entry.id));
+    setReceipt(sale);
+    flash(
+      `${entry.quantity} × ${entry.product_name} handed to ${entry.member_name} and billed ${formatRupees(
+        sale.total_amount
+      )}.`
+    );
+  }
+
+  /** Closes a reservation nobody collected. The shelf is untouched. */
+  async function dropPickup(entry: PendingPickup) {
+    setPickupBusyId(entry.id);
+    const result = await cancelPickup(tenantId, entry.id);
+    setPickupBusyId(null);
+
+    if (!result.ok) {
+      flash(result.error ?? 'Could not close that reservation.', 'bad');
+      loadPickups(tenantId);
+      return;
+    }
+
+    setPickups((prev) => prev.filter((row) => row.id !== entry.id));
+    flash(`The reservation for ${entry.product_name} was closed.`);
+  }
 
   // ---- Catalogue -----------------------------------------------------------
 
@@ -602,6 +705,133 @@ export default function GymStorePage() {
           </div>
         </div>
 
+
+        {/* Pending desk pickups — items members reserved from the companion app */}
+        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden mb-6">
+          <div className="p-4 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-amber-400" /> Pending Desk Pickups
+              {pickups.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                  {pickups.length} waiting
+                </span>
+              )}
+            </h2>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {pickups.length > 0 && (
+                <span className="text-[11px] text-neutral-400">{formatRupees(pickupValue)} reserved</span>
+              )}
+              <label className="flex items-center gap-2 text-[11px] text-neutral-500">
+                Billed as
+                <select
+                  value={pickupMethod}
+                  onChange={(e) => setPickupMethod(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                >
+                  {PAYMENT_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={() => loadPickups(tenantId)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-300 hover:text-white text-[11px] font-semibold transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </button>
+            </div>
+          </div>
+
+          {pickups.length === 0 ? (
+            <div className="p-8 text-center">
+              <Package className="w-7 h-7 text-neutral-600 mx-auto mb-3" />
+              <p className="text-sm text-neutral-300 font-semibold">The desk queue is clear</p>
+              <p className="text-xs text-neutral-500 mt-1">
+                Nothing is waiting for collection. Reservations made in the member app show up here.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-neutral-800 max-h-[360px] overflow-y-auto">
+              {pickups.map((entry) => {
+                const stale = entry.waiting_minutes >= 30;
+                const stockShort = Number(entry.stock_available ?? 0) < Number(entry.quantity);
+                const busy = pickupBusyId === entry.id;
+
+                return (
+                  <div
+                    key={entry.id}
+                    className="p-3.5 flex flex-wrap items-center gap-3 hover:bg-neutral-950/60 transition"
+                  >
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-300 shrink-0">
+                      <Package className="w-5 h-5" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold truncate">
+                        {entry.quantity} × {entry.product_name}
+                        <span className="ml-2 font-bold text-amber-300">
+                          {formatRupees(entry.total_amount)}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-neutral-500 truncate">
+                        {entry.member_name}
+                        {entry.member_phone ? ` · ${entry.member_phone}` : ''}
+                        {entry.member_username ? ` · @${entry.member_username}` : ''}
+                      </p>
+                      <p className="text-[10px] mt-0.5">
+                        <span className={stale ? 'text-amber-400 font-semibold' : 'text-neutral-500'}>
+                          waiting {waitingLabel(entry.waiting_minutes)}
+                        </span>
+                        {stockShort ? (
+                          <span className="text-rose-400 font-semibold">
+                            {' '}
+                            · not enough on the shelf to complete
+                          </span>
+                        ) : (
+                          <span className="text-neutral-500">
+                            {' '}
+                            · {entry.stock_available ?? 0} in stock
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handOverPickup(entry)}
+                        disabled={busy}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500 hover:bg-violet-600 disabled:opacity-60 text-white text-[11px] font-bold transition shadow-lg shadow-violet-500/20"
+                      >
+                        {busy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        Complete Pickup &amp; Bill
+                      </button>
+                      <button
+                        onClick={() => dropPickup(entry)}
+                        disabled={busy}
+                        title="Close the reservation without billing"
+                        className="px-2.5 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-400 hover:text-rose-300 hover:border-rose-500/30 disabled:opacity-60 transition"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="px-4 py-3 border-t border-neutral-800 text-[11px] text-neutral-500">
+            Reserved from the companion app. Completing a pickup bills it to the member, takes the
+            stock off the shelf and writes the order in one step.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           {/* Catalogue / till grid */}
@@ -1359,6 +1589,11 @@ export default function GymStorePage() {
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <h3 className="font-black text-lg">Payment received</h3>
+              {'reservation_kind' in receipt && receipt.reservation_kind === 'desk_pickup' && (
+                <p className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-bold">
+                  <ClipboardList className="w-3.5 h-3.5" /> Desk pickup
+                </p>
+              )}
               <p className="text-[11px] text-neutral-400">
                 {session?.tenantName || 'Your gym'} &middot; {formatStamp(receipt.created_at)}
               </p>

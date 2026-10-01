@@ -13,7 +13,7 @@ import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -30,7 +30,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ phone, pin }),
+        body: JSON.stringify({ identifier, pin }),
       });
 
       const result = (await response.json()) as {
@@ -86,19 +86,21 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 block mb-1">
-              Registered Phone
+              Phone, @handle or Email
             </label>
             <div className="relative">
               <Phone className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
               <input
                 required
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="6394550174 or 9569272339"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="9569272339 · @rahul · rahul@email.com"
                 className="w-full bg-zinc-950 border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono text-white focus:outline-none"
               />
             </div>
+            <p className="mt-1 text-[10px] text-neutral-500 font-mono">
+              Members sign in with no PIN — staff and reception add theirs below.
+            </p>
           </div>
 
           <div>
@@ -108,12 +110,11 @@ export default function LoginPage() {
             <div className="relative">
               <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
               <input
-                required
                 type="password"
                 maxLength={6}
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="**** (Owner: 1234 | Super: 9999)"
+                placeholder="Leave blank if you are a member"
                 className="w-full bg-zinc-950 border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono text-white focus:outline-none tracking-widest"
               />
             </div>

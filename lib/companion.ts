@@ -36,11 +36,29 @@ export interface CompanionMember {
   id: string;
   full_name: string;
   phone: string;
+  username: string | null;
   membership_end: string | null;
   is_frozen: boolean;
   freeze_end_date: string | null;
   status: string;
 }
+
+/** The streak badge on the Home tab. Computed in SQL from the attendance log. */
+export interface CompanionStreak {
+  count: number;
+  best: number;
+  checkedInToday: boolean;
+  lastVisit: string | null;
+  visitDays: number;
+}
+
+export const EMPTY_STREAK: CompanionStreak = {
+  count: 0,
+  best: 0,
+  checkedInToday: false,
+  lastVisit: null,
+  visitDays: 0,
+};
 
 export interface CompanionTrainer {
   id: string;
@@ -89,6 +107,7 @@ export interface CompanionData {
   workouts: WorkoutEntry[];
   reservations: ReservationEntry[];
   announcements: AnnouncementEntry[];
+  streak: CompanionStreak;
 }
 
 /** Supabase sends Postgres error text in `message`; prefer it because the RPCs
@@ -130,6 +149,7 @@ export async function loadCompanionData(
     workouts: [],
     reservations: [],
     announcements: [],
+    streak: EMPTY_STREAK,
   };
 
   if (!memberId) return { ok: false, error: 'Sign in to see your dashboard.', data: empty };
@@ -143,6 +163,7 @@ export async function loadCompanionData(
   const payload = asRecord(data);
   const memberRow = asRecord(payload.member);
   const trainerRow = asRecord(payload.trainer);
+  const streakRow = asRecord(payload.streak);
 
   return {
     ok: true,
@@ -152,6 +173,7 @@ export async function loadCompanionData(
             id: str(memberRow.id),
             full_name: str(memberRow.full_name, 'Member'),
             phone: str(memberRow.phone),
+            username: typeof memberRow.username === 'string' ? memberRow.username : null,
             membership_end:
               typeof memberRow.membership_end === 'string' ? memberRow.membership_end : null,
             is_frozen: Boolean(memberRow.is_frozen),
@@ -161,6 +183,13 @@ export async function loadCompanionData(
           }
         : null,
       tenant_id: typeof payload.tenant_id === 'string' ? payload.tenant_id : null,
+      streak: {
+        count: num(streakRow.streak_count),
+        best: num(streakRow.streak_best),
+        checkedInToday: Boolean(streakRow.checked_in_today),
+        lastVisit: typeof streakRow.last_visit === 'string' ? streakRow.last_visit : null,
+        visitDays: num(streakRow.visit_days),
+      },
       trainer: trainerRow.id
         ? {
             id: str(trainerRow.id),
@@ -242,6 +271,33 @@ export async function logWorkout(input: {
   return error ? { ok: false, error: errorText(error) } : { ok: true };
 }
 
+/**
+ * Renames the member's own @handle. The handle the gym minted on enrolment is
+ * derived from a name and a phone tail, which is fine for signing in and rarely
+ * what someone wants printed on their own profile.
+ */
+export async function setUsername(
+  memberId: string,
+  username: string
+): Promise<{ ok: boolean; error?: string; username?: string }> {
+  const clean = username.trim().replace(/^@+/, '').toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._]{2,23}$/.test(clean)) {
+    return {
+      ok: false,
+      error: 'Pick a handle of 3 to 24 characters: letters, numbers, dot or underscore.',
+    };
+  }
+
+  const { data, error } = await supabase.rpc('fn_member_set_username', {
+    p_member_id: memberId,
+    p_username: clean,
+  });
+
+  if (error) return { ok: false, error: errorText(error) };
+
+  return { ok: true, username: str(asRecord(data).username, clean) };
+}
+
 export async function reserveProduct(
   memberId: string,
   productId: string,
@@ -317,19 +373,53 @@ export function weightSparkPath(weights: WeightEntry[]): string | null {
  *  constant: this is a display rule, not a booking system. */
 export const GYM_HOURS = { opens: 5, closes: 23 } as const;
 
-function formatHour(hour24: number): string {
-  const suffix = hour24 >= 12 ? 'pm' : 'am';
+/** "5:00 AM – 11:00 PM", exactly as it is printed on the gym door. */
+function formatClock(hour24: number): string {
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
   const twelve = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${twelve}${suffix}`;
+  return `${twelve}:00 ${suffix}`;
 }
 
-export function gymOpenState(now: Date = new Date()): { open: boolean; label: string } {
+export const GYM_HOURS_LABEL = `${formatClock(GYM_HOURS.opens)} – ${formatClock(GYM_HOURS.closes)}`;
+
+export function gymOpenState(now: Date = new Date()): {
+  open: boolean;
+  label: string;
+  hours: string;
+} {
   const hour = now.getHours() + now.getMinutes() / 60;
   const open = hour >= GYM_HOURS.opens && hour < GYM_HOURS.closes;
-  return open
-    ? { open: true, label: 'Open now' }
-    : { open: false, label: `Closed · opens ${formatHour(GYM_HOURS.opens)}` };
+  return {
+    open,
+    label: open ? 'Open now' : `Closed · opens ${formatClock(GYM_HOURS.opens)}`,
+    hours: GYM_HOURS_LABEL,
+  };
 }
+
+/** The lineup under the streak flame: "12 Day Streak" or a nudge to start one. */
+export function streakHeadline(streak: { count: number; checkedInToday: boolean }): {
+  headline: string;
+  detail: string;
+  tone: string;
+} {
+  if (streak.count <= 0) {
+    return {
+      headline: 'Start your streak',
+      detail: 'Check in today to light this up.',
+      tone: 'bg-orange-50 text-orange-700 border-orange-200',
+    };
+  }
+
+  const word = streak.count === 1 ? 'Day' : 'Days';
+  return {
+    headline: `${streak.count} ${word} Streak`,
+    detail: streak.checkedInToday
+      ? "Today's check-in is in. Well done."
+      : 'Check in today to keep it alive.',
+    tone: 'bg-orange-50 text-orange-700 border-orange-200',
+  };
+}
+
 
 /** How busy the floor is, from the count of members currently inside.
  *  Thresholds are deliberately coarse: nobody needs to know there are 41 people

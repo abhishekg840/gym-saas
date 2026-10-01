@@ -26,6 +26,8 @@ export interface GymSession {
   tenantId?: string | null;
   tenantName?: string | null;
   tenantPhone?: string | null;
+  /** Member's public @handle, when they signed in as a member. */
+  username?: string | null;
 }
 
 /** True only for a well-formed UUID. Used to reject junk before hitting Postgres. */

@@ -1,10 +1,10 @@
 /**
- * Geofence maths shared by the member self-portal and any future gate check.
+ * Geofence geometry, kept for the owner's Hardware Console.
  *
- * The rule fails CLOSED on purpose: once a gym switches enforcement on, a pass
- * whose location could not be verified is not a valid pass. A member who denies
- * browser location permission therefore has to see the front desk, not a QR code
- * that happens to be standing in a car park two kilometres away.
+ * Phase 5 removed geofencing from the member pass: a member's QR code no longer
+ * depends on a GPS fix, and the kiosk no longer re-runs a distance check. What
+ * remains is the arithmetic behind the console's "where am I relative to this
+ * pin?" self-check, which is a setup aid for the owner rather than an access rule.
  */
 
 /** The slice of the tenant row that a pass decision depends on. */
@@ -46,8 +46,6 @@ export interface GeofenceVerdict {
 }
 
 export const DEFAULT_GEOFENCE_RADIUS = 100;
-
-import { isPassWindowCurrent, type PassTokenClaims } from './passtoken';
 
 /** Mean Earth radius in metres (IUGG). Good to well under a metre at gym scale. */
 const EARTH_RADIUS_METERS = 6_371_008.8;
@@ -198,48 +196,7 @@ export function evaluateGeofence(
     ...withDistance,
     state: 'outside',
     unlocked: false,
-    message: `Outside Gym Radius (${formatDistance(distance)} away). Gate pass unlocks when you are inside the gym facility.`,
+    message: `Outside Gym Radius (${formatDistance(distance)} away).`,
   };
 }
 
-/**
- * The gate's half of the same decision, run in `/api/scan/verify`.
- *
- * Hiding the QR on the phone is only a UI affordance — a screenshot, a dev-tools
- * console or a stale tab can still hand over the string — so the kiosk re-runs
- * the fence from the coordinates the phone recorded at mint time. Returns null
- * when the scan may proceed, otherwise the sentence the kiosk shows.
- *
- * The radius compared against is the gym's CURRENT one, not the one baked into
- * the token, so tightening the fence invalidates every pass minted under the old
- * rule the moment it is saved.
- *
- * GPS accuracy is deliberately not used as a tolerance: the phone compares
- * `distance <= radius` with no allowance either, and a gate that disagreed with
- * the screen would lock out members who are visibly standing at the door.
- */
-export function passGeofenceDenial(
-  claims: PassTokenClaims | null,
-  gymLatitude: number | null,
-  gymLongitude: number | null,
-  radiusMeters: number
-): string | null {
-  if (!claims) {
-    return 'This pass carries no location proof, so the gym fence cannot be verified. Please use the front desk.';
-  }
-  if (!isPassWindowCurrent(claims.t)) {
-    return 'This QR code has expired. Ask the member to reopen their pass.';
-  }
-  if (!claims.geo) {
-    return 'This pass was unlocked without a GPS fix. Stand inside the gym, reopen the pass, then scan again.';
-  }
-  if (gymLatitude === null || gymLongitude === null) {
-    return 'This gym has no saved coordinates, so the fence cannot be verified. Please use the front desk.';
-  }
-
-  const distance = haversineMeters(claims.geo.lat, claims.geo.lon, gymLatitude, gymLongitude);
-  if (distance > radiusMeters) {
-    return `Pass was unlocked ${Math.round(distance)} m from the gym — outside the ${radiusMeters} m gate radius.`;
-  }
-  return null;
-}
