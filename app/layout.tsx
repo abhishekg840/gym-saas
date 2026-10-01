@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import MobileNavProvider from './mobile-nav-provider';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -32,6 +33,9 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-neutral-950 text-white antialiased`}>
         {children}
+        {/* Android back button: page-level navigation first, then history, then
+            a double-press exit confirmation (app/mobile-nav-provider.tsx). */}
+        <MobileNavProvider />
         <script
           dangerouslySetInnerHTML={{
             __html: `

@@ -92,7 +92,11 @@ export async function POST(request: Request) {
   const identifier = String(
     payload.identifier ?? payload.phone ?? payload.username ?? payload.email ?? ''
   ).trim();
-  const pin = typeof payload.pin === 'string' ? payload.pin : '';
+  // The screen labels this field "Password / PIN": staff PINs are 4-6 digits and
+  // members leave it blank. `password` is accepted alongside `pin` so the label
+  // can say what people already call it without breaking older builds.
+  const rawSecret = payload.pin ?? payload.password;
+  const pin = typeof rawSecret === 'string' ? rawSecret : '';
 
   if (identifier.length < 3) {
     return NextResponse.json(

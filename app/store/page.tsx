@@ -35,9 +35,17 @@ import {
   type ProductCategory,
 } from '@/lib/crm';
 import {
+  MAX_PRODUCT_IMAGE_BYTES,
+  PRODUCT_IMAGE_BUCKET,
+  imageFileName,
+  uploadImage,
+  validateImageFile,
+} from '@/lib/media';
+import {
   AlertTriangle,
   ArrowLeft,
   Boxes,
+  Camera,
   CheckCircle2,
   ClipboardList,
   IndianRupee,
@@ -71,6 +79,8 @@ const EMPTY_PRODUCT = {
   stockQuantity: '0',
   lowStockThreshold: '5',
   sku: '',
+  /** Public storage URL of the photo; '' = no photo (emoji/category tile). */
+  imageUrl: '',
 };
 
 /** Local calendar day, so a 11pm sale still counts towards today's takings. */
@@ -107,6 +117,8 @@ export default function GymStorePage() {
   const [productFormId, setProductFormId] = useState<string | null>(null);
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT);
   const [savingProduct, setSavingProduct] = useState(false);
+  /** Photo is in flight to the product-images bucket right now. */
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [restockId, setRestockId] = useState<string | null>(null);
   const [restockQty, setRestockQty] = useState('10');
@@ -459,7 +471,41 @@ export default function GymStorePage() {
       stockQuantity: String(product.stock_quantity),
       lowStockThreshold: String(product.low_stock_threshold),
       sku: product.sku ?? '',
+      imageUrl: product.image_url ?? '',
     });
+  }
+
+  /**
+   * Uploads the picked photo straight to the product-images bucket and parks
+   * the public URL in the form; Save is what writes it onto the row. Cancelling
+   * after an upload leaves an orphan file in storage — cheap, and far simpler
+   * than tracking draft state across the modal.
+   */
+  async function pickProductImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    e.target.value = ''; // lets the same file be re-picked after a removal
+    if (!file) return;
+
+    const problem = validateImageFile(file, MAX_PRODUCT_IMAGE_BYTES);
+    if (problem) {
+      flash(problem, 'bad');
+      return;
+    }
+
+    // Editing reuses one slot per product; a brand-new product parks the file
+    // under a draft folder until Save gives it a real row.
+    const path = `${productFormId || 'draft'}/${Date.now()}-${imageFileName(file.name)}`;
+
+    setUploadingImage(true);
+    const result = await uploadImage(PRODUCT_IMAGE_BUCKET, path, file);
+    setUploadingImage(false);
+
+    if (!result.ok || !result.url) {
+      flash(result.error ?? 'Could not upload that photo.', 'bad');
+      return;
+    }
+
+    setProductForm((prev) => ({ ...prev, imageUrl: result.url as string }));
   }
 
   async function saveProduct(e: React.FormEvent) {
@@ -493,6 +539,7 @@ export default function GymStorePage() {
       stock_quantity: stockQuantity,
       low_stock_threshold: Number(productForm.lowStockThreshold) || 0,
       sku: productForm.sku.trim() || null,
+      image_url: productForm.imageUrl.trim() || null,
     };
 
     setSavingProduct(true);
@@ -932,11 +979,26 @@ export default function GymStorePage() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-bold truncate">{product.name}</p>
-                          <p className="text-[10px] text-neutral-500 font-mono truncate">
-                            {product.sku ?? 'no SKU'}
-                          </p>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {product.image_url ? (
+                            <span className="shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 flex items-center justify-center">
+                              <img
+                                src={product.image_url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            </span>
+                          ) : (
+                            <span className="shrink-0 w-10 h-10 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-lg">
+                              {meta.emoji}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-bold truncate">{product.name}</p>
+                            <p className="text-[10px] text-neutral-500 font-mono truncate">
+                              {product.sku ?? 'no SKU'}
+                            </p>
+                          </div>
                         </div>
                         <span
                           className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.badge}`}
@@ -1389,6 +1451,61 @@ export default function GymStorePage() {
                     placeholder="WHEY-1KG"
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-violet-500"
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                    Photo (optional)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0 w-14 h-14 rounded-xl bg-neutral-950 border border-neutral-800 overflow-hidden flex items-center justify-center">
+                      {productForm.imageUrl ? (
+                        <img
+                          src={productForm.imageUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Camera className="w-5 h-5 text-neutral-600" />
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 cursor-pointer transition">
+                        {uploadingImage ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Camera className="w-3.5 h-3.5" />
+                        )}
+                        {uploadingImage
+                          ? 'Uploading…'
+                          : productForm.imageUrl
+                            ? 'Replace photo'
+                            : 'Upload photo'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                          className="hidden"
+                          disabled={uploadingImage}
+                          onChange={pickProductImage}
+                        />
+                      </label>
+
+                      {productForm.imageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setProductForm((prev) => ({ ...prev, imageUrl: '' }))}
+                          className="px-3 py-2 rounded-xl text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-rose-300 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">
+                    JPEG, PNG, WebP, AVIF or GIF up to 5 MB. The photo shows on the till cards;
+                    skip it and the category emoji is used instead.
+                  </p>
                 </div>
 
 

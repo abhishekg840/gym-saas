@@ -29,7 +29,28 @@ const MISSING_TENANT =
   'Missing or malformed tenant_id. Sign in again to refresh your gym scope.';
 
 const PRODUCT_COLUMNS =
-  'id, name, category, cost_price, selling_price, stock_quantity, low_stock_threshold, sku, created_at';
+  'id, name, category, cost_price, selling_price, stock_quantity, low_stock_threshold, sku, image_url, created_at';
+
+const MAX_IMAGE_URL = 500;
+
+/**
+ * image_url must be an https link into our public storage (or empty to clear
+ * the photo). javascript:/data:/off-site junk is refused so a stray client can
+ * never turn the catalogue into a script host. undefined = leave unchanged.
+ */
+function parseImageUrl(
+  raw: unknown
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, value: null };
+  const value = String(raw).trim();
+  if (value.length > MAX_IMAGE_URL) {
+    return { ok: false, error: `image_url must be ${MAX_IMAGE_URL} characters or fewer.` };
+  }
+  if (!/^https:\/\/\S+$/i.test(value)) {
+    return { ok: false, error: 'image_url must be an https storage link.' };
+  }
+  return { ok: true, value };
+}
 
 function resolveTenant(candidates: Array<unknown>, request: Request): string | null {
   for (const candidate of candidates) {
@@ -151,6 +172,9 @@ export async function POST(request: Request) {
 
   const sku = String(body.sku ?? '').trim().slice(0, MAX_SKU) || null;
 
+  const imageUrl = parseImageUrl(body.image_url ?? body.imageUrl);
+  if (!imageUrl.ok) return badRequest(imageUrl.error);
+
   const { data, error } = await supabase
     .from('products')
     .insert({
@@ -162,6 +186,7 @@ export async function POST(request: Request) {
       stock_quantity: stockQuantity,
       low_stock_threshold: threshold,
       sku,
+      image_url: imageUrl.value,
     })
     .select(PRODUCT_COLUMNS)
     .single();
@@ -229,6 +254,13 @@ export async function PATCH(request: Request) {
 
   if (body.sku !== undefined) {
     patch.sku = String(body.sku ?? '').trim().slice(0, MAX_SKU) || null;
+  }
+
+  // Present-and-null clears the photo; absent leaves it alone.
+  if (body.image_url !== undefined || body.imageUrl !== undefined) {
+    const imageUrl = parseImageUrl(body.image_url ?? body.imageUrl);
+    if (!imageUrl.ok) return badRequest(imageUrl.error);
+    patch.image_url = imageUrl.value;
   }
 
   const deltaRaw = body.add_stock ?? body.addStock;

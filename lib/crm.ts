@@ -379,6 +379,8 @@ export interface Product {
   stock_quantity: number;
   low_stock_threshold: number;
   sku: string | null;
+  /** Public storage URL of the photo; null = emoji tile (see lib/media.ts). */
+  image_url?: string | null;
   created_at: string;
 }
 
@@ -433,6 +435,8 @@ export interface ProductInput {
   stock_quantity?: number;
   low_stock_threshold?: number;
   sku?: string | null;
+  /** Public storage URL; send null/'' to clear the photo. */
+  image_url?: string | null;
 }
 
 export interface OrderLine {
