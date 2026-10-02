@@ -14,8 +14,12 @@ import {
   LogOut,
   MessageCircle,
   Package,
+  Pencil,
   Phone,
+  Pin,
   Plus,
+  Settings,
+  ShieldCheck,
   RefreshCw,
   ShoppingBag,
   Store,
@@ -32,8 +36,10 @@ import { readSession, clearSession, type GymSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 import { encodePassToken, PASS_WINDOW_MS } from '@/lib/passtoken';
 import AvatarUploader from '@/components/avatar-uploader';
+import AccountSettings from '@/components/account-settings';
 import BadgeShowcase from '@/components/badge-showcase';
 import HardwareIdentityCard from '@/components/hardware-identity-card';
+import PasswordGate from '@/components/password-gate';
 import { loadHardwareIdentity, rfidDisplay, slotDisplay, HARDWARE_IDENTITY_HINT, type HardwareIdentity } from '@/lib/identity';
 import { loadBadges, loadMemberStats, type MemberBadge, type MemberStats } from '@/lib/gamification';
 import {
@@ -118,6 +124,12 @@ interface StoreItem {
   category: string;
   selling_price: number;
   stock_quantity: number;
+  /**
+   * Public Storage URL of the product photo, or null for no photo. Added by
+   * migration 0007; the member store could not show it until the query above
+   * started asking for this column.
+   */
+  image_url?: string | null;
 }
 
 /** What /api/member/pass returns for the signed-in member. */
@@ -135,6 +147,24 @@ interface PassMember {
   freeze_end_date: string | null;
   is_expired: boolean;
 }
+
+/** Member-facing labels for the notice `type` an owner picks in /admin/settings. */
+const NOTICE_LABELS: Record<string, string> = {
+  general: 'Notice',
+  alert: 'Alert',
+  event: 'Event',
+  maintenance: 'Maintenance',
+  offer: 'Offer',
+};
+
+/** Tailwind for each notice badge. Keyed the same way as NOTICE_LABELS. */
+const NOTICE_TONES: Record<string, string> = {
+  general: 'border-slate-200 bg-slate-100 text-slate-600',
+  alert: 'border-rose-200 bg-rose-50 text-rose-700',
+  event: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  maintenance: 'border-amber-200 bg-amber-50 text-amber-700',
+  offer: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+};
 
 interface TabProps {
   data: CompanionData;
@@ -223,6 +253,16 @@ export default function MemberDashboard() {
   const [stats, setStats] = useState<MemberStats | null>(null);
   /** The profile sheet: photo + hardware identity, reachable from the header. */
   const [profileOpen, setProfileOpen] = useState(false);
+  /** Phase 11: the Settings view, which is where the @handle now lives. */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /**
+   * Phase 11: until this member has set their own password, the app is BLOCKED
+   * behind PasswordGate. Defaults to true so the gate shows on the very first
+   * paint rather than flashing the dashboard and then covering it — which would
+   * leak the whole member's data for a frame on a shared device.
+   */
+  const [passwordDone, setPasswordDone] = useState(true);
 
   const memberId = session?.role === 'member' ? session.userId : null;
   const memberPhone = session?.phone ?? '';
@@ -273,6 +313,10 @@ export default function MemberDashboard() {
       return;
     }
     setData(result.data);
+
+    // Phase 11: the password gate reads the SAME bundle the tabs use, so there
+    // is no extra round trip just to decide whether to block the app.
+    setPasswordDone(result.data.member?.password_setup_completed !== false);
   }, [memberId]);
 
   /**
@@ -445,6 +489,28 @@ export default function MemberDashboard() {
     [stats]
   );
 
+  /**
+   * Phase 11 (Module 6): the blocking first-run screen.
+   *
+   * Rendered INSTEAD of the whole app rather than as a modal on top, so no
+   * member data is ever painted behind it. On a shared phone at the desk that
+   * matters: a dismissible modal would still expose the previous member's
+   * streak, weight and gate pass behind it.
+   */
+  if (!passwordDone) {
+    return (
+      <PasswordGate
+        memberId={memberId}
+        name={displayName}
+        onFlash={flash}
+        onDone={async () => {
+          setPasswordDone(true);
+          await refresh();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20 text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -538,6 +604,8 @@ export default function MemberDashboard() {
             badges={badges}
             bestStreak={data.streak.best}
             heaviestBenchKg={heaviestBenchKg}
+            onOpenProfile={() => setProfileOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
         {tab === 'training' && data && (
@@ -545,6 +613,53 @@ export default function MemberDashboard() {
         )}
         {tab === 'store' && data && <StoreTab data={data} onFlash={flash} onSaved={refresh} />}
       </main>
+
+      {/* Settings — where the @handle, personal details and security live
+          (Phase 11). Separate from the profile sheet on purpose: changing a
+          handle is a deliberate, rate-limited act, not a photo edit. */}
+      {settingsOpen && data && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Account settings"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-slate-50 p-4 sm:rounded-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                Settings
+              </p>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                aria-label="Close settings"
+                className={`rounded-xl border border-slate-200 bg-white p-2 text-slate-500 ${TAP}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <AccountSettings
+              memberId={data.member?.id ?? null}
+              currentUsername={data.member?.username ?? null}
+              passwordDone={data.member?.password_setup_completed !== false}
+              profile={{
+                display_name: data.profile.display_name,
+                emergency_phone: data.profile.emergency_phone,
+                gender: data.profile.gender,
+                date_of_birth: data.profile.date_of_birth,
+                username_changed_at: data.profile.username_changed_at,
+              }}
+              onSaved={refresh}
+              onFlash={flash}
+              onLogout={signOut}
+            />
+          </div>
+        </div>
+      )}
 
       {/* The header profile sheet. Same uploader, same hardware card, no
           duplication: the Health tab is the deep version of this sheet. */}
@@ -659,7 +774,9 @@ function HomeTab({
   now,
   onRefresh,
 }: HomeTabProps) {
-  const hours = gymOpenState();
+  // Phase 11: the gym's real weekly schedule (IST) instead of a hardcoded
+  // 05:00-23:00 that was wrong for most gyms.
+  const hours = gymOpenState(new Date(), data?.member?.operating_hours);
   const rush = rushLevel(insideNow);
   const countdown = expiryCountdown(pass?.membership_end ?? data?.member?.membership_end ?? null);
   const streak = data?.streak ?? EMPTY_STREAK;
@@ -753,7 +870,9 @@ function HomeTab({
         <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-slate-500">Gym timing</span>
-            <span className="font-semibold tabular-nums text-slate-800">{hours.hours}</span>
+            <span className="font-semibold tabular-nums text-slate-800">
+            {hours.open ? 'Open now' : hours.hours}
+          </span>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-slate-500">Right now</span>
@@ -818,10 +937,32 @@ function HomeTab({
         ) : (
           <ul className="mt-3 space-y-2">
             {announcements.map((notice) => (
-              <li key={notice.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                <p className="text-xs font-bold text-slate-800">{notice.title}</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600">
-                  {notice.message}
+              <li
+                key={notice.id}
+                className={`rounded-xl border p-3 ${
+                  notice.is_pinned
+                    ? 'border-amber-200 bg-amber-50/70'
+                    : 'border-slate-100 bg-slate-50/70'
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {notice.is_pinned && (
+                    <span className="inline-flex items-center gap-0.5 rounded-md border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800">
+                      <Pin className="h-2.5 w-2.5" /> Pinned
+                    </span>
+                  )}
+                  <span
+                    className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                      NOTICE_TONES[notice.type] ?? NOTICE_TONES.general
+                    }`}
+                  >
+                    {NOTICE_LABELS[notice.type] ?? 'Notice'}
+                  </span>
+                </div>
+
+                <p className="mt-1.5 text-xs font-bold text-slate-800">{notice.title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600 whitespace-pre-wrap">
+                  {notice.body || notice.message}
                 </p>
                 <p className="mt-1 text-[10px] font-medium text-slate-400">
                   {timeAgo(notice.created_at)}
@@ -876,6 +1017,10 @@ interface HealthExtras {
   badges: MemberBadge[];
   bestStreak: number;
   heaviestBenchKg: number;
+  /** Opens the photo sheet (Edit Profile). */
+  onOpenProfile: () => void;
+  /** Opens Settings, where the @handle and security live. */
+  onOpenSettings: () => void;
 }
 
 function HealthTab({
@@ -889,11 +1034,11 @@ function HealthTab({
   badges,
   bestStreak,
   heaviestBenchKg,
+  onOpenProfile,
+  onOpenSettings,
 }: TabProps & HealthExtras) {
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
-  const [handleDraft, setHandleDraft] = useState('');
-  const [savingHandle, setSavingHandle] = useState(false);
 
   const trend = weightTrend(data.weights);
   const spark = weightSparkPath(data.weights);
@@ -922,36 +1067,13 @@ function HealthTab({
     onFlash('Weigh-in saved.', 'ok');
     await onSaved();
   }
-
-  async function submitHandle(event: React.FormEvent) {
-    event.preventDefault();
-    if (!data.member) return;
-
-    const next = handleDraft.trim();
-    if (!next) {
-      onFlash('Type the handle you want first.', 'bad');
-      return;
-    }
-
-    setSavingHandle(true);
-    const result = await setUsername(data.member.id, next);
-    setSavingHandle(false);
-
-    if (!result.ok) {
-      onFlash(result.error ?? 'Could not change your handle.', 'bad');
-      return;
-    }
-
-    setHandleDraft('');
-    onFlash(`Your handle is now @${result.username}.`, 'ok');
-    await onSaved();
-  }
-
   return (
     <div className="space-y-4">
-      {/* Profile — photo, handle, phone */}
+      {/* Profile — identity only. The @handle EDITOR moved to Settings (Phase 11):
+          a handle is an identifier with a 30-day cooldown, not something you
+          retype on the front card every time you want a different one. */}
       <section className={`${CARD} p-5`}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4">
           <AvatarUploader
             memberId={data.member?.id ?? null}
             tenantId={tenantId}
@@ -964,44 +1086,50 @@ function HealthTab({
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
               My Profile
             </p>
+            {/* The display name the member chose wins; the gym's roster name is
+                the fallback so the card can never render blank. */}
             <h2 className="mt-1 truncate text-lg font-extrabold tracking-tight">
-              {data.member?.full_name ?? 'Member'}
+              {data.profile.display_name ?? data.member?.full_name ?? 'Member'}
             </h2>
+
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
                 @{data.member?.username ?? 'handle'}
               </span>
-              <span className="font-medium text-slate-500">
-                {data.member?.phone ?? 'No number on file'}
-              </span>
+              {/* Active Member pill — the spec's status signal, derived from the
+                  same fields the pass card already uses. */}
+              {!data.member?.is_frozen &&
+              (data.member?.membership_end ?? '') >= new Date().toISOString().slice(0, 10) ? (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  Active Member
+                </span>
+              ) : (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                  {data.member?.is_frozen ? 'Frozen' : 'Expired'}
+                </span>
+              )}
+            </div>
+
+            <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+              {data.member?.phone ?? 'No number on file'}
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={onOpenProfile}
+                className={`inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 ${TAP}`}
+              >
+                <Pencil className="h-3.5 w-3.5" /> Edit Profile
+              </button>
+              <button
+                onClick={onOpenSettings}
+                className={`inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 ${TAP}`}
+              >
+                <Settings className="h-3.5 w-3.5" /> Settings
+              </button>
             </div>
           </div>
         </div>
-
-        <form onSubmit={submitHandle} className="mt-4 border-t border-slate-100 pt-3">
-          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            Change my @handle
-          </label>
-          <div className="flex gap-2">
-            <input
-              value={handleDraft}
-              onChange={(event) => setHandleDraft(event.target.value)}
-              placeholder="rahul.kumar"
-              maxLength={24}
-              className={INPUT}
-            />
-            <button
-              type="submit"
-              disabled={savingHandle}
-              className={`shrink-0 px-4 py-2.5 text-xs ${PRIMARY} ${TAP}`}
-            >
-              {savingHandle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-            </button>
-          </div>
-          <p className="mt-1.5 text-[11px] font-medium text-slate-500">
-            Use this handle, your phone number or your email to sign in.
-          </p>
-        </form>
       </section>
 
       {/* Hardware credentials — read only, assigned by the gate (Modules 10 & 33) */}
@@ -1422,6 +1550,55 @@ function TrainingTab({ data, onFlash, onSaved }: TabProps) {
   );
 }
 
+/**
+ * A product thumbnail: the uploaded photo, or the category icon.
+ *
+ * The fallback is not only for products with no photo. A public bucket URL can
+ * still 404 — the gym deleted the file, renamed it, or the till uploaded to a
+ * path that was later overwritten — and a broken image icon in a store list
+ * reads as "the gym's photos are broken". Swapping to the icon on `onError`
+ * degrades quietly instead.
+ *
+ * `key` is derived from the URL so React remounts the <img> when the photo
+ * changes; without it a re-render reuses the previous (already errored) node and
+ * the fallback never comes back.
+ */
+function ProductThumb({ item, Icon }: { item: StoreItem; Icon: typeof Package }) {
+  const [failed, setFailed] = useState(false);
+  const url = item.image_url ?? null;
+
+  /**
+   * Clear the error when the URL changes — via the render-time adjustment
+   * pattern rather than an effect. An effect would run AFTER the render that
+   * still had the stale `failed=true`, so React would paint the fallback for a
+   * frame and then correct itself.
+   */
+  const [syncedFrom, setSyncedFrom] = useState<string | null>(url);
+  if (url !== syncedFrom) {
+    setSyncedFrom(url);
+    setFailed(false);
+  }
+
+  if (!url || failed) {
+    return (
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        <Icon className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      key={url}
+      src={url}
+      alt={item.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-slate-200"
+    />
+  );
+}
+
 // =============================================================================
 // Tab 4 — Store & Supplements
 // =============================================================================
@@ -1439,9 +1616,12 @@ function StoreTab({ data, onFlash, onSaved }: TabProps) {
       return;
     }
 
+    // image_url MUST be in the column list. PostgREST does not return columns
+    // that were not asked for, so omitting it here is why every product rendered
+    // as the generic cube icon even after the till uploaded a photo.
     const { data: rows } = await supabase
       .from('products')
-      .select('id, name, category, selling_price, stock_quantity')
+      .select('id, name, category, selling_price, stock_quantity, image_url')
       .eq('tenant_id', tenantId)
       .order('name', { ascending: true })
       .limit(200);
@@ -1600,9 +1780,7 @@ function StoreTab({ data, onFlash, onSaved }: TabProps) {
 
             return (
               <li key={item.id} className={`${CARD} flex items-center gap-3 p-4`}>
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                  <Icon className="h-5 w-5" />
-                </div>
+                <ProductThumb item={item} Icon={Icon} />
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-slate-900">{item.name}</p>

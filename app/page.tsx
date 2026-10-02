@@ -29,6 +29,7 @@ import {
   ArrowRightLeft,
   ServerCog,
   ShoppingBag,
+  Settings,
   Trophy
 } from 'lucide-react';
 import Link from 'next/link';
@@ -651,6 +652,13 @@ export default function GymDashboard() {
             className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"
           >
             <Trophy className="w-4 h-4 text-yellow-400" /> Challenges
+          </Link>
+          <Link
+            href="/admin/settings"
+            title="Gym announcements and opening hours"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 rounded-xl text-xs transition"
+          >
+            <Settings className="w-4 h-4 text-emerald-400" /> Settings
           </Link>
           <Link
             href="/trainers"

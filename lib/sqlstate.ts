@@ -60,6 +60,21 @@ const INTRODUCED_BY: Record<string, string> = {
   'fn_hardware_punch 3': '0003_phase2_hardware_geofence.sql',
   'fn_member_hardware_identity 1': '0010_phase10_vyroniq_identity_avatar.sql',
   'fn_member_set_avatar 2': '0010_phase10_vyroniq_identity_avatar.sql',
+
+  // Phase 11. Note the keys are the FUNCTION NAME PLUS ARITY, never a literal
+  // parameter list: PostgREST echoes the names as they were SPELLED AT THE CALL
+  // SITE, so `fn_tenant_set_operating_hours(p_hours, p_tenant_id)` and
+  // `(p_tenant_id, p_hours)` are the same function with the same missing-ness.
+  // Matching on arity is what makes this lookup stable across callers.
+  fn_announcements_admin_list: '0011_phase11_announcements_realtime_settings.sql',
+  fn_announcements_feed: '0011_phase11_announcements_realtime_settings.sql',
+  'fn_announcements_upsert 8': '0011_phase11_announcements_realtime_settings.sql',
+  'fn_announcements_delete 2': '0011_phase11_announcements_realtime_settings.sql',
+  fn_tenant_set_operating_hours: '0011_phase11_announcements_realtime_settings.sql',
+  fn_member_mark_password_setup: '0011_phase11_announcements_realtime_settings.sql',
+  fn_member_security_state: '0011_phase11_announcements_realtime_settings.sql',
+  fn_member_profile_update: '0011_phase11_announcements_realtime_settings.sql',
+
   fn_monthly_leaderboard: '0009_phase9_gamification_retention.sql',
   fn_member_badges: '0009_phase9_gamification_retention.sql',
   fn_challenge_list: '0009_phase9_gamification_retention.sql',

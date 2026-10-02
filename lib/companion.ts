@@ -1,4 +1,10 @@
 import { supabase } from '@/lib/supabase';
+import {
+  DEFAULT_OPERATING_HOURS,
+  normalizeOperatingHours,
+  operatingState,
+  type OperatingHours,
+} from '@/lib/settings';
 
 /**
  * Client for the member companion app (`/member/dashboard`).
@@ -41,6 +47,13 @@ export interface CompanionMember {
   is_frozen: boolean;
   freeze_end_date: string | null;
   status: string;
+  /** Phase 11: the gym's real weekly schedule, replacing a hardcoded constant. */
+  operating_hours: OperatingHours;
+  /**
+   * Phase 11: FALSE until the member has set their own password. The app shows a
+   * BLOCKING onboarding screen while this is false — see PasswordGate.
+   */
+  password_setup_completed: boolean;
 }
 
 /** The streak badge on the Home tab. Computed in SQL from the attendance log. */
@@ -92,15 +105,51 @@ export interface ReservationEntry {
   created_at: string;
 }
 
+/**
+ * A gym notice as the member app receives it.
+ *
+ * `body` and `message` are both present because migration 0011 emits both: the
+ * stored column is `body`, and `message` is a generated alias kept for the
+ * Phase 4 shape. Reading either works; new code should use `body`.
+ */
 export interface AnnouncementEntry {
   id: string;
   title: string;
+  body: string;
   message: string;
+  type: string;
+  is_pinned: boolean;
   created_at: string;
 }
 
+/** The member's own editable profile fields, distinct from the gym's roster row. */
+export interface CompanionProfile {
+  display_name: string | null;
+  emergency_phone: string | null;
+  gender: string | null;
+  date_of_birth: string | null;
+  avatar_url: string | null;
+  /** When the @handle last changed — drives the 30-day cooldown message. */
+  username_changed_at: string | null;
+}
+
+/** Days before another @handle change is allowed. Mirrors fn_member_set_username. */
+export const USERNAME_COOLDOWN_DAYS = 30;
+
+/** The shape used before any profile row exists. */
+export const EMPTY_PROFILE: CompanionProfile = {
+  display_name: null,
+  emergency_phone: null,
+  gender: null,
+  date_of_birth: null,
+  avatar_url: null,
+  username_changed_at: null,
+};
+
 export interface CompanionData {
   member: CompanionMember | null;
+  /** Phase 11: the member's own editable fields, beside the gym's roster row. */
+  profile: CompanionProfile;
   tenant_id: string | null;
   trainer: CompanionTrainer | null;
   weights: WeightEntry[];
@@ -143,6 +192,7 @@ export async function loadCompanionData(
 ): Promise<{ ok: boolean; error?: string; data: CompanionData }> {
   const empty: CompanionData = {
     member: null,
+    profile: EMPTY_PROFILE,
     tenant_id: null,
     trainer: null,
     weights: [],
@@ -164,6 +214,7 @@ export async function loadCompanionData(
   const memberRow = asRecord(payload.member);
   const trainerRow = asRecord(payload.trainer);
   const streakRow = asRecord(payload.streak);
+  const profileRow = asRecord(payload.profile);
 
   return {
     ok: true,
@@ -180,8 +231,29 @@ export async function loadCompanionData(
             freeze_end_date:
               typeof memberRow.freeze_end_date === 'string' ? memberRow.freeze_end_date : null,
             status: str(memberRow.status, 'active'),
+            // Phase 11: the gym's saved schedule. normalizeOperatingHours fills in
+            // any day the owner never configured, so this is never partial.
+            operating_hours: normalizeOperatingHours(memberRow.operating_hours),
+            password_setup_completed: Boolean(memberRow.password_setup_completed),
           }
         : null,
+      // The member's own fields, kept beside the roster row rather than merged
+      // into it: full_name is what the gym calls them, display_name is what they
+      // want to be called.
+      profile: {
+        display_name:
+          typeof profileRow.display_name === 'string' ? profileRow.display_name : null,
+        emergency_phone:
+          typeof profileRow.emergency_phone === 'string' ? profileRow.emergency_phone : null,
+        gender: typeof profileRow.gender === 'string' ? profileRow.gender : null,
+        date_of_birth:
+          typeof profileRow.date_of_birth === 'string' ? profileRow.date_of_birth : null,
+        avatar_url: typeof profileRow.avatar_url === 'string' ? profileRow.avatar_url : null,
+        username_changed_at:
+          typeof profileRow.username_changed_at === 'string'
+            ? profileRow.username_changed_at
+            : null,
+      },
       tenant_id: typeof payload.tenant_id === 'string' ? payload.tenant_id : null,
       streak: {
         count: num(streakRow.streak_count),
@@ -224,7 +296,13 @@ export async function loadCompanionData(
       announcements: list(payload.announcements, (r) => ({
         id: str(r.id),
         title: str(r.title, 'Notice'),
-        message: str(r.message),
+        // `body` is the stored column (migration 0011); `message` is the
+        // generated alias the Phase 4 shape still emits. Reading body first and
+        // falling back keeps this working against either version of the RPC.
+        body: str(r.body, str(r.message)),
+        message: str(r.message, str(r.body)),
+        type: str(r.type, 'general'),
+        is_pinned: Boolean(r.is_pinned),
         created_at: str(r.created_at),
       })),
     },
@@ -369,33 +447,34 @@ export function weightSparkPath(weights: WeightEntry[]): string | null {
     .join(' ');
 }
 
-/** Public gym hours used by the Home tab's Open/Closed pill. Deliberately a plain
- *  constant: this is a display rule, not a booking system. */
+// Phase 11 removed the hardcoded 05:00-23:00. The gym's schedule now lives on
+// tenants.operating_hours and arrives inside the companion bundle, so the Home
+// tab's Open/Closed pill reads the real roster instead of a constant that was
+// wrong for every gym with different hours.
+//
+// lib/settings.ts owns the maths (IST, past-midnight closes, rest days); this
+// function only adapts it to the shape the pass card already expected, and
+// normalizes any missing schedule back to the old default so a pre-migration
+// install degrades to the previous behaviour instead of rendering nothing.
 export const GYM_HOURS = { opens: 5, closes: 23 } as const;
 
-/** "5:00 AM – 11:00 PM", exactly as it is printed on the gym door. */
-function formatClock(hour24: number): string {
-  const suffix = hour24 >= 12 ? 'PM' : 'AM';
-  const twelve = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${twelve}:00 ${suffix}`;
-}
-
-export const GYM_HOURS_LABEL = `${formatClock(GYM_HOURS.opens)} – ${formatClock(GYM_HOURS.closes)}`;
-
-export function gymOpenState(now: Date = new Date()): {
+export function gymOpenState(
+  now: Date = new Date(),
+  hours?: OperatingHours
+): {
   open: boolean;
   label: string;
   hours: string;
+  tone: string;
 } {
-  const hour = now.getHours() + now.getMinutes() / 60;
-  const open = hour >= GYM_HOURS.opens && hour < GYM_HOURS.closes;
+  const state = operatingState(normalizeOperatingHours(hours), now);
   return {
-    open,
-    label: open ? 'Open now' : `Closed · opens ${formatClock(GYM_HOURS.opens)}`,
-    hours: GYM_HOURS_LABEL,
+    open: state.open,
+    label: state.label,
+    hours: state.todayLabel,
+    tone: state.tone,
   };
 }
-
 /** The lineup under the streak flame: "12 Day Streak" or a nudge to start one. */
 export function streakHeadline(streak: { count: number; checkedInToday: boolean }): {
   headline: string;

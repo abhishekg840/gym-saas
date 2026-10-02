@@ -35,15 +35,35 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- OAuth return trip: the provider redirects to
-                 vyroniq://auth?code=... and Android hands it to this activity,
-                 which Capacitor turns into an appUrlOpen event. The attribute
-                 values must match custom_url_scheme in res/values/strings.xml. -->
+            <!-- OAuth return trip, two forms:
+
+                 1. vyroniq://auth — the custom-scheme deep link. This is what
+                    Supabase redirects to when the app is installed. Capacitor
+                    turns the intent into an appUrlOpen event
+                    (app/mobile-nav-provider.tsx).
+
+                 2. https://gym.glitchfiesta.in/auth/callback — the App Link.
+                    autoVerify makes Android check
+                    /.well-known/assetlinks.json on FIRST install, so the app is
+                    opened directly with no Chrome round trip. Without
+                    autoVerify the user lands in a browser every time, which is
+                    the "opens Chrome but never returns" loop this replaces.
+
+                 The custom-scheme string must match custom_url_scheme in
+                 res/values/strings.xml; the host must match the URL registered
+                 with Supabase as a redirect allow-list entry. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="gym.glitchfiesta.in" android:pathPrefix="/auth/callback" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="vyroniq" />
+                <data android:scheme="vyroniq" android:host="auth" />
             </intent-filter>
 
         </activity>
