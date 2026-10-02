@@ -1,7 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ForgeOS</string>
-    <string name="title_activity_main">ForgeOS</string>
-    <string name="package_name">in.glitchfiesta.forgeos</string>
-    <string name="custom_url_scheme">in.glitchfiesta.forgeos</string>
+    <string name="app_name">Vyroniq</string>
+    <string name="title_activity_main">Vyroniq</string>
+    <string name="package_name">in.vyroniq.gym</string>
+    <!-- The deep-link scheme OAuth providers redirect back to. Kept as its own
+         string because android/app/src/main/AndroidManifest.xml cannot read a
+         literal attribute from a resource, so the two must be edited together. -->
+    <string name="custom_url_scheme">vyroniq</string>
 </resources>

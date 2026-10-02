@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "in.glitchfiesta.forgeos"
+    namespace "in.vyroniq.gym"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "in.glitchfiesta.forgeos"
+        applicationId "in.vyroniq.gym"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -35,6 +35,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- OAuth return trip: the provider redirects to
+                 vyroniq://auth?code=... and Android hands it to this activity,
+                 which Capacitor turns into an appUrlOpen event. The attribute
+                 values must match custom_url_scheme in res/values/strings.xml. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vyroniq" />
+            </intent-filter>
+
         </activity>
 
         <provider

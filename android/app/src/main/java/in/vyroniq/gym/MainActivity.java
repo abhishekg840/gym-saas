@@ -1,4 +1,4 @@
-package in.glitchfiesta.forgeos;
+package in.vyroniq.gym;
 
 import com.getcapacitor.BridgeActivity;
 
