@@ -137,7 +137,7 @@ interface StageMeta {
 export const PIPELINE_STAGES: readonly StageMeta[] = [
   {
     key: 'new',
-    label: 'New Inquiry',
+    label: 'New',
     badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
     lane: 'border-blue-500/20',
     hint: 'Walk-in or online lead just captured.',
@@ -151,7 +151,7 @@ export const PIPELINE_STAGES: readonly StageMeta[] = [
   },
   {
     key: 'trial_booked',
-    label: 'Trial Booked',
+    label: 'Trial Scheduled',
     badge: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
     lane: 'border-amber-500/20',
     hint: 'A free trial slot is on the calendar.',

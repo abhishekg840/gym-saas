@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Bell,
@@ -18,15 +19,23 @@ import {
   RefreshCw,
   ShoppingBag,
   Store,
+  Target,
   Timer,
   TrendingDown,
   TrendingUp,
+  Trophy,
   User,
   Utensils,
+  X,
 } from 'lucide-react';
 import { readSession, clearSession, type GymSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 import { encodePassToken, PASS_WINDOW_MS } from '@/lib/passtoken';
+import AvatarUploader from '@/components/avatar-uploader';
+import BadgeShowcase from '@/components/badge-showcase';
+import HardwareIdentityCard from '@/components/hardware-identity-card';
+import { loadHardwareIdentity, rfidDisplay, slotDisplay, HARDWARE_IDENTITY_HINT, type HardwareIdentity } from '@/lib/identity';
+import { loadBadges, loadMemberStats, type MemberBadge, type MemberStats } from '@/lib/gamification';
 import {
   EMPTY_STREAK,
   WORKOUT_SPLITS,
@@ -205,6 +214,16 @@ export default function MemberDashboard() {
   /** The greeting is decided once per mount, so it cannot flip mid-session. */
   const [greetingAt] = useState(() => new Date());
 
+  // ---- Phase 10 identity (photo, hardware credentials, badges) ---------------
+  // Held here, not inside HealthTab, because the header avatar and the profile
+  // modal need the same photo without the tab being mounted.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [hardware, setHardware] = useState<HardwareIdentity | null>(null);
+  const [badges, setBadges] = useState<MemberBadge[]>([]);
+  const [stats, setStats] = useState<MemberStats | null>(null);
+  /** The profile sheet: photo + hardware identity, reachable from the header. */
+  const [profileOpen, setProfileOpen] = useState(false);
+
   const memberId = session?.role === 'member' ? session.userId : null;
   const memberPhone = session?.phone ?? '';
 
@@ -212,6 +231,25 @@ export default function MemberDashboard() {
     setNotice(message);
     setNoticeKind(kind);
   }
+
+  /**
+   * The Phase 10 bundle. Badges and the photo are separate concerns from the
+   * four tabs' data, so a failed badge read must not blank the dashboard — each
+   * load is independent and simply leaves its own slice empty.
+   */
+  const loadIdentity = useCallback(async () => {
+    if (!memberId) return;
+
+    const [identity, earned, memberStats] = await Promise.all([
+      loadHardwareIdentity(memberId),
+      loadBadges(memberId),
+      loadMemberStats(memberId),
+    ]);
+
+    setHardware(identity);
+    setBadges(earned);
+    setStats(memberStats);
+  }, [memberId]);
 
   /** Reads the stored session once, then leaves routing to the effect below. */
   useEffect(() => {
@@ -267,7 +305,31 @@ export default function MemberDashboard() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     void loadPass();
-  }, [memberId, refresh, loadPass]);
+    void loadIdentity();
+  }, [memberId, refresh, loadPass, loadIdentity]);
+
+  /**
+   * The photo itself. profiles.avatar_url is the column the uploader writes
+   * (mirrored into members.avatar_url by the same RPC), so one read covers both
+   * the roster view and this header.
+   */
+  useEffect(() => {
+    if (!memberId) return;
+
+    let cancelled = false;
+    void (async () => {
+      const { data: row } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('user_id', memberId)
+        .maybeSingle();
+      if (!cancelled) setAvatarUrl(row?.avatar_url ?? null);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memberId]);
 
   // --- Live floor count for the rush indicator -------------------------------
   const loadRush = useCallback(async () => {
@@ -370,14 +432,52 @@ export default function MemberDashboard() {
 
   const locked = qrToken === null;
 
+  /**
+   * Heaviest bench the member has ever logged, for the locked-badges ring. The
+   * PR list is already in memory, so this costs nothing extra; a name that does
+   * not contain "bench" is ignored on purpose (the SQL rule is the same).
+   */
+  const heaviestBenchKg = useMemo(
+    () =>
+      (stats?.prs ?? [])
+        .filter((pr) => /bench/i.test(pr.exercise))
+        .reduce((max, pr) => Math.max(max, Number(pr.weight) || 0), 0),
+    [stats]
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20 text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white">
-              <Dumbbell className="h-5 w-5" />
-            </div>
+            {/* Tapping the header avatar opens the profile sheet — the same
+                Instagram-style uploader the Health tab carries, so there is one
+                implementation of the photo rules. */}
+            <button
+              onClick={() => setProfileOpen(true)}
+              title="Edit profile photo"
+              aria-label="Open your profile"
+              className={`shrink-0 rounded-full ring-2 ring-white shadow-sm ${TAP}`}
+            >
+              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-500 to-teal-700 text-xs font-extrabold text-white">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  displayName
+                    .trim()
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((word) => word.charAt(0))
+                    .join('')
+                    .toUpperCase() || 'M'
+                )}
+              </span>
+            </button>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold tracking-tight">{displayName}</p>
               <p className="truncate text-[11px] font-medium text-slate-500">
@@ -421,16 +521,84 @@ export default function MemberDashboard() {
             insideNow={insideNow}
             displayName={displayName}
             handle={handle}
+            hardware={hardware}
             now={greetingAt}
             onRefresh={refresh}
           />
         )}
-        {tab === 'health' && data && <HealthTab data={data} onFlash={flash} onSaved={refresh} />}
+        {tab === 'health' && data && (
+          <HealthTab
+            data={data}
+            onFlash={flash}
+            onSaved={refresh}
+            avatarUrl={avatarUrl}
+            onAvatarChange={setAvatarUrl}
+            tenantId={session?.tenantId ?? null}
+            hardware={hardware}
+            badges={badges}
+            bestStreak={data.streak.best}
+            heaviestBenchKg={heaviestBenchKg}
+          />
+        )}
         {tab === 'training' && data && (
           <TrainingTab data={data} onFlash={flash} onSaved={refresh} />
         )}
         {tab === 'store' && data && <StoreTab data={data} onFlash={flash} onSaved={refresh} />}
       </main>
+
+      {/* The header profile sheet. Same uploader, same hardware card, no
+          duplication: the Health tab is the deep version of this sheet. */}
+      {profileOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Your profile"
+          onClick={() => setProfileOpen(false)}
+        >
+          <div
+            className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-slate-50 p-4 sm:rounded-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                Your Profile
+              </p>
+              <button
+                onClick={() => setProfileOpen(false)}
+                aria-label="Close profile"
+                className={`rounded-xl border border-slate-200 bg-white p-2 text-slate-500 ${TAP}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className={`${CARD} flex items-center gap-4 p-4`}>
+              <AvatarUploader
+                memberId={memberId}
+                tenantId={session?.tenantId ?? null}
+                name={displayName}
+                avatarUrl={avatarUrl}
+                onFlash={flash}
+                onChanged={setAvatarUrl}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-extrabold tracking-tight">{displayName}</p>
+                <p className="truncate text-[11px] font-medium text-slate-500">
+                  {handle ? `@${handle}` : 'Vyroniq member'}
+                </p>
+                <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+                  Tap the camera to add a photo, or the bin to remove it.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <HardwareIdentityCard identity={hardware} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white">
         <div className="mx-auto grid max-w-md grid-cols-4">
@@ -471,6 +639,8 @@ interface HomeTabProps {
   insideNow: number;
   displayName: string;
   handle: string | null;
+  /** Read-only gate credentials, shown under the QR (Modules 10 & 33). */
+  hardware: HardwareIdentity | null;
   now: Date;
   onRefresh: () => Promise<void>;
 }
@@ -485,6 +655,7 @@ function HomeTab({
   insideNow,
   displayName,
   handle,
+  hardware,
   now,
   onRefresh,
 }: HomeTabProps) {
@@ -603,6 +774,29 @@ function HomeTab({
             Pay at the desk over UPI: <span className="font-semibold">{pass.upi_id}</span>
           </p>
         )}
+
+        {/* The alternate way through the same door: the card key and the finger
+            the gate knows. Read-only, and the same component the Health tab and
+            the profile sheet use. */}
+        {hardware && (hardware.rfid_linked || hardware.biometric_linked) && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-slate-500">RFID Key</span>
+              <span className="font-mono text-xs font-bold tracking-wider text-slate-800">
+                {rfidDisplay(hardware)}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between text-xs">
+              <span className="font-medium text-slate-500">Biometric Slot</span>
+              <span className="font-mono text-xs font-bold tracking-wider text-slate-800">
+                {slotDisplay(hardware)}
+              </span>
+            </div>
+            <p className="mt-2 text-[10px] font-medium leading-relaxed text-slate-400">
+              {HARDWARE_IDENTITY_HINT}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Gym notices */}
@@ -637,6 +831,30 @@ function HomeTab({
           </ul>
         )}
       </section>
+
+      {/* Community: the two screens that turn solo training into a gym-wide
+          habit. Both are full pages, so this is the only entry point. */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/member/leaderboard" className={`${CARD} flex flex-col gap-2 p-4 ${TAP}`}>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+            <Trophy className="w-4 h-4" />
+          </span>
+          <span className="text-xs font-extrabold text-slate-800">Leaderboard</span>
+          <span className="text-[10px] font-medium text-slate-500">
+            Where you rank this month
+          </span>
+        </Link>
+
+        <Link href="/member/challenges" className={`${CARD} flex flex-col gap-2 p-4 ${TAP}`}>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
+            <Target className="w-4 h-4" />
+          </span>
+          <span className="text-xs font-extrabold text-slate-800">Challenges</span>
+          <span className="text-[10px] font-medium text-slate-500">
+            30-day goals with the gym
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -645,7 +863,33 @@ function HomeTab({
 // Tab 2 — Health & Profile
 // =============================================================================
 
-function HealthTab({ data, onFlash, onSaved }: TabProps) {
+/**
+ * Extra slices the shell owns and hands down, so the header and this tab can
+ * never show two different photos or two different badge counts.
+ */
+interface HealthExtras {
+  avatarUrl: string | null;
+  onAvatarChange: (url: string | null) => void;
+  /** The member's gym, which is the first path segment of the photo. */
+  tenantId: string | null;
+  hardware: HardwareIdentity | null;
+  badges: MemberBadge[];
+  bestStreak: number;
+  heaviestBenchKg: number;
+}
+
+function HealthTab({
+  data,
+  onFlash,
+  onSaved,
+  avatarUrl,
+  onAvatarChange,
+  tenantId,
+  hardware,
+  badges,
+  bestStreak,
+  heaviestBenchKg,
+}: TabProps & HealthExtras) {
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
   const [handleDraft, setHandleDraft] = useState('');
@@ -705,19 +949,33 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Profile */}
+      {/* Profile — photo, handle, phone */}
       <section className={`${CARD} p-5`}>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-          My Profile
-        </p>
-        <h2 className="mt-1 text-lg font-extrabold tracking-tight">
-          {data.member?.full_name ?? 'Member'}
-        </h2>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
-            @{data.member?.username ?? 'handle'}
-          </span>
-          <span className="font-medium text-slate-500">{data.member?.phone ?? 'No number on file'}</span>
+        <div className="flex items-center gap-4">
+          <AvatarUploader
+            memberId={data.member?.id ?? null}
+            tenantId={tenantId}
+            name={data.member?.full_name ?? 'Member'}
+            avatarUrl={avatarUrl}
+            onFlash={onFlash}
+            onChanged={onAvatarChange}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              My Profile
+            </p>
+            <h2 className="mt-1 truncate text-lg font-extrabold tracking-tight">
+              {data.member?.full_name ?? 'Member'}
+            </h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                @{data.member?.username ?? 'handle'}
+              </span>
+              <span className="font-medium text-slate-500">
+                {data.member?.phone ?? 'No number on file'}
+              </span>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={submitHandle} className="mt-4 border-t border-slate-100 pt-3">
@@ -745,6 +1003,16 @@ function HealthTab({ data, onFlash, onSaved }: TabProps) {
           </p>
         </form>
       </section>
+
+      {/* Hardware credentials — read only, assigned by the gate (Modules 10 & 33) */}
+      <HardwareIdentityCard identity={hardware} />
+
+      {/* Badges: earned ones in colour, locked ones greyed with a progress ring */}
+      <BadgeShowcase
+        badges={badges}
+        bestStreak={bestStreak}
+        heaviestBenchKg={heaviestBenchKg}
+      />
 
       {/* Assigned trainer */}
       {trainer ? (

@@ -6,13 +6,13 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Gym SaaS - Command & Pass',
-  description: 'White-label Gym Management & Access Platform',
+  title: 'Vyroniq — Gym OS',
+  description: 'Gym management, gate access, leaderboards & challenges',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'GymPass',
+    title: 'Vyroniq',
   },
 };
 

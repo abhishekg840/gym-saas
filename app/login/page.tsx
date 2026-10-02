@@ -205,7 +205,7 @@ export default function LoginPage() {
             <Dumbbell className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-extrabold text-lg tracking-tight">GlitchFiesta Gym OS</h1>
+            <h1 className="font-extrabold text-lg tracking-tight">Vyroniq Gym OS</h1>
             <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Access Portal</span>
           </div>
         </div>

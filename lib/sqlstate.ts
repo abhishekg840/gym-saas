@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
  * one copy so every new route answers a database error the same way instead of
  * leaking a 500 for what is really a 400/401/404.
  *
- * Custom codes raised by ForgeOS functions (SQLSTATE 45xxx):
+ * Custom codes raised by Vyroniq functions (SQLSTATE 45xxx):
  *   45001 already frozen / not frozen / already transferred / package finished
  *   45002 nothing left to transfer
  *   45003 recipient phone is already a member of this gym
@@ -45,7 +45,53 @@ export interface PostgresFailure {
  * owner staring at the console, so name the file to run.
  */
 const SCHEMA_MISSING_HINT =
-  'The database schema is missing part of this endpoint. Run the pending migration from supabase/migrations/ (0003_phase2_hardware_geofence.sql or 0004_phase3_crm_trainer_store.sql) in the Supabase SQL Editor.';
+  'The database schema is missing part of this endpoint. Run the pending migration from supabase/migrations/ in the Supabase SQL Editor.';
+
+/**
+ * Which migration introduced a given database object.
+ *
+ * Kept as a lookup rather than a prose hint because the answer changes as the
+ * schema grows: fn_hardware_punch arrived in Phase 2, its four-argument
+ * RFID-key overload in Phase 10. Naming the wrong file costs the operator a
+ * round trip, so the mapping is data rather than prose.
+ */
+const INTRODUCED_BY: Record<string, string> = {
+  'fn_hardware_punch 4': '0010_phase10_vyroniq_identity_avatar.sql',
+  'fn_hardware_punch 3': '0003_phase2_hardware_geofence.sql',
+  'fn_member_hardware_identity 1': '0010_phase10_vyroniq_identity_avatar.sql',
+  'fn_member_set_avatar 2': '0010_phase10_vyroniq_identity_avatar.sql',
+  fn_monthly_leaderboard: '0009_phase9_gamification_retention.sql',
+  fn_member_badges: '0009_phase9_gamification_retention.sql',
+  fn_challenge_list: '0009_phase9_gamification_retention.sql',
+  fn_challenge_join: '0009_phase9_gamification_retention.sql',
+  fn_challenge_board: '0009_phase9_gamification_retention.sql',
+  fn_member_streak: '0009_phase9_gamification_retention.sql',
+  fn_member_stats: '0009_phase9_gamification_retention.sql',
+};
+
+/**
+ * PostgREST says exactly which signature is missing ("Could not find the
+ * function public.fn_hardware_punch(text, text, text, text) in the schema
+ * cache"), so the migration name is recovered from the message rather than
+ * guessed. Null when the message names nothing we recognise, and the caller
+ * falls back to the generic hint.
+ *
+ * The lookup key is "<name>" for a function with no arguments and
+ * "<name> <arity>" otherwise: PostgREST always prints the full argument list,
+ * but the PARAMETER NAMES depend on how the RPC was called, so arity — not the
+ * literal signature — is what reliably distinguishes an overload from its
+ * sibling.
+ */
+function migrationForMissingObject(message: string | undefined): string | null {
+  if (!message) return null;
+
+  const match = message.match(/function\s+public\.(\w+)\s*\(([^)]*)\)/);
+  if (!match) return null;
+
+  const name = match[1];
+  const arity = match[2].trim() === '' ? 0 : match[2].split(',').length;
+  return INTRODUCED_BY[`${name} ${arity}`] ?? INTRODUCED_BY[name] ?? null;
+}
 
 function isSchemaMissing(code: string | undefined): boolean {
   return code === 'PGRST202' || code === 'PGRST205';
@@ -67,10 +113,23 @@ export function databaseError(
 ): Response {
   const code = error?.code;
   const message = error?.message || fallbackMessage;
+
+  let text = message;
+  if (isSchemaMissing(code)) {
+    // Name the exact migration file when it can be identified, and keep the raw
+    // PostgREST text either way: it is the only thing that tells an integrator
+    // which signature the endpoint expected.
+    const file = migrationForMissingObject(error?.message);
+    const hint = file
+      ? `The database schema is missing part of this endpoint. Run supabase/migrations/${file} in the Supabase SQL Editor.`
+      : SCHEMA_MISSING_HINT;
+    text = `${hint} (${message})`;
+  }
+
   return NextResponse.json(
     {
       ok: false,
-      error: isSchemaMissing(code) ? `${SCHEMA_MISSING_HINT} (${message})` : message,
+      error: text,
       code,
     },
     { status: statusForSqlState(code, fallbackStatus) }

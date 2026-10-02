@@ -2,9 +2,9 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'GlitchFiesta Gym Pass',
-    short_name: 'GymPass',
-    description: 'Dynamic Anti-Cheat Gym Pass & Gate Access',
+    name: 'Vyroniq — Gym OS',
+    short_name: 'Vyroniq',
+    description: 'Gym management, gate access, leaderboards & challenges',
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0a0a',

@@ -24,9 +24,20 @@ export default function MobileNavProvider() {
   const router = useRouter();
   const pathname = usePathname();
 
-  /** Keeps the latest route visible inside the plugin listener without re-binding. */
+  /**
+   * Keeps the latest route visible inside the plugin listener without re-binding
+   * the listener on every navigation.
+   *
+   * Written as an effect rather than `ref.current = pathname` during render: a
+   * ref is not render state, so assigning one mid-render is invisible to React
+   * and is exactly what the react-hooks/refs rule rejects. An effect runs after
+   * the commit, which is also the only point at which the listener could not
+   * already have fired with a stale value.
+   */
   const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   const lastBackPressRef = useRef(0);
   const hintTimerRef = useRef<number | null>(null);

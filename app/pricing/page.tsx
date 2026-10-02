@@ -65,7 +65,7 @@ export default function HaikeiGymLanding() {
               GF
             </span>
             <div className="leading-tight">
-              <span className="font-extrabold text-sm uppercase tracking-tight block">GlitchFiesta</span>
+              <span className="font-extrabold text-sm uppercase tracking-tight block">Vyroniq</span>
               <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#111215]/50 block">Gym OS</span>
             </div>
           </Link>
@@ -79,7 +79,7 @@ export default function HaikeiGymLanding() {
 
           <div className="hidden md:flex items-center gap-3">
             <a
-              href={wa('Hi Abhishek, I would like to see a demo of GlitchFiesta Gym software.')}
+              href={wa('Hi Abhishek, I would like to see a demo of Vyroniq Gym software.')}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 bg-[#111215] hover:bg-neutral-800 text-[#F4F4F0] text-xs font-semibold px-5 py-2.5 rounded-full transition shadow-sm active:scale-95"
@@ -104,7 +104,7 @@ export default function HaikeiGymLanding() {
             <a href="#flow" onClick={() => setMenuOpen(false)}>Workflow</a>
             <a href="#pricing" onClick={() => setMenuOpen(false)}>Plans</a>
             <a
-              href={wa('Hi Abhishek, I want a demo of GlitchFiesta Gym software.')}
+              href={wa('Hi Abhishek, I want a demo of Vyroniq Gym software.')}
               target="_blank"
               rel="noreferrer"
               className="bg-[#111215] text-[#F4F4F0] text-center py-3 rounded-full font-bold"
@@ -141,7 +141,7 @@ export default function HaikeiGymLanding() {
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mt-10">
               <a
-                href={wa('Hi Abhishek, I want to start our 14-day free gym trial on GlitchFiesta Gym OS.')}
+                href={wa('Hi Abhishek, I want to start our 14-day free gym trial on Vyroniq Gym OS.')}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center justify-center gap-3 bg-[#111215] hover:bg-neutral-800 text-[#F4F4F0] px-8 py-4 rounded-full font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 group"
@@ -492,7 +492,7 @@ export default function HaikeiGymLanding() {
 
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <a
-              href={wa('Hi Abhishek, I want to set up GlitchFiesta Gym software for my gym.')}
+              href={wa('Hi Abhishek, I want to set up Vyroniq Gym software for my gym.')}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 bg-emerald-400 hover:bg-emerald-300 text-[#111215] font-mono font-bold text-xs uppercase px-7 py-4 rounded-full transition active:scale-95"
@@ -514,7 +514,7 @@ export default function HaikeiGymLanding() {
 
       {/* FOOTER */}
       <footer className="border-t border-[#111215]/10 py-10 max-w-7xl mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs text-[#111215]/50 uppercase tracking-wider">
-        <p>© 2026 GlitchFiesta Technologies · Gym Management Platform</p>
+        <p>© 2026 Vyroniq Technologies · Gym Management Platform</p>
         <div className="flex items-center gap-6">
           <Link href="/" className="hover:text-black transition">Dashboard</Link>
           <Link href="/scan" className="hover:text-black transition">Scanner</Link>

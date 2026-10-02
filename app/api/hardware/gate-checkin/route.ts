@@ -10,11 +10,21 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  * turnstile firmware and smart-gate vendors with the exact envelope they
  * were promised —
  *
- *   Request:  { api_key, slot? | biometric_id?, rfid? }
- *             (camelCase aliases accepted: apiKey, biometricId, rfidCard)
+ *   Request:  { device_key, action: "gate_checkin", slot? | rfid? | rfid_uid? }
+ *             (api_key / apiKey, biometric_id / biometricId, rfid_card /
+ *              rfidCard / card and rfidUid are all accepted as aliases, so the
+ *              older integrations keep working untouched)
  *   Response: { access: "GRANTED" | "DENIED", reason, member?, ... }
  *   Status:   200 for a decision, 400 malformed, 401 unknown/revoked key,
  *             5xx the database itself failed.
+ *
+ * Three credentials can arrive and only one is needed:
+ *   slot      the fingerprint template number the scanner stores
+ *   rfid      the raw card serial straight off the RC522
+ *   rfid_uid  the SYSTEM key printed on the card (members.rfid_uid), which
+ *             migration 0010 resolves to the serial server-side — so a Pi
+ *             that only knows the key still opens the door, and a stolen key
+ *             is useless without the machine's device_key
  *
  * The decision — membership validity, freeze state, the attendance row — all
  * live inside fn_hardware_punch, so the gate and this webhook can never
@@ -41,9 +51,20 @@ export async function POST(request: Request) {
   if ('response' in parsed) return parsed.response;
   const body = parsed.body;
 
-  const apiKey = String(body.api_key ?? body.apiKey ?? '').trim();
-  if (!apiKey) return badRequest('api_key is required.');
-  if (apiKey.length > 80) return badRequest('api_key is not valid.');
+  // `action` is optional and only ever gate_checkin. Rejecting an unknown
+  // action loudly is the difference between "the firmware is on the wrong
+  // build" and "the member was silently denied" — a door that answers
+  // DENIED for a logout request would open support tickets.
+  const action = String(body.action ?? 'gate_checkin').trim();
+  if (action !== 'gate_checkin') {
+    return badRequest("action must be 'gate_checkin'.");
+  }
+
+  // `device_key` is the Raspberry Pi spelling; `api_key` is the original
+  // contract. Both resolve to the same machine token.
+  const apiKey = String(body.api_key ?? body.apiKey ?? body.device_key ?? body.deviceKey ?? '').trim();
+  if (!apiKey) return badRequest('device_key (api_key) is required.');
+  if (apiKey.length > 80) return badRequest('device_key is not valid.');
 
   const biometricId = normalizeBiometricId(
     body.slot ?? body.biometric_id ?? body.biometricId
@@ -51,15 +72,24 @@ export async function POST(request: Request) {
   const rfidCard = normalizeCard(
     body.rfid ?? body.rfid_card ?? body.rfidCard ?? body.card
   );
+  // The system key printed on the card (members.rfid_uid). Resolved to the raw
+  // serial inside fn_hardware_punch, which is the only place the door decision
+  // is made — see migration 0010.
+  const rfidUid = normalizeCard(body.rfid_uid ?? body.rfidUid);
 
-  if (biometricId === null && rfidCard === null) {
-    return badRequest('Send slot/biometric_id (number) or rfid (string).');
+  if (biometricId === null && rfidCard === null && rfidUid === null) {
+    return badRequest('Send slot (biometric_id), rfid (card serial) or rfid_uid (card key).');
   }
 
+  // The four-argument overload from migration 0010: no defaults on the trailing
+  // parameters, so this call is unambiguous. Passing nulls for the credentials
+  // the device did not send keeps a fingerprint punch winning over a card tap,
+  // exactly as the three-argument version does.
   const { data, error } = await supabase.rpc('fn_hardware_punch', {
     p_api_key: apiKey,
     p_biometric_id: biometricId,
     p_rfid_card: rfidCard,
+    p_rfid_uid: rfidUid,
   });
 
   // SQLSTATE 45005 is fn_hardware_punch's "unknown or revoked device key" ->
@@ -99,6 +129,7 @@ export async function POST(request: Request) {
 export async function GET() {
   return NextResponse.json({
     status: 'online',
-    contract: 'POST { api_key, slot | biometric_id | rfid } -> { access: GRANTED | DENIED, reason }',
+    contract:
+      'POST { device_key, action: "gate_checkin", slot | rfid | rfid_uid } -> { access: GRANTED | DENIED, reason }',
   });
 }

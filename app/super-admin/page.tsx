@@ -231,7 +231,7 @@ export default function SuperAdminPortal() {
             <h1 className="text-2xl font-black tracking-tight">Super Admin Platform Hub</h1>
           </div>
           <p className="text-xs text-neutral-400 mt-1">
-            Global Gym OS License Controller · GlitchFiesta Master Access
+            Global Gym OS License Controller · Vyroniq Master Access
           </p>
         </div>
 

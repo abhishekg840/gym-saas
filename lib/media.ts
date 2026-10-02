@@ -19,7 +19,8 @@ const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'ima
 const TYPE_LIST = 'JPEG, PNG, WebP, AVIF or GIF';
 
 export const MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024;
-export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+/** Raised from 2 MB to 5 MB by migration 0010 — modern phone photos are bigger. */
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 /** null = fine to upload, otherwise the message to show the person. */
 export function validateImageFile(file: File, maxBytes: number): string | null {

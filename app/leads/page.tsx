@@ -26,6 +26,7 @@ import {
   CalendarClock,
   CheckCircle2,
   MessageCircle,
+  PhoneCall,
   Plus,
   Search,
   Sparkles,
@@ -264,6 +265,26 @@ export default function LeadsPipelinePage() {
       '_blank',
       'noopener'
     );
+  }
+
+  // ---- Call ----------------------------------------------------------------
+  /**
+   * Hands the number to the dialler. `tel:` is the only way a phone screen can
+   * start a call — a `wa.me` link cannot — so the button degrades to a plain
+   * anchor that most desktop browsers turn into a "no handler" message, which
+   * is why the button is labelled rather than left as a bare icon.
+   */
+  function callLead(lead: Lead) {
+    const digits = (lead.phone ?? '').replace(/[^0-9]/g, '');
+    if (!digits) {
+      flash('This lead has no phone number saved.', 'bad');
+      return;
+    }
+
+    // 10 digits are Indian mobiles: the +91 prefix is what makes the dialer
+    // recognise the number as mobile rather than a landline.
+    const tel = digits.length === 10 ? `+91${digits}` : `+${digits}`;
+    window.location.href = `tel:${tel}`;
   }
 
   // ---- Conversion ----------------------------------------------------------
@@ -533,9 +554,19 @@ export default function LeadsPipelinePage() {
                               <button
                                 onClick={() => sendWhatsApp(lead)}
                                 title="Open a WhatsApp chat with this lead"
+                                aria-label={`WhatsApp ${lead.full_name}`}
                                 className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition"
                               >
                                 <MessageCircle className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => callLead(lead)}
+                                title="Call this lead"
+                                aria-label={`Call ${lead.full_name}`}
+                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition"
+                              >
+                                <PhoneCall className="w-3.5 h-3.5" />
                               </button>
 
                               {advance && (

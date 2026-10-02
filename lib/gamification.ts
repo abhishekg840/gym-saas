@@ -64,6 +64,55 @@ export async function loadBadges(memberId: string): Promise<MemberBadge[]> {
   return (data as MemberBadge[]).filter((row) => row && typeof row.badge_key === 'string');
 }
 
+/**
+ * How a member is doing against a badge they have not won yet.
+ *
+ * The award itself is decided in SQL (fn_badges_evaluate) so it can never be
+ * faked from the client; this is presentation only, and it deliberately reads
+ * from data the screen already holds (the streak and the PR list) rather than
+ * adding a round trip per tile.
+ */
+export interface BadgeProgress {
+  earned: boolean;
+  /** 0-100, for the locked tile's ring. */
+  percent: number;
+  /** `4 / 7 days` — the honest "how close am I" line. */
+  detail: string;
+}
+
+export function badgeProgress(
+  key: string,
+  earnedKeys: Set<string>,
+  context: { bestStreak: number; heaviestBenchKg: number }
+): BadgeProgress {
+  if (earnedKeys.has(key)) {
+    return { earned: true, percent: 100, detail: 'Unlocked' };
+  }
+
+  if (key === 'iron_streak_7' || key === 'beast_mode_30') {
+    const target = key === 'iron_streak_7' ? 7 : 30;
+    const best = Math.max(0, Math.floor(context.bestStreak));
+    const percent = Math.min(100, Math.round((best / target) * 100));
+    return {
+      earned: false,
+      percent,
+      detail: best === 0 ? `0 / ${target} days` : `${best} / ${target} days`,
+    };
+  }
+
+  if (key === 'bench_100kg') {
+    const best = context.heaviestBenchKg;
+    const percent = Math.min(100, Math.round((best / 100) * 100));
+    return {
+      earned: false,
+      percent,
+      detail: best <= 0 ? 'Log a bench set' : `${best.toFixed(0)} / 100 kg`,
+    };
+  }
+
+  return { earned: false, percent: 0, detail: '' };
+}
+
 // -----------------------------------------------------------------------------
 // Streak (read side; the write side is the attendance trigger)
 // -----------------------------------------------------------------------------
@@ -248,6 +297,113 @@ export async function loadChallengeBoard(
   if (error) return { ok: false, board: [], error: errorText(error) };
   const row = (data ?? {}) as Record<string, unknown>;
   return { ok: true, board: Array.isArray(row.board) ? (row.board as ChallengeBoardRow[]) : [] };
+}
+
+// -----------------------------------------------------------------------------
+// Owner-side challenge management (/admin/challenges)
+// -----------------------------------------------------------------------------
+// The member side above goes straight to the RPCs; the owner console has to
+// CREATE and DELETE challenge rows, which /api/challenges does with the same
+// tenant scoping as /api/leads. Both go through one envelope helper so a failed
+// request always reaches the form as a sentence.
+
+async function callAdmin(
+  path: string,
+  init: RequestInit
+): Promise<{ ok: boolean; error?: string; body: Record<string, unknown> }> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    });
+  } catch {
+    return { ok: false, error: 'Network error — the request could not reach the server.', body: {} };
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await response.json()) as Record<string, unknown>;
+  } catch {
+    return {
+      ok: false,
+      error: `Server returned an invalid response (${response.status}).`,
+      body: {},
+    };
+  }
+
+  if (!response.ok || body.ok === false) {
+    return {
+      ok: false,
+      error: typeof body.error === 'string' ? body.error : `Request failed (${response.status}).`,
+      body,
+    };
+  }
+  return { ok: true, body };
+}
+
+const NO_GYM = 'No gym is linked to this session. Sign in again.';
+
+export interface ChallengeInput {
+  title: string;
+  kind: ChallengeKind;
+  description?: string | null;
+  /** YYYY-MM-DD. */
+  startDate: string;
+  endDate: string;
+  targetValue: number;
+}
+
+/** Every challenge in the gym, for the owner table. */
+export async function listChallengesForOwner(
+  tenantId: string | null
+): Promise<{ ok: boolean; error?: string; challenges: Challenge[] }> {
+  if (!isUuid(tenantId)) return { ok: false, error: NO_GYM, challenges: [] };
+  const result = await callAdmin(`/api/challenges?tenant_id=${tenantId}`, { method: 'GET' });
+  if (!result.ok) {
+    return { ok: false, error: result.error, challenges: [] };
+  }
+  return {
+    ok: true,
+    challenges: Array.isArray(result.body.challenges)
+      ? (result.body.challenges as Challenge[])
+      : [],
+  };
+}
+
+export async function createChallenge(
+  tenantId: string | null,
+  input: ChallengeInput
+): Promise<{ ok: boolean; error?: string; challenge?: Challenge }> {
+  if (!isUuid(tenantId)) return { ok: false, error: NO_GYM };
+  const result = await callAdmin('/api/challenges', {
+    method: 'POST',
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      title: input.title,
+      kind: input.kind,
+      description: input.description ?? null,
+      start_date: input.startDate,
+      end_date: input.endDate,
+      target_value: input.targetValue,
+    }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, challenge: result.body.challenge as Challenge };
+}
+
+export async function deleteChallenge(
+  tenantId: string | null,
+  challengeId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isUuid(tenantId)) return { ok: false, error: NO_GYM };
+  if (!isUuid(challengeId)) return { ok: false, error: 'Unknown challenge.' };
+  const result = await callAdmin('/api/challenges', {
+    method: 'DELETE',
+    body: JSON.stringify({ tenant_id: tenantId, challenge_id: challengeId }),
+  });
+  return { ok: true, ...(result.ok ? {} : { error: result.error }) };
 }
 
 // -----------------------------------------------------------------------------
