@@ -1107,7 +1107,80 @@ grant execute on function
 to anon, authenticated;
 
 -- -----------------------------------------------------------------------------
--- 11. Verification
+-- 6. FIX: the RFID-key overload must FALL BACK to the raw serial
+-- -----------------------------------------------------------------------------
+-- Migration 0010 added fn_hardware_punch(key, slot, card, uid) so a board that
+-- only knows the system key still opens the door. It resolved the key to a
+-- serial and delegated — but when the key matched NOTHING it passed a NULL
+-- card straight through:
+--
+--   select m.rfid_card into v_card where upper(trim(m.rfid_uid)) = upper(v_key);
+--   return public.fn_hardware_punch(p_api_key, p_biometric_id, v_card);  -- v_card may be NULL
+--
+-- The inner function then raised 22023 "Send biometric_id or rfid_card" — a 400
+-- for a device that had sent a perfectly ordinary card serial. The key lookup was
+-- allowed to DESTROY the serial lookup instead of extending it.
+--
+-- That matters because the route deliberately sends the same credential as BOTH
+-- p_rfid_card and p_rfid_uid (so a board populating either field works without a
+-- reflash). With the old overload that combination always 400s, because the key
+-- lookup misses and the card it passes on is NULL.
+--
+-- Fixed by resolving the key first and, when it misses, treating the SAME value
+-- as the literal card. Both columns are now tried, in that order, so a card
+-- enrolled by serial and a card enrolled by key are equally valid.
+--
+-- Redefined here rather than by editing 0010: migrations are append-only, and an
+-- install that already ran 0010 picks up this correction by name+signature.
+create or replace function public.fn_hardware_punch(
+  p_api_key      text,
+  p_biometric_id integer,
+  p_rfid_card    text,
+  p_rfid_uid     text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_key   text := nullif(trim(coalesce(p_rfid_uid, '')), '');
+  v_card  text := nullif(trim(coalesce(p_rfid_card, '')), '');
+  v_bykey text;
+begin
+  -- No key supplied: the caller's card is already the serial.
+  if v_key is null then
+    return public.fn_hardware_punch(p_api_key, p_biometric_id, v_card);
+  end if;
+
+  select m.rfid_card into v_bykey
+    from public.members m
+   where upper(trim(m.rfid_uid)) = upper(v_key)
+     and m.rfid_card is not null
+     and trim(m.rfid_card) <> ''
+   limit 1;
+
+  -- KEY MATCH WINS when it resolves — that is the point of the column.
+  -- Otherwise fall back to whatever the caller sent, which covers both
+  --   (a) the route's deliberate p_rfid_card = p_rfid_uid aliasing, and
+  --   (b) a device that sends only a system key for a card whose serial was
+  --       never enrolled (the key path still resolves it when it can).
+  return public.fn_hardware_punch(
+    p_api_key,
+    p_biometric_id,
+    coalesce(v_bykey, v_card, v_key)
+  );
+end;
+$$;
+
+comment on function public.fn_hardware_punch(text, integer, text, text) is
+  'Gate overload accepting the system RFID key. Resolves members.rfid_uid first, then falls back to the literal card, so an unknown key never discards a valid serial.';
+
+grant execute on function public.fn_hardware_punch(text, integer, text, text)
+to anon, authenticated;
+
+-- -----------------------------------------------------------------------------
+-- 7. Confirmation
 -- -----------------------------------------------------------------------------
 -- The migration RAISES rather than committing a half-applied schema. Each check
 -- below corresponds to a defect listed at the top of the file, so a failure
