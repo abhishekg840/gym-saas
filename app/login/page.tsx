@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { writeSession, type GymSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
-import { Dumbbell, Lock, ArrowRight, Phone, Eye, EyeOff } from 'lucide-react';
+import { hardSignOut, isLoggedOutLanding } from '@/lib/logout';
+import { Dumbbell, Lock, ArrowRight, Phone, Eye, EyeOff, Building2, UserRound, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
 /** The one Google mark the brand already lives with — no icon library needed. */
@@ -48,6 +49,17 @@ function hasOAuthArtifacts(): boolean {
   );
 }
 
+/**
+ * The two accounts one phone number matched.
+ *
+ * Both sessions are returned by /api/auth/login, already verified server-side,
+ * so choosing a portal is a local routing decision and never re-authenticates.
+ */
+interface PortalPair {
+  owner: GymSession;
+  member: GymSession;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [identifier, setIdentifier] = useState('');
@@ -56,6 +68,35 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  /**
+   * True when this page was reached by an explicit logout.
+   *
+   * Deliberately NOT state. The old shape stored it via setState inside the mount
+   * effect, which forces a second render before first paint; deriving it during
+   * initialisation means the banner is correct on the very first commit and the
+   * suppression decision is made without a re-render. `isLoggedOutLanding()`
+   * reads the same thing, so there is exactly one source of truth.
+   */
+  const loggedOut = isLoggedOutLanding();
+
+  /**
+   * DUAL ROLE (Phase 12).
+   *
+   * A gym owner who also holds a membership at their own gym is a real and
+   * common case — the owner is usually the first member. Both rows match the
+   * same phone number, and the old code returned whichever it found first, so
+   * the owner was permanently locked into the console and could never open their
+   * own pass.
+   *
+   * /api/auth/login now returns BOTH accounts when it finds both, and this page
+   * asks which one to open instead of guessing. Null means a single-role sign-in
+   * and behaves exactly as before.
+   */
+  const [portalChoice, setPortalChoice] = useState<PortalPair | null>(null);
+
+  /** True when the credentials matched both an owner and a member account. */
+  const isDualRole = portalChoice !== null;
 
   /** Stops the auth listener and getSession() from finishing the same login twice. */
   const completingRef = useRef(false);
@@ -96,10 +137,25 @@ export default function LoginPage() {
         ok?: boolean;
         reason?: string;
         session?: GymSession;
+        portals?: PortalPair;
       };
 
-      if (!result.ok || !result.session) {
+      if (!result.ok) {
         setErrorMsg(result.reason || 'Sign-in failed. Please check your details.');
+        setLoading(false);
+        return;
+      }
+
+      // Both an owner console AND a member pass matched this phone number. Do
+      // not guess — the owner may be on their way to a workout, not the till.
+      if (result.portals) {
+        setPortalChoice(result.portals);
+        setLoading(false);
+        return;
+      }
+
+      if (!result.session) {
+        setErrorMsg('Sign-in failed: the server returned no account.');
         setLoading(false);
         return;
       }
@@ -109,6 +165,12 @@ export default function LoginPage() {
       setErrorMsg('Sign-in failed: could not reach the server.');
       setLoading(false);
     }
+  }
+
+  /** Opens one of the two portals from the dual-role selector. */
+  function choosePortal(session: GymSession) {
+    setPortalChoice(null);
+    finish(session);
   }
 
   /**
@@ -177,6 +239,24 @@ export default function LoginPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // ---- LOGOUT LANDING: recover nothing -------------------------------------
+    // Arriving here from a logout means the user EXPLICITLY asked to be signed
+    // out. Without this guard the effect below did the opposite of what was
+    // asked: lib/supabase.ts sets autoRefreshToken, so on mount supabase-js
+    // refreshed the still-valid token it had just been told to forget,
+    // onAuthStateChange fired with a session, completeGoogleLogin ran, and the
+    // user was pushed back into the app a second or two later.
+    //
+    // The flag is read once, synchronously, BEFORE any listener is attached, so
+    // there is no window in which a refresh event can slip through.
+    if (isLoggedOutLanding()) {
+      // Belt and braces: if anything survived the client purge (an HttpOnly
+      // cookie we could not see), drop the auth session too. No setState here —
+      // the banner is derived during render, so nothing needs to change.
+      void supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      return;
+    }
+
     // The redirect back from Google may have been processed before React mounted,
     // so also check for OAuth leftovers in the URL — never a bare stale session.
     if (hasOAuthArtifacts()) {
@@ -185,8 +265,16 @@ export default function LoginPage() {
       });
     }
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
+
+      // TOKEN_REFRESHED is the event that powered the loop. autoRefreshToken is
+      // on, so the client silently renews its token in the background, this
+      // listener wakes up with a perfectly valid `session`, and treating that as
+      // a sign-in re-authenticates the user they just signed out. A background
+      // refresh is not a login; only an explicit one may complete a login.
+      if (event === 'TOKEN_REFRESHED') return;
+
       if (session) void completeGoogleLogin(session.access_token);
     });
 
@@ -198,31 +286,102 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-sm bg-[#16181D] border border-neutral-800 rounded-3xl p-8 shadow-2xl relative">
+    <main className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-center items-center p-4">
+      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-8 shadow-sm relative">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center">
             <Dumbbell className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-extrabold text-lg tracking-tight">Vyroniq Gym OS</h1>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">Access Portal</span>
+            <h1 className="font-extrabold text-lg tracking-tight text-slate-900">Vyroniq Gym OS</h1>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Access Portal</span>
           </div>
         </div>
 
+        {/* ---- DUAL ROLE PORTAL SELECTOR ------------------------------------- */}
+        {isDualRole && portalChoice && (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-900">You have both accounts</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700">
+                This number is registered as a gym owner and as a member. Pick where
+                you want to go.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => choosePortal(portalChoice.owner)}
+              className="w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50/50 active:scale-[0.99]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <Building2 className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-slate-900">Continue to Owner Console</span>
+                <span className="block text-[11px] text-slate-500">
+                  Roster, hardware gate, store &amp; billing
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => choosePortal(portalChoice.member)}
+              className="w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 active:scale-[0.99]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                <UserRound className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-slate-900">Continue to Member App</span>
+                <span className="block text-[11px] text-slate-500">
+                  Your pass, workouts, streak &amp; store
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPortalChoice(null)}
+              className="w-full py-2 text-[11px] font-medium text-slate-400 hover:text-slate-600 transition"
+            >
+              Use a different account
+            </button>
+          </div>
+        )}
+
+        {/* ---- LOGGED-OUT NOTICE ---------------------------------------------- */}
+        {!isDualRole && loggedOut && (
+          <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <LogOut className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-xs font-semibold text-emerald-900">You have been signed out</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-700">
+                Your session and saved tokens were cleared from this device.
+              </p>
+            </div>
+          </div>
+        )}
+
         {errorMsg && (
-          <div className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
+          <div className="mb-5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
             {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* Hidden while the dual-role chooser is up: the credentials have already
+            been verified, so re-showing the form would just invite a second,
+            confusing submission. */}
+        <form onSubmit={handleLogin} className={isDualRole ? 'hidden' : 'space-y-4'}>
           <div>
-            <label htmlFor="login-identifier" className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 block mb-1">
+            <label htmlFor="login-identifier" className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
               Username / Email / Mobile Number
             </label>
             <div className="relative">
-              <Phone className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
+              <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 id="login-identifier"
                 required
@@ -231,20 +390,20 @@ export default function LoginPage() {
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="9569272339 · @rahul · rahul@email.com"
-                className="w-full bg-zinc-950 border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono text-white focus:outline-none"
+                className="w-full bg-white border border-slate-200 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono text-slate-900 focus:outline-none"
               />
             </div>
-            <p className="mt-1 text-[10px] text-neutral-500 font-mono">
+            <p className="mt-1 text-[10px] text-slate-400 font-mono">
               Members sign in with no PIN — staff and reception add theirs below.
             </p>
           </div>
 
           <div>
-            <label htmlFor="login-secret" className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 block mb-1">
+            <label htmlFor="login-secret" className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
               Password / PIN
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 id="login-secret"
                 type={showSecret ? 'text' : 'password'}
@@ -253,13 +412,13 @@ export default function LoginPage() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="Leave blank if you are a member"
-                className="w-full bg-zinc-950 border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-11 py-2.5 text-sm font-mono text-white focus:outline-none tracking-widest"
+                className="w-full bg-white border border-slate-200 focus:border-emerald-500 rounded-xl pl-10 pr-11 py-2.5 text-sm font-mono text-slate-900 focus:outline-none tracking-widest"
               />
               <button
                 type="button"
                 onClick={() => setShowSecret((shown) => !shown)}
                 aria-label={showSecret ? 'Hide password' : 'Show password'}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-neutral-500 hover:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
               >
                 {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -269,30 +428,30 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading || googleBusy}
-            className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-50"
           >
             {loading ? 'Authenticating...' : 'Sign In'} <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        <div className="my-5 flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-          <span className="h-px flex-1 bg-neutral-800" />
+        <div className="my-5 flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
           or continue with
-          <span className="h-px flex-1 bg-neutral-800" />
+          <span className="h-px flex-1 bg-slate-200" />
         </div>
 
         <button
           type="button"
           onClick={() => void signInWithGoogle()}
           disabled={loading || googleBusy}
-          className="w-full py-3 bg-white hover:bg-neutral-200 text-neutral-900 font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+          className="w-full py-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50"
         >
           <GoogleIcon />
           {googleBusy ? 'Opening Google…' : 'Continue with Google'}
         </button>
 
-        <div className="mt-6 pt-5 border-t border-neutral-800/80 text-center">
-          <Link href="/member" className="text-xs text-neutral-400 hover:text-emerald-400 font-mono transition">
+        <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+          <Link href="/member" className="text-xs text-slate-500 hover:text-emerald-600 font-mono transition">
             Member without PIN? Open Direct Pass →
           </Link>
         </div>

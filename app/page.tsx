@@ -30,7 +30,9 @@ import {
   ServerCog,
   ShoppingBag,
   Settings,
-  Trophy
+  Trophy,
+  UserRound,
+  CreditCard
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -40,6 +42,9 @@ import {
   type MembershipResult,
 } from '@/lib/membership';
 import { convertLead, takeEnrollPrefill } from '@/lib/crm';
+import { hardSignOut } from '@/lib/logout';
+import LiveCrowdCard from '@/components/live-crowd-card';
+import RfidLinkModal from '@/components/rfid-link-modal';
 import { clearSession, readSession } from '@/lib/session';
 
 interface Plan {
@@ -56,6 +61,8 @@ interface Member {
   email?: string;
   emergency_contact?: string;
   biometric_id?: number | null;
+  /** Phase 12: the linked card serial. Shown in the Link RFID / Bio modal. */
+  rfid_card?: string | null;
   membership_end: string;
   status: string;
   amount_paid?: number;
@@ -88,6 +95,10 @@ export default function GymDashboard() {
 
   // Membership transfer modal: null = closed. Owner-only action.
   const [transferTarget, setTransferTarget] = useState<Member | null>(null);
+
+  // RFID / fingerprint linking modal (Phase 12): null = closed.
+  const [linkTarget, setLinkTarget] = useState<Member | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [transferName, setTransferName] = useState('');
   const [transferPhone, setTransferPhone] = useState('');
   const [transferBusy, setTransferBusy] = useState(false);
@@ -182,8 +193,10 @@ export default function GymDashboard() {
   }
 
   function handleLogout() {
-    clearSession();
-    router.push('/login');
+    // Was `clearSession(); router.push('/login')` — the same bug as the member
+    // side: the gym session was dropped but Supabase's tokens survived, so the
+    // background auto-refresh silently signed the owner straight back in.
+    void hardSignOut();
   }
 
   function handlePlanChange(planId: string) {
@@ -369,6 +382,66 @@ export default function GymDashboard() {
     setTransferPhone('');
   }
 
+  /**
+   * Saves a tapped or typed credential (Phase 12).
+   *
+   * The roster row is refreshed in place from the response rather than
+   * re-fetching the whole member list: linking a card is a single-cell change,
+   * and refetching would make the desk lose scroll position and search text for
+   * no benefit.
+   *
+   * Note the modal passes `biometricId: null` when the owner leaves the field
+   * blank, which the modal treats as "no change". Clearing a slot is a separate,
+   * explicit action so an empty input can never silently wipe a fingerprint.
+   */
+  async function saveHardwareCredential(input: {
+    rfidUid: string | null;
+    biometricId: number | null;
+  }) {
+    if (!linkTarget) return;
+
+    setLinkBusy(true);
+    try {
+      const response = await fetch('/api/hardware/link', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: requireTenant(),
+          member_id: linkTarget.id,
+          rfid_uid: input.rfidUid,
+          biometric_id: input.biometricId,
+        }),
+      });
+
+      const result = (await response.json()) as { ok?: boolean; error?: string };
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Could not save that credential.');
+      }
+
+      setMembers(prev =>
+        prev.map(m =>
+          m.id === linkTarget.id
+            ? {
+                ...m,
+                rfid_card: input.rfidUid ?? m.rfid_card,
+                // Only overwrite the slot when one was actually supplied.
+                biometric_id: input.biometricId ?? m.biometric_id,
+              }
+            : m
+        )
+      );
+
+      // Success is reported inside the modal by its own closing (the row updates
+      // and the dialog disappears), so a toast here would only duplicate it. The
+      // thrown Error carries the database message — e.g. "That card is already
+      // linked to another member" — which the modal displays verbatim.
+    } finally {
+      setLinkBusy(false);
+    }
+  }
+
   async function submitTransfer(e: React.FormEvent) {
     e.preventDefault();
     if (!transferTarget) return;
@@ -498,6 +571,21 @@ export default function GymDashboard() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
+      {/* ---- Tap-to-enroll / credential linking (Phase 12) -----------------
+          Mounted at the page root so the desk can open it from any row without
+          the table needing to own the modal's state. */}
+      {linkTarget && (
+        <RfidLinkModal
+          tenantId={session?.tenantId ?? null}
+          memberId={linkTarget.id}
+          memberName={linkTarget.full_name}
+          initialUid={linkTarget.rfid_card ?? null}
+          initialBiometricId={linkTarget.biometric_id ?? null}
+          onClose={() => setLinkTarget(null)}
+          onSave={saveHardwareCredential}
+        />
+      )}
+
       {transferTarget && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form
@@ -616,6 +704,21 @@ export default function GymDashboard() {
                 {currentRole === 'owner' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                 {currentRole} Mode
               </button>
+
+              {/* ---- Member Pass switch (Phase 12) ---------------------------
+                  Sits directly beside the OWNER MODE badge so the escape hatch is
+                  where the owner is already looking. Gym owners very often hold a
+                  membership at their own gym; without this the only way to reach
+                  their pass was to sign out and back in as a member, which is
+                  exactly the flow that produced the logout loop we just fixed. */}
+              <Link
+                href="/member/dashboard"
+                title="Open your Vyroniq member pass and app"
+                className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border flex items-center gap-1 bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20 transition"
+              >
+                <UserRound className="w-3 h-3" />
+                Member Pass &amp; App
+              </Link>
             </div>
             <p className="text-xs text-neutral-400 mt-1">
               Signed in as <strong className="text-white">{session?.name || 'Owner'}</strong> ({session?.phone})
@@ -718,6 +821,14 @@ export default function GymDashboard() {
 
       {/* Metrics */}
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* ---- Live occupancy (Phase 12) -------------------------------------
+            Full width because it carries the "who's inside" roster as well as
+            the number: when the count looks wrong the owner's first question is
+            always "who exactly?", and a bare integer cannot answer it. */}
+        <div className="md:col-span-2 lg:col-span-4">
+          <LiveCrowdCard tenantId={session?.tenantId ?? null} />
+        </div>
+
         <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center gap-4">
           <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl">
             <Users className="w-6 h-6" />
@@ -976,6 +1087,22 @@ export default function GymDashboard() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* ---- Link RFID / Bio (Phase 12) ---------------------
+                                Tap-to-enroll and fingerprint slot editing for one
+                                existing member. Placed first in the group because it
+                                is the action a desk performs most often after
+                                enrollment: the member lost their card, or a
+                                fingerprint template needs re-registering. */}
+                            <button
+                              disabled={linkBusy}
+                              onClick={() => setLinkTarget(member)}
+                              title="Link an RFID card or fingerprint slot"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs rounded-lg transition disabled:opacity-50 font-mono"
+                            >
+                              <CreditCard className="w-3 h-3 text-indigo-400" />
+                              Link RFID / Bio
+                            </button>
+
                             <button
                               onClick={() => viewLatestInvoice(member.id)}
                               title="Print Receipt"

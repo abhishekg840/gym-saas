@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
  *   45005 machine authentication failed (unknown or revoked device key)
  *   45006 lead has already been converted to a member
  *   45007 not enough stock left for the requested quantity
+ *   45008 a card is already linked to a different member (Phase 12)
  */
 const STATUS_BY_SQLSTATE: Record<string, number> = {
   '22023': 400, // invalid parameter (bad date, bad phone, bad enum value)
@@ -28,6 +29,10 @@ const STATUS_BY_SQLSTATE: Record<string, number> = {
   '45005': 401,
   '45006': 409,
   '45007': 409,
+  // A conflict, not a bad request: the request was well-formed, the card is just
+  // already spoken for. 409 lets the UI say "unlink it there first" instead of
+  // implying the owner typed something invalid.
+  '45008': 409,
   '23505': 409, // unique violation (composite tenant key)
   '23503': 400, // foreign key (unknown plan / tenant / member)
 };
@@ -60,6 +65,19 @@ const INTRODUCED_BY: Record<string, string> = {
   'fn_hardware_punch 3': '0003_phase2_hardware_geofence.sql',
   'fn_member_hardware_identity 1': '0010_phase10_vyroniq_identity_avatar.sql',
   'fn_member_set_avatar 2': '0010_phase10_vyroniq_identity_avatar.sql',
+
+  // Phase 12: enrollment capture, crowd tracker, biometric slots, branding.
+  // Named by ARITY, for the same reason as Phase 11 above: PostgREST echoes
+  // parameter names as spelled at the call site, not as declared.
+  'fn_hardware_begin_enrollment 3': '0012_phase12_enrollment_crowd_branding.sql',
+  'fn_hardware_enrollment_state 2': '0012_phase12_enrollment_crowd_branding.sql',
+  'fn_hardware_capture_enrollment 2': '0012_phase12_enrollment_crowd_branding.sql',
+  'fn_hardware_checkout 3': '0012_phase12_enrollment_crowd_branding.sql',
+  fn_next_biometric_slot: '0012_phase12_enrollment_crowd_branding.sql',
+  'fn_member_link_hardware 5': '0012_phase12_enrollment_crowd_branding.sql',
+  fn_gym_live_crowd: '0012_phase12_enrollment_crowd_branding.sql',
+  'fn_tenant_set_branding 4': '0012_phase12_enrollment_crowd_branding.sql',
+  fn_tenant_public_profile: '0012_phase12_enrollment_crowd_branding.sql',
 
   // Phase 11. Note the keys are the FUNCTION NAME PLUS ARITY, never a literal
   // parameter list: PostgREST echoes the names as they were SPELLED AT THE CALL

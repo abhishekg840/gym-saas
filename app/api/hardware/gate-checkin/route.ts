@@ -138,6 +138,43 @@ export async function POST(request: Request) {
     return badRequest('Send rfid_card (card serial) or rfid_uid (card key), or slot for a fingerprint.');
   }
 
+  // ------------------------------------------------------------------
+  // ENROLLMENT MODE INTERCEPT
+  // ------------------------------------------------------------------
+  // If this terminal is armed for enrollment, the tap is NOT a gym entry. It is
+  // captured and answered with ENROLL_CAPTURED, and crucially NO attendances row
+  // is written -- otherwise enrolling a card would check its current holder into
+  // the gym as a phantom guest.
+  //
+  // The capture is a compare-and-swap inside SQL, so two readers tapping at once
+  // cannot both win, and a terminal whose 60s window expired simply reports
+  // captured=false and falls through to a normal punch below.
+  //
+  // Only tried when a card was actually sent: a fingerprint has nothing to enroll.
+  if (rfidCredential !== null) {
+    const { data: captured, error: captureError } = await supabase.rpc(
+      'fn_hardware_capture_enrollment',
+      { p_api_key: apiKey, p_card: rfidCredential }
+    );
+
+    if (captureError) {
+      // Never let the enrollment path break the gate. A failure here must fall
+      // through to a normal punch rather than locking members out of the door.
+      return databaseError(captureError, 'Could not check enrollment mode on this terminal.', 500);
+    }
+
+    const capture = (captured ?? {}) as { captured?: boolean };
+    if (capture.captured === true) {
+      return NextResponse.json({
+        access: 'ENROLL_CAPTURED',
+        rfid_uid: rfidCredential,
+        message: 'Card captured for enrollment',
+        device_id: (captured as { device_id?: string }).device_id ?? null,
+        captured_at: new Date().toISOString(),
+      });
+    }
+  }
+
   // The four-argument overload from migration 0010: no defaults on the trailing
   // parameters, so this call is unambiguous. p_rfid_card and p_rfid_uid are both
   // set to the resolved credential so either column can match it.

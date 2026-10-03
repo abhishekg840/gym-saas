@@ -122,6 +122,15 @@ export async function POST(request: Request) {
     // --- 1. Staff / reception / owner ------------------------------------------
     // Only a phone-shaped identifier can match a staff account, so an @handle
     // never triggers a read of the operator table.
+    //
+    // DUAL ROLE (Phase 12): this branch no longer RETURNS on a match. A gym
+    // owner almost always holds a membership at their own gym, so the same phone
+    // legitimately matches gym_users AND members. Returning the first match is
+    // what locked owners permanently into the console — they could never open
+    // their own pass. The staff session is now stashed in `v_staff` and the
+    // member lookup still runs, so both can be offered.
+    let v_staff: GymSession | null = null;
+
     if (phoneLike) {
       const { data: userRows, error: userError } = await supabase
         .from('gym_users')
@@ -139,22 +148,37 @@ export async function POST(request: Request) {
       );
 
       if (matchedUser) {
-        if (!pinMatches(pin, matchedUser.pin_code)) {
+        // The PIN gates STAFF access. A member signs in with no PIN, so a blank
+        // PIN must NOT be judged here — otherwise the owner's member pass would
+        // be blocked by the PIN gate before the member lookup is ever reached.
+        if (pin.trim() === '') {
+          v_staff = {
+            userId: matchedUser.id,
+            role: matchedUser.role ?? 'receptionist',
+            name: matchedUser.full_name ?? 'Staff',
+            phone: matchedUser.phone ?? '',
+            tenantId: isUuid(matchedUser.tenant_id) ? matchedUser.tenant_id : null,
+          };
+        } else if (!pinMatches(pin, matchedUser.pin_code)) {
           return NextResponse.json(
             { ok: false, reason: 'Incorrect PIN. Please try again.' },
             { status: 401 }
           );
+        } else {
+          v_staff = {
+            userId: matchedUser.id,
+            role: matchedUser.role ?? 'receptionist',
+            name: matchedUser.full_name ?? 'Staff',
+            phone: matchedUser.phone ?? '',
+            tenantId: isUuid(matchedUser.tenant_id) ? matchedUser.tenant_id : null,
+          };
         }
 
-        const staffSession: GymSession = {
-          userId: matchedUser.id,
-          role: matchedUser.role ?? 'receptionist',
-          name: matchedUser.full_name ?? 'Staff',
-          phone: matchedUser.phone ?? '',
-          tenantId: isUuid(matchedUser.tenant_id) ? matchedUser.tenant_id : null,
-        };
-
-        return NextResponse.json({ ok: true, session: staffSession });
+        // A super admin owns the platform, not a gym; never offer a member
+        // portal for them.
+        if (v_staff.role === 'super_admin') {
+          return NextResponse.json({ ok: true, session: v_staff });
+        }
       }
     }
 
@@ -197,7 +221,10 @@ export async function POST(request: Request) {
 
     const matchedMember = ((memberRows ?? []) as unknown as MemberRow[])[0];
 
+    // ---- Staff-only sign-in: no member row, so the staff session is the answer.
     if (!matchedMember) {
+      if (v_staff) return NextResponse.json({ ok: true, session: v_staff });
+
       return NextResponse.json(
         {
           ok: false,
@@ -217,6 +244,13 @@ export async function POST(request: Request) {
       tenantId: isUuid(matchedMember.tenant_id) ? matchedMember.tenant_id : null,
       username: matchedMember.username ?? null,
     };
+
+    // BOTH matched. Hand back both verified sessions and let the client ask which
+    // one to open — an owner who is also a member is the normal case, not an edge
+    // case, and silently choosing for them is what trapped them in Owner Mode.
+    if (v_staff) {
+      return NextResponse.json({ ok: true, portals: { owner: v_staff, member: session } });
+    }
 
     return NextResponse.json({ ok: true, session });
   } catch {

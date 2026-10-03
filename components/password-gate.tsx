@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 
 /**
  * First-login password onboarding (Module 6).
@@ -39,9 +39,23 @@ interface PasswordGateProps {
   /** Called once the password is set, so the parent can drop the gate. */
   onDone: () => void;
   onFlash: (message: string, kind?: 'ok' | 'bad') => void;
+  /**
+   * Phase 12: lets the member dismiss the gate.
+   *
+   * This screen used to be genuinely blocking, and that trapped a real and common
+   * case: a member enrolled at the desk has NO Supabase auth account, so
+   * `updateUser({ password })` answers 409 and there is nothing they can do about
+   * it. They were stuck on "Secure your Vyroniq account" with no way forward —
+   * locked out of a gym they had just paid for.
+   *
+   * Skipping does NOT mark the password as set. password_setup_completed stays
+   * false, so the app can keep reminding them later from a non-blocking place. It
+   * simply lets them use the gym now, which is what they actually came to do.
+   */
+  onSkip?: () => void;
 }
 
-export default function PasswordGate({ memberId, name, onDone, onFlash }: PasswordGateProps) {
+export default function PasswordGate({ memberId, name, onDone, onFlash, onSkip }: PasswordGateProps) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
@@ -175,6 +189,25 @@ export default function PasswordGate({ memberId, name, onDone, onFlash }: Passwo
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
             Save and continue
           </button>
+
+          {/* ---- Skip (Phase 12) -------------------------------------------
+              Present for everyone, not just on the 409 error. A desk-enrolled
+              member with no auth account can never complete this form, so the
+              only humane thing is an exit that always exists. */}
+          {onSkip && (
+            <button
+              type="button"
+              onClick={() => {
+                onFlash('You can set a password any time from your profile.', 'ok');
+                onSkip();
+              }}
+              className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            >
+              Skip for now
+              <ArrowRight className="h-3.5 w-3.5" />
+              Go to Dashboard
+            </button>
+          )}
         </form>
 
         <p className="mt-4 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-slate-400">

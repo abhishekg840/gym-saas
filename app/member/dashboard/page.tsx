@@ -33,6 +33,8 @@ import {
   X,
 } from 'lucide-react';
 import { readSession, clearSession, type GymSession } from '@/lib/session';
+import { hardSignOut } from '@/lib/logout';
+import LiveCrowdCard from '@/components/live-crowd-card';
 import { supabase } from '@/lib/supabase';
 import { encodePassToken, PASS_WINDOW_MS } from '@/lib/passtoken';
 import AvatarUploader from '@/components/avatar-uploader';
@@ -304,6 +306,63 @@ export default function MemberDashboard() {
     if (!session || session.role !== 'member') router.replace('/login');
   }, [ready, session, router]);
 
+  /**
+   * DUAL ROLE (Phase 12): does this member ALSO run the gym?
+   *
+   * The owner-console badge only appears for someone who genuinely has a staff
+   * account, so this asks gym_users for a matching phone — scoped to the SAME
+   * tenant as the member's, so a member of Gym A never sees a link into an owner
+   * console they do not belong to.
+   *
+   * Read directly rather than through a new endpoint: gym_users is a small
+   * operator table the app already reads in /api/auth/login, and this is a
+   * single-column existence check on the client for display purposes only. It
+   * grants nothing — navigating to / is still checked server-side by the
+   * tenant-scoped routes.
+   */
+  const [isStaffToo, setIsStaffToo] = useState(false);
+
+  // Derived rather than stored: a guard effect that calls setState(false) before
+  // returning is the synchronous-update-in-effect pattern. Computing the inputs
+  // first and only setting state inside the async continuation keeps the one
+  // legitimate state write where it belongs.
+  const staffPhone = (session?.phone ?? '').replace(/\D/g, '').slice(-10);
+  const staffTenant = session?.tenantId ?? null;
+  const canCheckStaff = ready && staffPhone.length === 10 && staffTenant !== null;
+
+  useEffect(() => {
+    // No early setState: when the inputs are unusable the state is already the
+    // correct value (false), or `arm` below resets it via the cleanup.
+    if (!canCheckStaff) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('gym_users')
+          .select('id, phone')
+          .eq('tenant_id', staffTenant);
+
+        if (cancelled || error) return;
+
+        const match = ((data ?? []) as Array<{ id: string; phone: string }>).some(
+          (row) => (row.phone ?? '').replace(/\D/g, '').slice(-10) === staffPhone
+        );
+        if (!cancelled) setIsStaffToo(match);
+      } catch {
+        /* the badge is a convenience; stay hidden on failure */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      // Clearing on scope change stops one gym's answer leaking into another's
+      // badge after a sign-out, without an extra render on the happy path.
+      setIsStaffToo(false);
+    };
+  }, [canCheckStaff, staffPhone, staffTenant]);
+
   /** Reloads the four tabs' bundle. */
   const refresh = useCallback(async () => {
     if (!memberId) return;
@@ -467,8 +526,11 @@ export default function MemberDashboard() {
   }, [memberId, memberPhone, passLock]);
 
   function signOut() {
-    clearSession();
-    router.replace('/login');
+    // Was `clearSession(); router.replace('/login')` — which is exactly what
+    // caused the logout loop: it removed the gym session but left Supabase's
+    // tokens in localStorage, autoRefreshToken renewed them on the next mount,
+    // and the user was bounced straight back into the app.
+    void hardSignOut();
   }
 
   const displayName = pass?.full_name ?? data?.member?.full_name ?? session?.name ?? 'Member';
@@ -506,6 +568,13 @@ export default function MemberDashboard() {
         onDone={async () => {
           setPasswordDone(true);
           await refresh();
+        }}
+        // Phase 12: the escape hatch. Deliberately does NOT call
+        // fn_member_mark_password_setup — the member still has no password, so
+        // password_setup_completed stays false and the reminder can return later
+        // from Settings. It only stops this screen from being a dead end.
+        onSkip={() => {
+          setPasswordDone(true);
         }}
       />
     );
@@ -551,14 +620,37 @@ export default function MemberDashboard() {
               </p>
             </div>
           </div>
-          <button
-            onClick={signOut}
-            title="Sign out"
-            aria-label="Sign out"
-            className={`rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:text-slate-900 ${TAP}`}
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* ---- Live gym crowd (Phase 12) -------------------------------
+                A member deciding whether to drive over wants to know if the floor
+                is packed, not a raw integer, so the badge leads with the
+                Quiet/Moderate/Busy sentiment. */}
+            <LiveCrowdCard tenantId={session?.tenantId ?? null} variant="badge" />
+
+            {/* ---- Back to Owner Console (Phase 12) ----------------------
+                Only rendered when this member ALSO holds a staff account, which
+                is the dual-role case. Hidden for everyone else: a badge that
+                leads nowhere is worse than no badge. */}
+            {isStaffToo && (
+              <Link
+                href="/"
+                title="You also manage this gym — open the owner console"
+                className={`inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2.5 py-2 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100 ${TAP}`}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Owner
+              </Link>
+            )}
+
+            <button
+              onClick={signOut}
+              title="Sign out"
+              aria-label="Sign out"
+              className={`rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:text-slate-900 ${TAP}`}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </header>
 
