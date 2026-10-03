@@ -124,6 +124,11 @@ export default function GymDashboard() {
   const [enrollLeadId, setEnrollLeadId] = useState<string | null>(null);
   const [enrollBanner, setEnrollBanner] = useState<string | null>(null);
 
+  // Failure of the CURRENT enrolment attempt, rendered inside the form instead
+  // of a blocking window.alert(): the desk keeps whatever they typed and can act
+  // on the message (e.g. "run migration 0016") without losing the form.
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+
   // Set after a successful enrolment: everything the WhatsApp onboarding
   // message needs. Offered as a button rather than auto-opened, because a tab
   // spawned after the awaits in addMember() would be blocked as a popup.
@@ -217,37 +222,71 @@ export default function GymDashboard() {
     }
   }
 
+  /**
+   * Maps a raw PostgREST/Postgres failure from the enrolment INSERT into text
+   * the desk can act on, instead of the bare database string a window.alert()
+   * used to show. The RLS case is called out because it is not a form mistake:
+   * it means the database is missing the Phase 16 policies, and only running
+   * that migration can fix it.
+   */
+  function describeEnrollError(error: { message?: string | null } | null): string {
+    const raw = error?.message?.trim() || 'The member could not be enrolled.';
+    if (raw.includes('row-level security')) {
+      return 'Enrollment was blocked by the database security policy. Run 0016_phase16_members_desk_write.sql in the Supabase SQL Editor, then try again.';
+    }
+    if (raw.includes('null value in column')) {
+      return 'A required enrollment field is empty — check the full name, phone and membership plan.';
+    }
+    if (raw.includes('duplicate key value')) {
+      return 'A member with that email already exists — clear the email field or use a different one.';
+    }
+    return raw;
+  }
+
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setEnrollError(null);
 
-    const chosenPlan = plans.find(p => p.id === selectedPlanId);
-    const durationDays = chosenPlan ? chosenPlan.duration_days : 30;
+    // Nothing below may escape as an unhandled rejection: supabase-js can
+    // reject on a network drop, and an escaped error would leave the button
+    // stuck on "Enrolling..." with no message. Everything lands in enrollError.
+    try {
+      const chosenPlan = plans.find(p => p.id === selectedPlanId);
+      const durationDays = chosenPlan ? chosenPlan.duration_days : 30;
 
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + durationDays);
-    const feeAmount = parseFloat(amountPaid) || 0;
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + durationDays);
+      const feeAmount = parseFloat(amountPaid) || 0;
 
-    const { data: memberData, error: memberError } = await supabase
-      .from('members')
-      .insert([
-        {
-          full_name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim() || null,
-          emergency_contact: emergencyPhone.trim() || null,
-          biometric_id: biometricId ? parseInt(biometricId) : null,
-          plan_id: selectedPlanId || null,
-          amount_paid: feeAmount,
-          membership_end: endDate.toISOString().split('T')[0],
-          status: 'active',
-          tenant_id: session?.tenantId || null
-        }
-      ])
-      .select()
-      .single();
+      const { data: memberData, error: memberError } = await supabase
+        .from('members')
+        .insert([
+          {
+            full_name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim() || null,
+            emergency_contact: emergencyPhone.trim() || null,
+            biometric_id: biometricId ? parseInt(biometricId) : null,
+            plan_id: selectedPlanId || null,
+            amount_paid: feeAmount,
+            // Sent explicitly because both server-side enrolment paths
+            // (fn_lead_convert_to_member and the transfer function) set it too:
+            // the desk payload must not depend on an unknown column default.
+            membership_start: new Date().toISOString().split('T')[0],
+            membership_end: endDate.toISOString().split('T')[0],
+            status: 'active',
+            tenant_id: session?.tenantId || null
+          }
+        ])
+        .select()
+        .single();
 
-    if (!memberError && memberData) {
+      if (memberError || !memberData) {
+        setEnrollError(describeEnrollError(memberError));
+        return;
+      }
+
       await supabase.from('invoices').insert([
         {
           member_id: memberData.id,
@@ -276,7 +315,7 @@ export default function GymDashboard() {
         });
 
         if (!linked.ok) {
-          alert(
+          setEnrollError(
             linked.error ||
               'The member was enrolled, but the lead could not be marked converted. Convert it from the pipeline.'
           );
@@ -295,10 +334,13 @@ export default function GymDashboard() {
       });
 
       fetchMembers(session?.tenantId);
-    } else {
-      alert(memberError?.message || 'Error enrolling member');
+    } catch (err) {
+      setEnrollError(
+        err instanceof Error ? err.message : 'Enrollment failed unexpectedly. Please retry.'
+      );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function renewMember(member: Member) {
@@ -1011,6 +1053,15 @@ export default function GymDashboard() {
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 text-white font-mono"
               />
             </div>
+            {enrollError && (
+              <div
+                role="alert"
+                className="mt-2 flex items-start gap-2 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2.5"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-rose-400" />
+                <p className="text-[11px] leading-relaxed text-rose-200">{enrollError}</p>
+              </div>
+            )}
             <button
               type="submit"
               disabled={loading}
