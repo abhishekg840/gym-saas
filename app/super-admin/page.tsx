@@ -16,6 +16,21 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+/**
+ * Temporary password handed to a newly provisioned owner.
+ *
+ * Phase 14 replaced a hardcoded plaintext `pin_code: '1234'` written directly to
+ * gym_users through the public anon key. The value is now bcrypt-hashed inside
+ * `fn_staff_provision_owner` and flagged `password_must_change`, so the owner is
+ * forced to replace it at first sign-in rather than keeping a credential that
+ * was typed on their behalf and shown on a console screen.
+ *
+ * This is a FIRST password for an account that cannot be used until it is set,
+ * so it is not a secret that persists. It is still shown once to the super admin
+ * for hand-off.
+ */
+const TEMP_OWNER_PASSWORD = 'Vyroniq@1234';
+
 interface Tenant {
   id: string;
   name: string;
@@ -99,16 +114,28 @@ export default function SuperAdminPortal() {
       .single();
 
     if (tenant && !error) {
-      // Create default owner user with 1234 PIN
-      await supabase.from('gym_users').insert([
-        {
-          tenant_id: tenant.id,
-          phone: ownerPhone.trim(),
-          full_name: ownerName.trim(),
-          role: 'owner',
-          pin_code: '1234',
-        },
-      ]);
+      // Phase 14: this used to INSERT a plaintext `pin_code` straight into
+      // gym_users with the public anon key, which wrote a credential in the
+      // clear and was readable by anyone via PostgREST. Owner creation now goes
+      // through a SECURITY DEFINER function that bcrypt-hashes the initial
+      // password and flags it for a forced change at first sign-in.
+      const { error: ownerError } = await supabase.rpc('fn_staff_provision_owner', {
+        p_tenant_id: tenant.id,
+        p_phone: ownerPhone.trim(),
+        p_full_name: ownerName.trim(),
+        p_temp_password: TEMP_OWNER_PASSWORD,
+      });
+
+      if (ownerError) {
+        alert(
+          'The gym was created, but the owner account failed: ' + ownerError.message
+        );
+      } else {
+        alert(
+          `Owner created. Temporary password: ${TEMP_OWNER_PASSWORD}\n\n` +
+            'Share it with the owner — they will be asked to change it at first sign-in.'
+        );
+      }
 
       setShowAddModal(false);
       setGymName('');

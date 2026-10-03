@@ -39,6 +39,16 @@ const STATUS_BY_SQLSTATE: Record<string, number> = {
   '45009': 409,
   '23505': 409, // unique violation (composite tenant key)
   '23503': 400, // foreign key (unknown plan / tenant / member)
+  // Insufficient privilege. 403 rather than 500: the request was well-formed and
+  // the caller is who they claim to be, the DATABASE is simply refusing it. A
+  // bare 500 here is how "permission denied for table members" reached the
+  // Member Smart Pass and was reported to the user as a server error.
+  '42501': 403,
+  // undefined_function. Phase 13's verifiers raised this for EVERY sign-in on
+  // Supabase because pgcrypto sits in `extensions` and they pinned
+  // `search_path = public, pg_temp`. 503 (not 500) because it is a deployment
+  // that needs a migration, and naming the file is the actionable answer.
+  '42883': 503,
 };
 
 /** The subset of a PostgREST error this app needs. */
@@ -86,11 +96,20 @@ const INTRODUCED_BY: Record<string, string> = {
   // Phase 13: credentials. A missing one of these means the deployment has not
   // had 0013 applied, and telling the operator "invalid password" for that would
   // send every user chasing a credential problem they do not have.
-  fn_staff_verify_password: '0013_phase13_real_credentials.sql',
-  fn_member_verify_password: '0013_phase13_real_credentials.sql',
-  'fn_member_set_password 4': '0013_phase13_real_credentials.sql',
-  'fn_staff_set_password 4': '0013_phase13_real_credentials.sql',
-  'fn_member_issue_temp_password 4': '0013_phase13_real_credentials.sql',
+  //
+  // Phase 14 note: 0013 ALONE IS NOT ENOUGH on Supabase. It creates the verifiers
+  // with `search_path = public, pg_temp`, which cannot resolve pgcrypto's
+  // `crypt()` because Supabase installs extensions in the `extensions` schema.
+  // That surfaces as 42883 "function crypt(text, text) does not exist" - a fault
+  // INSIDE a function that exists, not a missing one. 0014 recreates them with
+  // the correct search_path and moves the hashes out of the anon-readable tables,
+  // so a sign-in failure here almost always means 0014 is the pending file.
+  fn_staff_verify_password: '0013_phase13_real_credentials.sql + 0014_phase14_privilege_rls_repair.sql',
+  fn_member_verify_password: '0013_phase13_real_credentials.sql + 0014_phase14_privilege_rls_repair.sql',
+  fn_staff_provision_owner: '0014_phase14_privilege_rls_repair.sql',
+  'fn_member_set_password 4': '0013_phase13_real_credentials.sql + 0014_phase14_privilege_rls_repair.sql',
+  'fn_staff_set_password 4': '0013_phase13_real_credentials.sql + 0014_phase14_privilege_rls_repair.sql',
+  'fn_member_issue_temp_password 4': '0013_phase13_real_credentials.sql + 0014_phase14_privilege_rls_repair.sql',
 
   // Phase 11. Note the keys are the FUNCTION NAME PLUS ARITY, never a literal
   // parameter list: PostgREST echoes the names as they were SPELLED AT THE CALL

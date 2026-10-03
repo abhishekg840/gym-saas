@@ -24,6 +24,14 @@ import { isUuid, normalizePhone10, type GymSession } from '@/lib/session';
  * pgcrypto's bcrypt. The hash never leaves the database, and this route never
  * sees a plaintext credential for anyone.
  *
+ * WHERE THE HASH LIVES (Phase 14)
+ * ------------------------------
+ * Not on the public tables. `public.members` and `public.gym_users` must be
+ * readable in full so the browser's `select('*')` queries keep working, and a
+ * table that answers `select('*')` cannot hide a column. The credentials
+ * therefore live in a `private` schema that PostgREST does not serve, and only
+ * the SECURITY DEFINER verifiers can reach them.
+ *
  * DUAL ROLE
  * ---------
  * An owner who also holds a membership matches BOTH verifiers. When that happens
@@ -77,29 +85,40 @@ function looksLikePhone(value: string): boolean {
 }
 
 /**
- * Runs one of the Phase 13 verifiers and normalises the answer.
+ * WHY THIS USES THE POSTGREST ERROR CODE, NOT THE MESSAGE TEXT
+ * -----------------------------------------------------------
+ * The previous version classified a failure as "migration 0013 has not been
+ * applied" whenever the error message contained "does not exist". That regex
+ * matched a completely different, and far more common, failure:
  *
- * Returns null when the RPC is missing (migration 0013 not applied yet) so the
- * caller can answer with an actionable message instead of pretending the
- * credentials were simply wrong â€” otherwise every user would be told "invalid
- * password" and nobody would know the deployment was broken.
+ *     42883  function crypt(text, text) does not exist
+ *
+ * which is what every verifier returned on Supabase, because pgcrypto is
+ * installed in the `extensions` schema while the functions pinned
+ * `search_path = public, pg_temp`. Migration 0013 was applied and working as
+ * written; the deployment was fine and the *error message* was misleading. The
+ * route then told every user that a migration they had already run was missing,
+ * sending the operator to re-apply a file that could not possibly help.
+ *
+ * Only PostgREST's own PGRST202 / PGRST205 actually mean "this RPC is not in the
+ * schema cache". Everything else is a real fault and is surfaced as one.
  */
 async function verify(
   fn: 'fn_staff_verify_password' | 'fn_member_verify_password',
   identifier: string,
   password: string
-): Promise<{ row: StaffRow | MemberRow | null; missing: boolean }> {
+): Promise<{ row: StaffRow | MemberRow | null; missing: boolean; fault?: string }> {
   const { data, error } = await supabase.rpc(fn, {
     p_identifier: identifier,
     p_password: password,
   });
 
   if (error) {
-    const message = error.message ?? '';
-    const missing =
-      /could not find the function|does not exist/i.test(message) ||
-      /schema cache/i.test(message);
-    return { row: null, missing };
+    // PGRST202 / PGRST205 are the ONLY codes that mean the RPC itself is absent.
+    // A 42883 (undefined_function) is a fault INSIDE the function - a broken
+    // search_path, typically - and must never be reported as a missing migration.
+    const missing = error.code === 'PGRST202' || error.code === 'PGRST205';
+    return { row: null, missing, fault: error.message ?? 'Unknown database error.' };
   }
 
   // NULL from Postgres == wrong credential (by design: the function cannot
@@ -107,9 +126,30 @@ async function verify(
   return { row: (data as StaffRow | MemberRow | null) ?? null, missing: false };
 }
 
+/**
+ * Only reached when the RPC genuinely is not in the schema cache. Kept as a
+ * last-resort operator hint, not a pre-flight check: nothing probes for it
+ * before the real query runs.
+ */
+const MISSING_RPC =
+  'Sign-in is not ready: the password verification functions are missing from this database. Run supabase/migrations/0013_phase13_real_credentials.sql followed by supabase/migrations/0014_phase14_privilege_rls_repair.sql in the Supabase SQL Editor.';
 
-const MISSING_MIGRATION =
-  'Sign-in is not ready: migration 0013 has not been applied to this database. Run supabase/migrations/0013_phase13_real_credentials.sql in the Supabase SQL Editor.';
+/**
+ * What a database FAULT looks like to the person at the desk.
+ *
+ * Generic about cause, specific about action. A 42883 almost always means a
+ * verifier's search_path lost the `extensions` schema that holds pgcrypto, so
+ * naming the migration that fixes it saves the operator a round trip of guessing.
+ */
+function faultMessage(fault: string | undefined): string {
+  if (!fault) return 'Sign-in is unavailable right now. Please retry.';
+
+  if (fault.includes('crypt(') || fault.includes('gen_salt(')) {
+    return 'Sign-in is temporarily misconfigured on the server. An administrator needs to run the latest database migration.';
+  }
+
+  return 'Sign-in is unavailable right now. Please retry.';
+}
 
 export async function POST(request: Request) {
   let payload: Record<string, unknown>;
@@ -165,8 +205,25 @@ export async function POST(request: Request) {
       verify('fn_member_verify_password', identifier, password),
     ]);
 
+    // A missing RPC is the ONLY case that earns a 503. Anything else that went
+    // wrong (a 42883 from a broken search_path, a dropped connection, a
+    // permission fault) is a server-side problem, and reporting it as "run
+    // migration 0013" sent operators to re-run a file that was already applied.
     if (staff.missing || member.missing) {
-      return NextResponse.json({ ok: false, reason: MISSING_MIGRATION }, { status: 503 });
+      return NextResponse.json({ ok: false, reason: MISSING_RPC }, { status: 503 });
+    }
+
+    // A fault on EITHER verifier means we cannot know whether the credentials
+    // were valid, so this must NOT fall through to a 401: answering "invalid
+    // password" here would blame the person typing for a database that is
+    // broken. Checked before the row comparison for exactly that reason.
+    const fault = staff.fault ?? member.fault;
+    if (fault) {
+      console.error('[auth/login] verifier fault:', fault);
+      return NextResponse.json(
+        { ok: false, reason: faultMessage(fault) },
+        { status: 503 }
+      );
     }
 
     const staffRow = staff.row as StaffRow | null;
@@ -236,7 +293,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, session });
-  } catch {
+  } catch (err) {
+    // Logged rather than swallowed: an unexpected throw here is a deployment
+    // fault, and without this line the only evidence is a generic 500.
+    console.error('[auth/login] unexpected error:', err);
     return NextResponse.json(
       { ok: false, reason: 'Sign-in is unavailable right now. Please retry.' },
       { status: 500 }
