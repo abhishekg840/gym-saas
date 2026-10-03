@@ -3,42 +3,52 @@ import { supabase } from '@/lib/supabase';
 import { isUuid, normalizePhone10, type GymSession } from '@/lib/session';
 
 /**
- * POST /api/auth/login
+ * POST /api/auth/login â€” MANDATORY credentials for owners AND members (Phase 13).
  *
- * Body: { identifier: string, pin?: string }
- *   identifier = a 10-digit mobile number, "@handle", or an email address.
- *   `phone`, `username` and `email` are still accepted as aliases so an older
- *   build of the app in someone's pocket keeps working.
+ * Body: { identifier: string, password: string }
+ *   identifier = a 10-digit mobile number, "@handle", an email address, or a user
+ *   id. `password` is REQUIRED: there is no longer a blank-password path for
+ *   anyone, which is what closes the phone-number-only bypass.
  *
- * The login screen used to run `supabase.from('gym_users').select('*')`, which
- * shipped every operator account in every gym - PINs included - to whoever opened
- * the page, then compared the PIN in the browser. Member lookup had the same
- * problem for member names and phone numbers.
+ * HOW VERIFICATION WORKS NOW
+ * --------------------------
+ * Previously this route SELECTED gym_users.pin_code with the anon key and
+ * compared the PIN in JavaScript. That was catastrophic twice over: the plaintext
+ * PIN travelled to the server (and into any request log), and â€” because
+ * gym_users had no RLS and no column restriction â€” anybody could read every
+ * owner's PIN directly from PostgREST with the public key. That leak was
+ * confirmed live before it was fixed.
  *
- * Verification now happens here: only what the visitor typed is sent in, and the
- * only thing that comes back is the session for the one account that matched.
- * No PIN, no other gyms' rows.
+ * Now every credential check happens INSIDE Postgres via
+ * fn_staff_verify_password / fn_member_verify_password, which compare with
+ * pgcrypto's bcrypt. The hash never leaves the database, and this route never
+ * sees a plaintext credential for anyone.
  *
- * A PIN is required for staff and reception accounts only. A member identifies
- * themselves with the phone number, @handle or email their gym enrolled them
- * under - they never had a PIN to forget.
+ * DUAL ROLE
+ * ---------
+ * An owner who also holds a membership matches BOTH verifiers. When that happens
+ * both are verified BEFORE any choice is offered, and the response carries
+ * `portals`. Nothing is revealed until a correct password has been supplied, so
+ * the selector is not an account-existence oracle.
  */
 
-interface UserRow {
-  id: string;
+interface StaffRow {
+  user_id: string;
   full_name: string | null;
   phone: string | null;
   role: string | null;
   tenant_id: string | null;
-  pin_code: string | null;
+  password_must_change: boolean;
 }
 
 interface MemberRow {
-  id: string;
+  member_id: string;
   full_name: string | null;
   phone: string | null;
   username: string | null;
   tenant_id: string | null;
+  password_must_change: boolean;
+  password_setup_completed: boolean;
 }
 
 /**
@@ -61,25 +71,45 @@ function rateLimited(key: string): boolean {
   return false;
 }
 
-/** Compares PINs without leaking length/timing through a short-circuit on index 0. */
-function pinMatches(input: string, stored: string | null): boolean {
-  // A staff row saved before PINs were mandatory has a NULL code; the documented
-  // desk default is used for it so such an account is not bricked.
-  const expected = (stored ?? '1234').trim();
-  const given = input.trim();
-  if (given.length !== expected.length) return false;
-
-  let diff = 0;
-  for (let i = 0; i < expected.length; i += 1) {
-    diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
 /** True for anything a person would type as a phone number. */
 function looksLikePhone(value: string): boolean {
   return /^[+0-9][0-9\s\-()]{5,}$/.test(value.trim());
 }
+
+/**
+ * Runs one of the Phase 13 verifiers and normalises the answer.
+ *
+ * Returns null when the RPC is missing (migration 0013 not applied yet) so the
+ * caller can answer with an actionable message instead of pretending the
+ * credentials were simply wrong â€” otherwise every user would be told "invalid
+ * password" and nobody would know the deployment was broken.
+ */
+async function verify(
+  fn: 'fn_staff_verify_password' | 'fn_member_verify_password',
+  identifier: string,
+  password: string
+): Promise<{ row: StaffRow | MemberRow | null; missing: boolean }> {
+  const { data, error } = await supabase.rpc(fn, {
+    p_identifier: identifier,
+    p_password: password,
+  });
+
+  if (error) {
+    const message = error.message ?? '';
+    const missing =
+      /could not find the function|does not exist/i.test(message) ||
+      /schema cache/i.test(message);
+    return { row: null, missing };
+  }
+
+  // NULL from Postgres == wrong credential (by design: the function cannot
+  // distinguish "no such account" from "wrong password").
+  return { row: (data as StaffRow | MemberRow | null) ?? null, missing: false };
+}
+
+
+const MISSING_MIGRATION =
+  'Sign-in is not ready: migration 0013 has not been applied to this database. Run supabase/migrations/0013_phase13_real_credentials.sql in the Supabase SQL Editor.';
 
 export async function POST(request: Request) {
   let payload: Record<string, unknown>;
@@ -92,11 +122,11 @@ export async function POST(request: Request) {
   const identifier = String(
     payload.identifier ?? payload.phone ?? payload.username ?? payload.email ?? ''
   ).trim();
-  // The screen labels this field "Password / PIN": staff PINs are 4-6 digits and
-  // members leave it blank. `password` is accepted alongside `pin` so the label
-  // can say what people already call it without breaking older builds.
-  const rawSecret = payload.pin ?? payload.password;
-  const pin = typeof rawSecret === 'string' ? rawSecret : '';
+
+  // `pin` is accepted alongside `password` because a desk still calls a 4-digit
+  // credential a PIN, and an older build in someone's pocket sends that name.
+  const rawSecret = payload.password ?? payload.pin;
+  const password = typeof rawSecret === 'string' ? rawSecret : '';
 
   if (identifier.length < 3) {
     return NextResponse.json(
@@ -105,10 +135,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const phone10 = normalizePhone10(identifier);
-  const phoneLike = looksLikePhone(identifier) && phone10.length === 10;
-  const emailLike = !identifier.startsWith('@') && identifier.includes('@');
-  const handle = identifier.replace(/^@+/, '').toLowerCase();
+  // MANDATORY PASSWORD — this is the bypass being closed.
+  //
+  // Rejected BEFORE any database call so a blank password can never reach the
+  // verifier, and answered with a 401 rather than a 400: the request was
+  // well-formed, the credential was simply absent.
+  if (password.trim() === '') {
+    return NextResponse.json(
+      { ok: false, reason: 'Enter your password. Blank passwords are no longer accepted.' },
+      { status: 401 }
+    );
+  }
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
   if (rateLimited(`${ip}:${identifier.toLowerCase()}`)) {
@@ -119,137 +156,83 @@ export async function POST(request: Request) {
   }
 
   try {
-    // --- 1. Staff / reception / owner ------------------------------------------
-    // Only a phone-shaped identifier can match a staff account, so an @handle
-    // never triggers a read of the operator table.
-    //
-    // DUAL ROLE (Phase 12): this branch no longer RETURNS on a match. A gym
-    // owner almost always holds a membership at their own gym, so the same phone
-    // legitimately matches gym_users AND members. Returning the first match is
-    // what locked owners permanently into the console — they could never open
-    // their own pass. The staff session is now stashed in `v_staff` and the
-    // member lookup still runs, so both can be offered.
-    let v_staff: GymSession | null = null;
+    // BOTH verifiers run before any decision is made. An owner who is also a
+    // member must be checked against each of their credentials independently —
+    // picking the owner account and only testing the owner password would lock
+    // a member-owner out of their own pass entirely.
+    const [staff, member] = await Promise.all([
+      verify('fn_staff_verify_password', identifier, password),
+      verify('fn_member_verify_password', identifier, password),
+    ]);
 
-    if (phoneLike) {
-      const { data: userRows, error: userError } = await supabase
-        .from('gym_users')
-        .select('id, full_name, phone, role, tenant_id, pin_code');
-
-      if (userError) {
-        return NextResponse.json(
-          { ok: false, reason: 'Sign-in is unavailable right now. Please retry.' },
-          { status: 500 }
-        );
-      }
-
-      const matchedUser = ((userRows ?? []) as unknown as UserRow[]).find(
-        (u) => normalizePhone10(u.phone) === phone10
-      );
-
-      if (matchedUser) {
-        // The PIN gates STAFF access. A member signs in with no PIN, so a blank
-        // PIN must NOT be judged here — otherwise the owner's member pass would
-        // be blocked by the PIN gate before the member lookup is ever reached.
-        if (pin.trim() === '') {
-          v_staff = {
-            userId: matchedUser.id,
-            role: matchedUser.role ?? 'receptionist',
-            name: matchedUser.full_name ?? 'Staff',
-            phone: matchedUser.phone ?? '',
-            tenantId: isUuid(matchedUser.tenant_id) ? matchedUser.tenant_id : null,
-          };
-        } else if (!pinMatches(pin, matchedUser.pin_code)) {
-          return NextResponse.json(
-            { ok: false, reason: 'Incorrect PIN. Please try again.' },
-            { status: 401 }
-          );
-        } else {
-          v_staff = {
-            userId: matchedUser.id,
-            role: matchedUser.role ?? 'receptionist',
-            name: matchedUser.full_name ?? 'Staff',
-            phone: matchedUser.phone ?? '',
-            tenantId: isUuid(matchedUser.tenant_id) ? matchedUser.tenant_id : null,
-          };
-        }
-
-        // A super admin owns the platform, not a gym; never offer a member
-        // portal for them.
-        if (v_staff.role === 'super_admin') {
-          return NextResponse.json({ ok: true, session: v_staff });
-        }
-      }
+    if (staff.missing || member.missing) {
+      return NextResponse.json({ ok: false, reason: MISSING_MIGRATION }, { status: 503 });
     }
 
-    // --- 2. Members: phone, @handle or email -----------------------------------
-    const MEMBER_COLUMNS = 'id, full_name, phone, username, tenant_id';
+    const staffRow = staff.row as StaffRow | null;
+    const memberRow = member.row as MemberRow | null;
 
-    let memberQuery = supabase.from('members').select(MEMBER_COLUMNS);
-
-    if (emailLike) {
-      memberQuery = memberQuery.eq('email', identifier.toLowerCase());
-    } else if (identifier.startsWith('@')) {
-      memberQuery = memberQuery.eq('username', handle);
-    } else if (phoneLike) {
-      memberQuery = memberQuery.eq('phone', phone10);
-    } else {
-      // A bare word is a handle without the '@': people type "rahul", not "@rahul".
-      memberQuery = memberQuery.eq('username', handle);
-    }
-
-    let { data: memberRows, error: memberError } = await memberQuery.limit(5);
-
-    // Legacy rows were saved with a +91 prefix or spaces, so one loose attempt is
-    // still made - anchored to the full 10-digit tail, never a short fragment.
-    if ((memberError || (memberRows ?? []).length === 0) && phoneLike) {
-      const loose = await supabase
-        .from('members')
-        .select(MEMBER_COLUMNS)
-        .like('phone', `%${phone10}`)
-        .limit(5);
-      memberRows = loose.data;
-      memberError = loose.error;
-    }
-
-    if (memberError) {
+    // Neither matched: ONE message for both cases. Distinguishing "no such
+    // account" from "wrong password" would turn this endpoint into an account
+    // enumeration oracle.
+    if (!staffRow && !memberRow) {
       return NextResponse.json(
-        { ok: false, reason: 'Sign-in is unavailable right now. Please retry.' },
-        { status: 500 }
+        { ok: false, reason: 'Invalid credentials. Please enter your password.' },
+        { status: 401 }
       );
     }
 
-    const matchedMember = ((memberRows ?? []) as unknown as MemberRow[])[0];
+    const staffSession: GymSession | null = staffRow
+      ? {
+          userId: staffRow.user_id,
+          role: staffRow.role ?? 'receptionist',
+          name: staffRow.full_name ?? 'Staff',
+          phone: staffRow.phone ?? '',
+          tenantId: isUuid(staffRow.tenant_id) ? staffRow.tenant_id : null,
+          // Carried so the client can force the change-password screen.
+          passwordMustChange: Boolean(staffRow.password_must_change),
+          userIdForPassword: staffRow.user_id,
+        }
+      : null;
 
-    // ---- Staff-only sign-in: no member row, so the staff session is the answer.
-    if (!matchedMember) {
-      if (v_staff) return NextResponse.json({ ok: true, session: v_staff });
+    const memberSession: GymSession | null = memberRow
+      ? {
+          userId: memberRow.member_id,
+          role: 'member',
+          name: memberRow.full_name ?? 'Member',
+          phone: memberRow.phone ?? '',
+          tenantId: isUuid(memberRow.tenant_id) ? memberRow.tenant_id : null,
+          username: memberRow.username ?? null,
+          passwordMustChange: Boolean(memberRow.password_must_change),
+          userIdForPassword: memberRow.member_id,
+        }
+      : null;
 
+    // Both accounts, one correct password: let the person choose. Safe to offer
+    // because authentication has ALREADY succeeded for each side.
+    if (staffSession && memberSession) {
+      return NextResponse.json({
+        ok: true,
+        portals: { owner: staffSession, member: memberSession },
+      });
+    }
+
+    const session = staffSession ?? memberSession;
+    if (!session) {
       return NextResponse.json(
-        {
-          ok: false,
-          reason: phoneLike
-            ? 'No account found for that number. Check the digits, or sign in with your @handle.'
-            : 'No account found for those details. Check them, or ask the front desk.',
-        },
-        { status: 404 }
+        { ok: false, reason: 'Invalid credentials. Please enter your password.' },
+        { status: 401 }
       );
     }
 
-    const session: GymSession = {
-      userId: matchedMember.id,
-      role: 'member',
-      name: matchedMember.full_name ?? 'Member',
-      phone: matchedMember.phone ?? '',
-      tenantId: isUuid(matchedMember.tenant_id) ? matchedMember.tenant_id : null,
-      username: matchedMember.username ?? null,
-    };
-
-    // BOTH matched. Hand back both verified sessions and let the client ask which
-    // one to open — an owner who is also a member is the normal case, not an edge
-    // case, and silently choosing for them is what trapped them in Owner Mode.
-    if (v_staff) {
-      return NextResponse.json({ ok: true, portals: { owner: v_staff, member: session } });
+    // A super admin owns the platform rather than a gym; skip the forced change
+    // so the platform console is never gated on a per-gym credential.
+    if (session.passwordMustChange && session.role !== 'super_admin') {
+      return NextResponse.json({
+        ok: true,
+        session,
+        requires_password_change: true,
+      });
     }
 
     return NextResponse.json({ ok: true, session });

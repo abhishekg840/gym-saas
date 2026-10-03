@@ -10,15 +10,17 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  *   POST { member_id, action: 'password_setup' }    -> set password, mark it done
  *   POST { member_id, action: 'update_profile', … } -> edit profile fields
  *
- * WHY A ROUTE AND NOT A DIRECT SUPABASE CALL: the password half calls
- * supabase.auth.updateUser(), which needs the user's OWN access token. A member
- * who signed in with Google has one; a member who signed in with the gym PIN has
- * none, and updateUser() would fail. The route reports that case in plain words
- * instead of pretending the password was set.
+ * WHY A ROUTE AND NOT A DIRECT SUPABASE CALL: the profile fields live on
+ * `profiles`, but they go through fn_member_profile_update so the validation
+ * rules live in ONE place rather than being reimplemented in the UI.
  *
- * The profile fields live on `profiles` (which the client could write directly),
- * but they go through fn_member_profile_update so the validation rules live in
- * ONE place rather than being reimplemented in the UI.
+ * PHASE 13 — the password half no longer touches Supabase Auth at all.
+ * It used to call supabase.auth.updateUser(), which requires the user's OWN
+ * access token. A desk-enrolled member has no auth.users row and therefore no
+ * token, so that call could never succeed and the route answered with a
+ * hardcoded 409 ("there is no password to set here") — a dead end that blocked
+ * members on the setup screen. The credential is now a bcrypt hash written by
+ * fn_member_set_password, so no auth session is needed at all.
  */
 
 const MIN_PASSWORD = 8;
@@ -108,35 +110,39 @@ export async function POST(request: Request) {
     const check = checkPassword(password, confirm);
     if (!check.ok) return badRequest(check.error ?? 'That password will not work.');
 
-    // No Supabase session => this member signed in with a gym PIN, not an auth
-    // account, so there is no credential to set.
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'This account signs in with the number your gym gave you, so there is no password to set here. Your gym number and @handle are your sign-in.',
-        },
-        { status: 409 }
-      );
-    }
+    // PHASE 13 — this branch used to call supabase.auth.updateUser(), which
+    // REQUIRES a Supabase Auth session. A desk-enrolled member has no auth.users
+    // row, so it could never succeed, and the route answered with a hardcoded
+    // 409 telling the member there was "no password to set here". That dead end
+    // is what blocked them on the setup screen.
+    //
+    // The credential now lives in Postgres as a bcrypt hash, written by
+    // fn_member_set_password. No auth session is needed, and no service_role key
+    // is introduced.
+    //
+    // `current_password` is forwarded when supplied. fn_member_set_password
+    // requires it for anyone who already has a password and allows it to be
+    // absent only for a first-time set — so this cannot silently overwrite a
+    // credential that already exists.
+    const currentPassword = body.current_password ?? body.currentPassword;
 
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    if (updateError) {
-      return NextResponse.json(
-        { ok: false, error: 'Could not set that password. Please try again.' },
-        { status: 400 }
-      );
-    }
-
-    // Only now is the flag honest: Auth accepted the secret first.
-    const { error: markError } = await supabase.rpc('fn_member_mark_password_setup', {
+    const { data, error } = await supabase.rpc('fn_member_set_password', {
       p_member_id: memberId,
+      p_current_password: currentPassword == null ? null : String(currentPassword),
+      p_new_password: password,
+      p_confirm: confirm,
     });
-    if (markError) return databaseError(markError, 'Password set, but the flag could not be saved.');
 
-    return NextResponse.json({ ok: true, password_setup_completed: true });
+    if (error) {
+      return databaseError(error, 'Could not save that password.', 409);
+    }
+
+    const result = (data ?? {}) as { password_setup_completed?: boolean };
+
+    return NextResponse.json({
+      ok: true,
+      password_setup_completed: result.password_setup_completed !== false,
+    });
   }
 
   if (action === 'change_username') {

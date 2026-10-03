@@ -16,6 +16,8 @@ import { NextResponse } from 'next/server';
  *   45006 lead has already been converted to a member
  *   45007 not enough stock left for the requested quantity
  *   45008 a card is already linked to a different member (Phase 12)
+ *   45009 the CURRENT password supplied for a credential change was wrong
+ *     (Phase 13)
  */
 const STATUS_BY_SQLSTATE: Record<string, number> = {
   '22023': 400, // invalid parameter (bad date, bad phone, bad enum value)
@@ -33,6 +35,8 @@ const STATUS_BY_SQLSTATE: Record<string, number> = {
   // already spoken for. 409 lets the UI say "unlink it there first" instead of
   // implying the owner typed something invalid.
   '45008': 409,
+  // Same shape for a wrong CURRENT password: the new password may well be fine.
+  '45009': 409,
   '23505': 409, // unique violation (composite tenant key)
   '23503': 400, // foreign key (unknown plan / tenant / member)
 };
@@ -78,6 +82,15 @@ const INTRODUCED_BY: Record<string, string> = {
   fn_gym_live_crowd: '0012_phase12_enrollment_crowd_branding.sql',
   'fn_tenant_set_branding 4': '0012_phase12_enrollment_crowd_branding.sql',
   fn_tenant_public_profile: '0012_phase12_enrollment_crowd_branding.sql',
+
+  // Phase 13: credentials. A missing one of these means the deployment has not
+  // had 0013 applied, and telling the operator "invalid password" for that would
+  // send every user chasing a credential problem they do not have.
+  fn_staff_verify_password: '0013_phase13_real_credentials.sql',
+  fn_member_verify_password: '0013_phase13_real_credentials.sql',
+  'fn_member_set_password 4': '0013_phase13_real_credentials.sql',
+  'fn_staff_set_password 4': '0013_phase13_real_credentials.sql',
+  'fn_member_issue_temp_password 4': '0013_phase13_real_credentials.sql',
 
   // Phase 11. Note the keys are the FUNCTION NAME PLUS ARITY, never a literal
   // parameter list: PostgREST echoes the names as they were SPELLED AT THE CALL

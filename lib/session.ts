@@ -28,6 +28,23 @@ export interface GymSession {
   tenantPhone?: string | null;
   /** Member's public @handle, when they signed in as a member. */
   username?: string | null;
+  /**
+   * Phase 13: TRUE when this account still holds a desk-issued or legacy PIN and
+   * must choose a real password before continuing.
+   *
+   * Carried IN the session (not looked up again per page) because the forced
+   * change is a one-way door: the client routes to /setup-password on it, and
+   * every other page needs to know the value without another round trip.
+   */
+  passwordMustChange?: boolean;
+  /**
+   * Phase 13: the id to present when CHANGING this password.
+   *
+   * Equals `userId` for both roles, but named separately so a future split
+   * between the auth identity and the gym identity cannot silently change which
+   * id gets sent to the credential endpoint.
+   */
+  userIdForPassword?: string;
 }
 
 /** True only for a well-formed UUID. Used to reject junk before hitting Postgres. */

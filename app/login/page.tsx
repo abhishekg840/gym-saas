@@ -138,6 +138,7 @@ export default function LoginPage() {
         reason?: string;
         session?: GymSession;
         portals?: PortalPair;
+        requires_password_change?: boolean;
       };
 
       if (!result.ok) {
@@ -157,6 +158,17 @@ export default function LoginPage() {
       if (!result.session) {
         setErrorMsg('Sign-in failed: the server returned no account.');
         setLoading(false);
+        return;
+      }
+
+      // Phase 13: the account authenticated, but it still holds a desk-issued or
+      // legacy PIN. It is a VALID login, so the session is written first — the
+      // person is not locked out — and only then routed to the forced change.
+      // Writing the session before the redirect is what lets /setup-password know
+      // whose credential to replace.
+      if (result.requires_password_change) {
+        writeSession(result.session);
+        router.push('/setup-password');
         return;
       }
 
@@ -394,25 +406,26 @@ export default function LoginPage() {
               />
             </div>
             <p className="mt-1 text-[10px] text-slate-400 font-mono">
-              Members sign in with no PIN — staff and reception add theirs below.
+              Required for both members and gym staff.
             </p>
           </div>
 
           <div>
             <label htmlFor="login-secret" className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1">
-              Password / PIN
+              Password <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 id="login-secret"
                 type={showSecret ? 'text' : 'password'}
-                maxLength={64}
+                maxLength={72}
+                required
                 autoComplete="current-password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="Leave blank if you are a member"
-                className="w-full bg-white border border-slate-200 focus:border-emerald-500 rounded-xl pl-10 pr-11 py-2.5 text-sm font-mono text-slate-900 focus:outline-none tracking-widest"
+                placeholder="Your password"
+                className="w-full bg-white border border-slate-200 focus:border-emerald-500 rounded-xl pl-10 pr-11 py-2.5 text-sm font-mono text-slate-900 focus:outline-none"
               />
               <button
                 type="button"

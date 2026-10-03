@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
+import { Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 
 /**
  * First-login password onboarding (Module 6).
@@ -190,24 +190,25 @@ export default function PasswordGate({ memberId, name, onDone, onFlash, onSkip }
             Save and continue
           </button>
 
-          {/* ---- Skip (Phase 12) -------------------------------------------
-              Present for everyone, not just on the 409 error. A desk-enrolled
-              member with no auth account can never complete this form, so the
-              only humane thing is an exit that always exists. */}
-          {onSkip && (
-            <button
-              type="button"
-              onClick={() => {
-                onFlash('You can set a password any time from your profile.', 'ok');
-                onSkip();
-              }}
-              className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-            >
-              Skip for now
-              <ArrowRight className="h-3.5 w-3.5" />
-              Go to Dashboard
-            </button>
-          )}
+          {/*
+            PHASE 13 — the "Skip for now" escape hatch is GONE, and that is the
+            point of this change.
+
+            It existed to stop the blocking setup screen trapping desk-enrolled
+            members. Now that the flow actually WORKS (the credential is written
+            as a bcrypt hash by fn_member_set_password, so no auth.users row is
+            needed), there is nothing left to skip past: a member who lands here
+            has already authenticated with a temporary password and has one
+            meaningful action left, which is to replace it.
+
+            Leaving a Skip here would reintroduce exactly the bypass this work
+            removes — an account whose owner walks away from the screen still
+            holding a desk-issued PIN.
+
+            A member who genuinely cannot proceed (no idea what their PIN is)
+            is handled by the DESK, via fn_member_issue_temp_password, which
+            requires the owner to prove their own credential first.
+          */}
         </form>
 
         <p className="mt-4 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-slate-400">
