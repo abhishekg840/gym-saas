@@ -280,7 +280,7 @@ begin
   end if;
 
   select u.id, u.tenant_id, u.full_name, u.phone, u.email, u.role,
-         c.password_hash, coalesce(c.password_must_change, false)
+         c.password_hash, coalesce(c.password_must_change, false) as password_must_change
     into v_row
     from public.gym_users u
     left join private.staff_credentials c on c.user_id = u.id
@@ -330,7 +330,7 @@ begin
 
   select m.id, m.full_name, m.phone, m.email, m.username, m.tenant_id,
          m.password_setup_completed,
-         c.password_hash, coalesce(c.password_must_change, false)
+         c.password_hash, coalesce(c.password_must_change, false) as password_must_change
     into v_row
     from public.members m
     left join private.member_credentials c on c.member_id = m.id
