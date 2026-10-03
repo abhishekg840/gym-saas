@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { readSession } from '@/lib/session';
 import { 
   ShieldAlert, 
   Building2, 
@@ -19,17 +21,13 @@ import Link from 'next/link';
 /**
  * Temporary password handed to a newly provisioned owner.
  *
- * Phase 14 replaced a hardcoded plaintext `pin_code: '1234'` written directly to
- * gym_users through the public anon key. The value is now bcrypt-hashed inside
- * `fn_staff_provision_owner` and flagged `password_must_change`, so the owner is
- * forced to replace it at first sign-in rather than keeping a credential that
- * was typed on their behalf and shown on a console screen.
- *
- * This is a FIRST password for an account that cannot be used until it is set,
- * so it is not a secret that persists. It is still shown once to the super admin
- * for hand-off.
+ * '1234' is the desk default the Phase 15 backfill standardised on and the same
+ * value fn_superadmin_create_tenant itself defaults to. It is bcrypt-hashed
+ * inside fn_staff_provision_owner and flagged password_must_change, so it is a
+ * FIRST password for an account that cannot be used until it is replaced — not
+ * a secret that persists. It is still shown once, for hand-off.
  */
-const TEMP_OWNER_PASSWORD = 'Vyroniq@1234';
+const TEMP_OWNER_PASSWORD = '1234';
 
 interface Tenant {
   id: string;
@@ -41,6 +39,28 @@ interface Tenant {
   subscription_status: string;
   trial_ends_at: string;
   created_at: string;
+}
+
+/** A mutation that must be authorised with the super admin's own password. */
+type AuthorizedAction = (creds: { identifier: string; password: string }) => Promise<void>;
+
+/**
+ * Normalises a supabase.rpc() failure into something safe to show.
+ *
+ * `code` is kept because SQLSTATE 45005 ("Unauthorized", raised by every
+ * fn_superadmin_* BEFORE it touches anything, when the supplied password does
+ * not verify) decides whether a cached credential should be dropped and the
+ * prompt shown again — a password that stopped working must not fail
+ * identically forever.
+ */
+function describeRpcError(err: unknown): { message: string; code: string } {
+  const failure = err as { message?: unknown; code?: unknown } | null;
+  const message =
+    typeof failure?.message === 'string' && failure.message
+      ? failure.message
+      : 'The database refused the request.';
+  const code = typeof failure?.code === 'string' ? failure.code : '';
+  return { message, code };
 }
 
 export default function SuperAdminPortal() {
@@ -56,97 +76,176 @@ export default function SuperAdminPortal() {
   const [ownerPhone, setOwnerPhone] = useState('');
   const [tier, setTier] = useState('pro');
 
-  async function fetchTenants() {
-    const { data, error } = await supabase
-      .from('tenants')
-      .select('*')
-      .order('created_at', { ascending: false });
+  // Credentials for the password-gated fn_superadmin_* RPCs. HELD IN MEMORY
+  // ONLY: never localStorage, never a cookie, never the URL — a reload asks
+  // again, which is the price of not writing a platform credential to disk.
+  // `pendingAction` is the mutation currently waiting on the prompt.
+  const [adminCreds, setAdminCreds] = useState<{ identifier: string; password: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<AuthorizedAction | null>(null);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
-    if (data) setTenants(data);
-    if (error) console.error('Error fetching tenants:', error.message);
+  async function fetchTenants() {
+    // fn_superadmin_list_tenants (0015 §7a) rather than select('*'): the
+    // directory read is deliberately unauthenticated, but going through the
+    // function pins the exact columns this console renders, so a schema change
+    // elsewhere cannot silently widen what a browser receives.
+    const { data, error } = await supabase.rpc('fn_superadmin_list_tenants');
+
+    if (error) {
+      console.error('Error fetching tenants:', error.message);
+      return;
+    }
+    setTenants((data ?? []) as Tenant[]);
   }
 
+  const router = useRouter();
+
   useEffect(() => {
+    // A platform console has no business rendering for a gym session. The
+    // directory read below is unauthenticated by design, but every mutation
+    // needs the super admin password, and neither should be offered to a
+    // member or owner who wandered here from a stale tab.
+    const session = readSession();
+    if (!session || session.role !== 'super_admin') {
+      router.replace('/login');
+      return;
+    }
+
     // Load-on-mount, not render-derived state: the setStates land after the await.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTenants();
-  }, []);
+  }, [router]);
+
+  /**
+   * Runs a password-gated mutation. With a credential cached from earlier in
+   * this tab it goes straight through; otherwise the prompt opens and the
+   * action resumes from submitAuthorization(). A rejected password (SQLSTATE
+   * 45005) clears the cache so the next attempt prompts instead of re-failing
+   * identically forever.
+   */
+  async function runAuthorized(action: AuthorizedAction) {
+    if (adminCreds) {
+      try {
+        await action(adminCreds);
+        return;
+      } catch (err) {
+        const failure = describeRpcError(err);
+        if (failure.code !== '45005') {
+          alert('Error: ' + failure.message);
+          return;
+        }
+        setAdminCreds(null);
+      }
+    }
+
+    setAuthPassword('');
+    setAuthError(null);
+    setPendingAction(() => action);
+  }
+
+  async function submitAuthorization(e: React.FormEvent) {
+    e.preventDefault();
+    const action = pendingAction;
+    if (!action) return;
+
+    // The identifier is the signed-in super admin's own phone (or user id):
+    // fn_superadmin_verify_password only ever accepts a row whose role is
+    // super_admin, so reusing the session identity keeps this to one field.
+    const session = readSession();
+    const identifier = (session?.phone || session?.userId || '').trim();
+    if (!identifier) {
+      setAuthError('Your session has no identifier. Sign in again.');
+      return;
+    }
+    if (authPassword === '') return;
+
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const creds = { identifier, password: authPassword };
+      await action(creds);
+      setAdminCreds(creds); // memory only — see the state declarations above
+      setPendingAction(null);
+    } catch (err) {
+      setAuthError(describeRpcError(err).message);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   async function toggleStatus(tenant: Tenant) {
     const newStatus = tenant.subscription_status === 'active' ? 'suspended' : 'active';
-    const { error } = await supabase
-      .from('tenants')
-      .update({ subscription_status: newStatus })
-      .eq('id', tenant.id);
-
-    if (!error) fetchTenants();
-    else alert('Error: ' + error.message);
+    await runAuthorized(async (creds) => {
+      const { error } = await supabase.rpc('fn_superadmin_set_subscription_status', {
+        p_identifier: creds.identifier,
+        p_password: creds.password,
+        p_tenant_id: tenant.id,
+        p_status: newStatus,
+      });
+      if (error) throw error;
+      await fetchTenants();
+    });
   }
 
   async function changeTier(tenantId: string, newTier: string) {
-    const { error } = await supabase
-      .from('tenants')
-      .update({ subscription_tier: newTier })
-      .eq('id', tenantId);
-
-    if (!error) fetchTenants();
-    else alert('Error: ' + error.message);
+    await runAuthorized(async (creds) => {
+      const { error } = await supabase.rpc('fn_superadmin_set_subscription_tier', {
+        p_identifier: creds.identifier,
+        p_password: creds.password,
+        p_tenant_id: tenantId,
+        p_tier: newTier,
+      });
+      if (error) throw error;
+      await fetchTenants();
+    });
   }
 
   async function createGymTenant(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const { data: tenant, error } = await supabase
-      .from('tenants')
-      .insert([
-        {
-          name: gymName.trim(),
-          slug: cleanSlug,
-          owner_name: ownerName.trim(),
-          phone: ownerPhone.trim(),
-          subscription_tier: tier,
-          subscription_status: 'active',
-        },
-      ])
-      .select()
-      .single();
+    try {
+      await runAuthorized(async (creds) => {
+        // One RPC creates the gym AND its owner credential: the tenant INSERT
+        // and the bcrypt hash never travel through the anon key any more, and
+        // "how an owner credential is created" stays in exactly one place.
+        const { data, error } = await supabase.rpc('fn_superadmin_create_tenant', {
+          p_identifier: creds.identifier,
+          p_password: creds.password,
+          p_name: gymName.trim(),
+          p_slug: slug.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          p_owner_name: ownerName.trim(),
+          p_owner_phone: ownerPhone.trim(),
+          p_tier: tier,
+          p_owner_password: TEMP_OWNER_PASSWORD,
+        });
+        if (error) throw error;
 
-    if (tenant && !error) {
-      // Phase 14: this used to INSERT a plaintext `pin_code` straight into
-      // gym_users with the public anon key, which wrote a credential in the
-      // clear and was readable by anyone via PostgREST. Owner creation now goes
-      // through a SECURITY DEFINER function that bcrypt-hashes the initial
-      // password and flags it for a forced change at first sign-in.
-      const { error: ownerError } = await supabase.rpc('fn_staff_provision_owner', {
-        p_tenant_id: tenant.id,
-        p_phone: ownerPhone.trim(),
-        p_full_name: ownerName.trim(),
-        p_temp_password: TEMP_OWNER_PASSWORD,
+        const created = (data ?? {}) as { owner_password_set?: boolean };
+
+        setShowAddModal(false);
+        setGymName('');
+        setSlug('');
+        setOwnerName('');
+        setOwnerPhone('');
+        setTier('pro');
+        await fetchTenants();
+
+        // The owner row only exists when BOTH owner fields were supplied — the
+        // provisioner refuses to invent half an identity — so say which
+        // happened rather than promising a password for a login that was
+        // never created.
+        alert(
+          created.owner_password_set
+            ? `Owner created. Temporary password: ${TEMP_OWNER_PASSWORD}\n\nShare it with the owner — they will be asked to change it at first sign-in.`
+            : 'Gym created, but no owner login was provisioned — owner name and phone are both required to create one.'
+        );
       });
-
-      if (ownerError) {
-        alert(
-          'The gym was created, but the owner account failed: ' + ownerError.message
-        );
-      } else {
-        alert(
-          `Owner created. Temporary password: ${TEMP_OWNER_PASSWORD}\n\n` +
-            'Share it with the owner — they will be asked to change it at first sign-in.'
-        );
-      }
-
-      setShowAddModal(false);
-      setGymName('');
-      setSlug('');
-      setOwnerName('');
-      setOwnerPhone('');
-      fetchTenants();
-    } else {
-      alert(error?.message || 'Failed to create gym');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const filteredTenants = tenants.filter(
@@ -264,7 +363,7 @@ export default function SuperAdminPortal() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/"
+            href="/admin"
             className="text-xs font-mono text-neutral-400 hover:text-white px-3.5 py-2 rounded-xl border border-neutral-800 bg-neutral-900"
           >
             ← Open Local Gym
@@ -376,6 +475,57 @@ export default function SuperAdminPortal() {
           </table>
         </div>
       </div>
+
+      {/* Authorisation prompt for the password-gated fn_superadmin_* RPCs.
+          Renders above every other modal: the mutation resumes the moment the
+          password verifies, and Cancel simply drops it. */}
+      {pendingAction && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              <h2 className="text-lg font-black text-white">Platform password required</h2>
+            </div>
+            <p className="text-xs text-neutral-400 leading-relaxed mb-5">
+              Creating, suspending and re-tiering a gym each verify the super
+              admin password inside Postgres before touching anything — the
+              same reason sign-in stopped comparing passwords in JavaScript.
+              It is kept in memory for this tab only and never written to
+              storage.
+            </p>
+
+            <form onSubmit={submitAuthorization}>
+              <input
+                type="password"
+                autoFocus
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder="Super admin password"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
+              />
+              {authError && (
+                <p className="mt-3 text-xs text-rose-400">{authError}</p>
+              )}
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingAction(null)}
+                  className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs font-mono text-neutral-400 hover:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={authBusy || authPassword === ''}
+                  className="flex-1 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-amber-400 hover:bg-amber-500/20 disabled:opacity-50 transition"
+                >
+                  {authBusy ? 'Authorising…' : 'Authorise'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

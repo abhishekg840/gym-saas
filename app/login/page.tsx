@@ -110,7 +110,7 @@ export default function LoginPage() {
     if (session.role === 'super_admin') {
       router.push('/super-admin');
     } else if (session.role === 'owner') {
-      router.push('/');
+      router.push('/admin');
     } else if (session.role === 'member') {
       router.push('/member/dashboard');
     } else {

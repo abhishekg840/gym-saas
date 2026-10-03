@@ -102,7 +102,7 @@ export default function AttendanceLogsPage() {
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           <Link
-            href="/"
+            href="/admin"
             className="p-2.5 rounded-xl bg-zinc-900/80 backdrop-blur-md border border-white/10 text-zinc-400 hover:text-white hover:border-emerald-500/40 active:scale-95 transition-all duration-150"
             aria-label="Back to the dashboard"
           >

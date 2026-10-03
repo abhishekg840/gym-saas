@@ -213,7 +213,7 @@ export default function GymScanner() {
       {/* Header */}
       <div className="flex items-center justify-between w-full max-w-md mb-6">
         <Link
-          href="/"
+          href="/admin"
           className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-xl"
         >
           <ArrowLeft className="w-4 h-4" /> Dashboard

@@ -417,7 +417,7 @@ export default function HardwareConsole() {
           <p className="text-xs text-neutral-400 mb-4">
             The hardware console is scoped to one gym, so it needs your operator session.
           </p>
-          <Link href="/" className="inline-block bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-xl active:scale-95 transition-all duration-150">
+          <Link href="/login" className="inline-block bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-xl active:scale-95 transition-all duration-150">
             Back to sign in
           </Link>
         </div>
@@ -431,7 +431,7 @@ export default function HardwareConsole() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <Link
-              href="/"
+              href="/admin"
               className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition mb-2"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Dashboard

@@ -74,7 +74,7 @@ export default function HaikeiGymLanding() {
             <a href="#features" className="hover:text-black transition">Platform</a>
             <a href="#flow" className="hover:text-black transition">Workflow</a>
             <a href="#pricing" className="hover:text-black transition">Plans</a>
-            <Link href="/" className="hover:text-black transition text-emerald-800 font-semibold">Live System</Link>
+            <Link href="/admin" className="hover:text-black transition text-emerald-800 font-semibold">Live System</Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -516,7 +516,7 @@ export default function HaikeiGymLanding() {
       <footer className="border-t border-[#111215]/10 py-10 max-w-7xl mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs text-[#111215]/50 uppercase tracking-wider">
         <p>© 2026 Vyroniq Technologies · Gym Management Platform</p>
         <div className="flex items-center gap-6">
-          <Link href="/" className="hover:text-black transition">Dashboard</Link>
+          <Link href="/admin" className="hover:text-black transition">Dashboard</Link>
           <Link href="/scan" className="hover:text-black transition">Scanner</Link>
           <a href={wa('Hi, I need support.')} target="_blank" rel="noreferrer" className="hover:text-black transition">Support</a>
         </div>

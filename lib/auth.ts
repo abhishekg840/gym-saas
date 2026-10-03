@@ -138,7 +138,7 @@ export async function handleOAuthReturn(url: string): Promise<OAuthResult> {
 /** Where a completed gym session should land. Mirrors /login's finish(). */
 export function routeForSession(session: GymSession): string {
   if (session.role === 'super_admin') return '/super-admin';
-  if (session.role === 'owner') return '/';
+  if (session.role === 'owner') return '/admin';
   if (session.role === 'member') return '/member/dashboard';
   return '/scan';
 }

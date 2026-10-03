@@ -633,7 +633,7 @@ export default function MemberDashboard() {
                 leads nowhere is worse than no badge. */}
             {isStaffToo && (
               <Link
-                href="/"
+                href="/admin"
                 title="You also manage this gym — open the owner console"
                 className={`inline-flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2.5 py-2 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100 ${TAP}`}
               >

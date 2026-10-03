@@ -376,7 +376,7 @@ export default function TrainersPayoutPage() {
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href="/admin"
               className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition"
             >
               <ArrowLeft className="w-5 h-5" />

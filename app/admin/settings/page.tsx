@@ -433,7 +433,7 @@ export default function AdminSettingsPage() {
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href="/admin"
               className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition"
               aria-label="Back to the dashboard"
             >

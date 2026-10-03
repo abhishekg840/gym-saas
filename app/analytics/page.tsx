@@ -109,7 +109,7 @@ export default function AnalyticsPage() {
       <div className="max-w-6xl mx-auto flex items-center justify-between border-b border-neutral-800 pb-6 mb-8">
         <div className="flex items-center gap-3">
           <Link
-            href="/"
+            href="/admin"
             className="p-2.5 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl text-neutral-400 hover:text-white transition"
           >
             <ArrowLeft className="w-5 h-5" />

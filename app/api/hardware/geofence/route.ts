@@ -17,10 +17,15 @@ import {
  * These are the four columns 0003 adds to public.tenants. The owner sets them
  * once from the Hardware Console; the member pass reads them on every open.
  *
- * tenants carries no api key and the app already exposes gym identity (name,
- * phone) to this role, so a direct tenant-scoped UPDATE is in keeping with the
- * rest of the app. The scope still comes from the session cookie when the body
- * omits it, and a non-UUID tenant is a hard 403 rather than an unscoped update.
+ * The GET stays a plain tenant-scoped SELECT: 0015 leaves reads granted. The
+ * POST is no longer an UPDATE -- section 9 of 0015 revoked UPDATE on
+ * public.tenants from the anon key, because anybody holding that key could
+ * otherwise have disarmed the fence or moved it onto their own doorstep and
+ * walked the turnstile from home. The write now goes through
+ * fn_tenant_set_geofence, a SECURITY DEFINER function that cannot touch any
+ * column other than the four it names. Scope still comes from the session
+ * cookie when the body omits it, and a non-UUID tenant remains a hard 403
+ * rather than an unscoped write.
  */
 
 const TENANT_FIELDS =
@@ -119,20 +124,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data, error } = await supabase
-    .from('tenants')
-    .update({
-      latitude: latitude.value,
-      longitude: longitude.value,
-      geofence_radius_meters: radius,
-      enforce_geofence: enforce,
-    })
-    .eq('id', tenantId)
-    .select(TENANT_FIELDS)
-    .maybeSingle();
+  // The write goes through the SECURITY DEFINER function rather than a tenants
+  // UPDATE: migration 0015 §9 revoked UPDATE on public.tenants from the anon
+  // key, so this call is now the only way the four columns change. The function
+  // repeats the checks above verbatim -- those exist to give the person at the
+  // desk a fast, specific message; the function is what actually guarantees the
+  // invariant for every caller -- and answers with the saved row as jsonb.
+  const { data, error } = await supabase.rpc('fn_tenant_set_geofence', {
+    p_tenant_id: tenantId,
+    p_latitude: latitude.value,
+    p_longitude: longitude.value,
+    p_geofence_radius_meters: radius,
+    p_enforce_geofence: enforce,
+  });
 
   if (error) return databaseError(error, 'Could not save the geofence settings.');
   if (!data) return badRequest('That gym does not exist.', 404);
 
-  return NextResponse.json({ ok: true, geofence: present(data as Record<string, unknown>) });
+  // The jsonb names its keys tenant_id/tenant_name where a tenants row would
+  // say id/name; rename them so the one presenter above shapes both responses.
+  const saved = data as Record<string, unknown>;
+  return NextResponse.json({
+    ok: true,
+    geofence: present({ ...saved, id: saved.tenant_id, name: saved.tenant_name }),
+  });
 }
