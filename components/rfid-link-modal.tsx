@@ -3,14 +3,17 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  Fingerprint,
   Keyboard,
   Loader2,
   Radio,
   RefreshCw,
   ScanLine,
+  Settings2,
   X,
   AlertTriangle,
 } from 'lucide-react';
+import FingerprintEnrollModal from '@/components/fingerprint-enroll-modal';
 import { normalizeCardUid, useTapToEnroll } from '@/lib/tap-to-enroll';
 
 /**
@@ -93,6 +96,16 @@ export default function RfidLinkModal({
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  /**
+   * The live R307 ceremony, opened on top of this dialog (Phase 17).
+   *
+   * Nested rather than replacing, so an owner enrolling a card AND a finger in
+   * one visit keeps the card they already tapped. `onEnrolled` writes the slot
+   * into `bioSlot` — the server already bound it to the member by the time that
+   * callback fires, so the number here is a reflection, not the source of truth.
+   */
+  const [fingerprintOpen, setFingerprintOpen] = useState(false);
 
   /**
    * The gym's next free fingerprint slot, fetched once on open.
@@ -340,23 +353,66 @@ export default function RfidLinkModal({
             </div>
           )}
 
-          {/* ---- Fingerprint slot ------------------------------------------- */}
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Fingerprint slot (optional)
-            </label>
-            <input
-              value={bioSlot}
-              onChange={(event) =>
-                setBioSlot(event.target.value.replace(/[^0-9]/g, '').slice(0, 7))
-              }
-              inputMode="numeric"
-              placeholder={nextSlot ? `Next free: ${nextSlot}` : 'e.g. 42'}
-              className={INPUT}
-            />
-            <p className="mt-1.5 text-[11px] text-slate-400">
-              Leave blank to keep the current slot, or clear it from the roster to remove it.
+          {/* ---- Fingerprint ---------------------------------------------- */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+            <div className="mb-2 flex items-center gap-2">
+              <Fingerprint className="h-4 w-4 text-violet-600" />
+              <span className="text-[13px] font-bold text-slate-900">Fingerprint</span>
+              {bioSlot && (
+                <span className="vy-chip vy-chip-violet ml-auto">Slot {bioSlot}</span>
+              )}
+            </div>
+
+            {/* PRIMARY: the real hardware flow. Two-pass capture on the R307S,
+                watched live. This is what "enroll a fingerprint" means now. */}
+            <button
+              type="button"
+              onClick={() => setFingerprintOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-violet-700"
+            >
+              <Fingerprint className="h-4 w-4" />
+              {bioSlot ? 'Re-enroll fingerprint' : 'Register fingerprint'}
+            </button>
+
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+              Captures the finger on your terminal and assigns the next free slot
+              automatically. The member places the same finger twice.
             </p>
+
+            {/* ADVANCED FALLBACK: manual slot entry, kept deliberately.
+                Needed when the sensor already holds a template that was enrolled
+                out-of-band (a factory-loaded reader, a terminal not yet on this
+                account) — there is nothing to capture, only a number to record. */}
+            <details className="mt-2.5">
+              <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-500 transition hover:text-slate-700">
+                <span className="inline-flex items-center gap-1.5">
+                  <Settings2 className="h-3 w-3" /> Advanced — enter slot manually
+                </span>
+              </summary>
+
+              <div className="mt-2.5">
+                <label
+                  className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+                  htmlFor="bio-slot"
+                >
+                  Fingerprint slot
+                </label>
+                <input
+                  id="bio-slot"
+                  value={bioSlot}
+                  onChange={(event) =>
+                    setBioSlot(event.target.value.replace(/[^0-9]/g, '').slice(0, 7))
+                  }
+                  inputMode="numeric"
+                  placeholder={nextSlot ? `Next free: ${nextSlot}` : 'e.g. 42'}
+                  className={INPUT}
+                />
+                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                  Only for a template already stored on the terminal. Leave blank to
+                  keep the current slot, or clear it from the roster to remove it.
+                </p>
+              </div>
+            </details>
           </div>
 
           {saveError && (
@@ -392,6 +448,30 @@ export default function RfidLinkModal({
           </button>
         </footer>
       </div>
+
+      {/* The live R307 ceremony. Mounted here rather than by the page so it
+          inherits this dialog's already-tapped card, and so closing it returns
+          the owner to the credential they were halfway through. */}
+      {fingerprintOpen && (
+        <FingerprintEnrollModal
+          tenantId={tenantId}
+          memberId={memberId}
+          memberName={memberName}
+          currentSlot={
+            initialBiometricId != null
+              ? initialBiometricId
+              : bioSlot.trim() === ''
+                ? null
+                : Number(bioSlot.trim())
+          }
+          onClose={() => setFingerprintOpen(false)}
+          onEnrolled={(slot) => {
+            // The server already wrote members.biometric_id; this only keeps the
+            // field honest so a later "Save credential" cannot send a stale value.
+            setBioSlot(String(slot));
+          }}
+        />
+      )}
     </div>
   );
 }
