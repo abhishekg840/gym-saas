@@ -138,50 +138,50 @@ export const PIPELINE_STAGES: readonly StageMeta[] = [
   {
     key: 'new',
     label: 'New',
-    badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
-    lane: 'border-blue-500/20',
+    badge: 'bg-blue-50 text-blue-700 border-blue-200',
+    lane: 'border-blue-200',
     hint: 'Walk-in or online lead just captured.',
   },
   {
     key: 'contacted',
     label: 'Contacted',
-    badge: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
-    lane: 'border-cyan-500/20',
+    badge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    lane: 'border-cyan-200',
     hint: 'First call or WhatsApp reply is done.',
   },
   {
     key: 'trial_booked',
     label: 'Trial Scheduled',
-    badge: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-    lane: 'border-amber-500/20',
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    lane: 'border-amber-200',
     hint: 'A free trial slot is on the calendar.',
   },
   {
     key: 'trial_completed',
     label: 'Trial Done',
-    badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30',
-    lane: 'border-purple-500/20',
+    badge: 'bg-violet-50 text-violet-700 border-violet-200',
+    lane: 'border-violet-200',
     hint: 'They trained. The fee conversation is next.',
   },
   {
     key: 'negotiation',
     label: 'Negotiation',
-    badge: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
-    lane: 'border-orange-500/20',
+    badge: 'bg-orange-50 text-orange-700 border-orange-200',
+    lane: 'border-orange-200',
     hint: 'Pricing, plan and objections are on the table.',
   },
   {
     key: 'converted',
     label: 'Converted',
-    badge: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-    lane: 'border-emerald-500/20',
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    lane: 'border-emerald-200',
     hint: 'Now an active member. Counted in revenue.',
   },
   {
     key: 'lost',
     label: 'Lost',
-    badge: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/30',
-    lane: 'border-neutral-700/40',
+    badge: 'bg-slate-50 text-slate-600 border-slate-200',
+    lane: 'border-line',
     hint: 'Not joining for now. Kept for the follow-up report.',
   },
 ] as const;
@@ -357,10 +357,10 @@ export interface SessionPunch {
 }
 
 export const PT_STATUS_META: Record<PtStatus, { label: string; badge: string }> = {
-  active: { label: 'Active', badge: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
-  completed: { label: 'Completed', badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30' },
-  expired: { label: 'Expired', badge: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-  cancelled: { label: 'Cancelled', badge: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+  active: { label: 'Active', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  completed: { label: 'Completed', badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  expired: { label: 'Expired', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  cancelled: { label: 'Cancelled', badge: 'bg-rose-50 text-rose-700 border-rose-200' },
 };
 
 /** Whole days from today until the given date (negative once passed). */
@@ -411,11 +411,11 @@ export const PRODUCT_CATEGORIES: readonly ProductCategory[] = [
 ] as const;
 
 export const PRODUCT_CATEGORY_META: Record<ProductCategory, CategoryMeta> = {
-  protein: { label: 'Protein', badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30', emoji: '🥛' },
-  supplements: { label: 'Supplements', badge: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30', emoji: '💊' },
-  merchandise: { label: 'Merchandise', badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30', emoji: '👕' },
-  beverages: { label: 'Beverages', badge: 'bg-amber-500/10 text-amber-300 border-amber-500/30', emoji: '🥤' },
-  gear: { label: 'Gear', badge: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30', emoji: '🧤' },
+  protein: { label: 'Protein', badge: 'bg-violet-50 text-violet-700 border-violet-200', emoji: '🥛' },
+  supplements: { label: 'Supplements', badge: 'bg-cyan-50 text-cyan-700 border-cyan-200', emoji: '💊' },
+  merchandise: { label: 'Merchandise', badge: 'bg-blue-50 text-blue-700 border-blue-200', emoji: '👕' },
+  beverages: { label: 'Beverages', badge: 'bg-amber-50 text-amber-700 border-amber-200', emoji: '🥤' },
+  gear: { label: 'Gear', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', emoji: '🧤' },
 };
 
 export function isProductCategory(value: unknown): value is ProductCategory {

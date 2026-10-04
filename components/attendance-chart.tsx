@@ -176,28 +176,28 @@ export default function AttendanceChart({ hist, peakHour }: AttendanceChartProps
           tracks its column without a positioning library. */}
       {hover !== null && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-[#E5E7EB] bg-white px-2 py-1 text-[11px] shadow-lg shadow-[#0F172A]/10"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-line bg-white px-2 py-1 text-[11px] shadow-lg shadow-[#0F172A]/10"
           style={{
             left: `${((padL + slot * hover + slot / 2) / W) * 100}%`,
             top: `${(y(hoveredCount) / H) * 100}%`,
             marginTop: '-8px',
           }}
         >
-          <span className="font-medium tabular-nums text-[#111827]">
+          <span className="font-medium tabular-nums text-ink">
             {hourRangeLabel(hover)}
           </span>
-          <span className="text-[#6B7280]">
+          <span className="text-muted">
             {' · '}
             {hoveredCount} check-in{hoveredCount === 1 ? '' : 's'}
           </span>
         </div>
       )}
 
-      <figcaption className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#F3F4F6] pt-3">
+      <figcaption className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-3">
         {HOUR_BANDS.map((band) => (
           <span
             key={band.label}
-            className="inline-flex items-center gap-1.5 text-[10px] text-[#6B7280]"
+            className="inline-flex items-center gap-1.5 text-[10px] text-muted"
           >
             <span
               className="h-2 w-2 shrink-0 rounded-[2px]"
@@ -206,8 +206,8 @@ export default function AttendanceChart({ hist, peakHour }: AttendanceChartProps
             {band.label}
           </span>
         ))}
-        <span className="inline-flex items-center gap-1.5 text-[10px] text-[#6B7280]">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-[#111827]" />
+        <span className="inline-flex items-center gap-1.5 text-[10px] text-muted">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-ink" />
           Peak hour
         </span>
       </figcaption>

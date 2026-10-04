@@ -630,23 +630,23 @@ export default function GymStorePage() {
 
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white font-sans">
+    <div className="vy-page vy-noscroll font-sans">
       {/* Header */}
-      <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
+      <div className="vy-topbar">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
               href="/admin"
-              className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition"
+              className="p-2.5 rounded-xl rounded-xl border border-line bg-surface text-muted hover:text-ink transition"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-300">
+            <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-wash text-ink-2">
               <ShoppingBag className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight">Gym Store &amp; POS</h1>
-              <p className="text-xs text-neutral-400">
+              <h1 className="text-[17px] font-semibold tracking-tight text-ink">Gym Store &amp; POS</h1>
+              <p className="text-[12px] text-muted">
                 {session?.tenantName || 'Your gym'} &middot; {products.length} products &middot;{' '}
                 {shelfCount} units on the shelf
               </p>
@@ -655,19 +655,19 @@ export default function GymStorePage() {
 
           <div className="flex flex-wrap items-center gap-2">
             {lowStock.length > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
+              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 text-[11px] font-bold">
                 <AlertTriangle className="w-3.5 h-3.5" /> {lowStock.length} low on stock
               </span>
             )}
             <button
               onClick={refresh}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white text-[11px] font-semibold transition"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl rounded-xl border border-line bg-surface text-ink-2 hover:text-ink text-[11px] font-semibold transition"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </button>
             <button
               onClick={openAddProduct}
-              className="flex items-center gap-1.5 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-violet-500/20"
+              className="vy-btn vy-btn-lg vy-btn-brand"
             >
               <Package className="w-4 h-4" /> Add Product
             </button>
@@ -675,13 +675,13 @@ export default function GymStorePage() {
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
+      <div className="vy-shell-wide">
         {notice && (
           <div
-            className={`mb-5 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
+            className={`mb-5 vy-notice ${
               noticeKind === 'ok'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-700'
             }`}
           >
             {noticeKind === 'ok' ? (
@@ -692,7 +692,7 @@ export default function GymStorePage() {
             <span className="flex-1">{notice}</span>
             <button
               onClick={() => setNotice(null)}
-              className="text-neutral-400 hover:text-white transition"
+              className="text-muted hover:text-ink transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -701,51 +701,51 @@ export default function GymStorePage() {
 
         {/* Metrics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-300">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-700">
               <Boxes className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Stock Value</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">Stock Value</p>
               <p className="text-xl font-bold">{formatRupees(stockAtCost)}</p>
-              <p className="text-[10px] text-neutral-500">at cost price</p>
+              <p className="text-[10px] text-faint">at cost price</p>
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">
+              <p className="text-[11px] uppercase tracking-wider text-muted">
                 Today&apos;s Takings
               </p>
               <p className="text-xl font-bold">{formatRupees(todayTakings)}</p>
-              <p className="text-[10px] text-neutral-500">from the last 25 sales</p>
+              <p className="text-[10px] text-faint">from the last 25 sales</p>
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400">
               <Receipt className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">In the Cart</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">In the Cart</p>
               <p className="text-xl font-bold">{formatRupees(cartValue)}</p>
-              <p className="text-[10px] text-neutral-500">
+              <p className="text-[10px] text-faint">
                 {cartCount} item{cartCount === 1 ? '' : 's'} scanned
               </p>
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
               <AlertTriangle className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Low Stock</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">Low Stock</p>
               <p className="text-xl font-bold">{lowStock.length}</p>
-              <p className="text-[10px] text-neutral-500">
+              <p className="text-[10px] text-faint">
                 {lowStock.length === 0 ? 'everything stocked' : 'at or below re-order level'}
               </p>
             </div>
@@ -754,12 +754,12 @@ export default function GymStorePage() {
 
 
         {/* Pending desk pickups — items members reserved from the companion app */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden mb-6">
-          <div className="p-4 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+        <div className="vy-card overflow-hidden mb-6">
+          <div className="p-4 border-b border-line flex flex-wrap items-center justify-between gap-3">
+            <h2 className="vy-eyebrow flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-amber-400" /> Pending Desk Pickups
               {pickups.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 text-[10px] font-bold">
                   {pickups.length} waiting
                 </span>
               )}
@@ -767,14 +767,14 @@ export default function GymStorePage() {
 
             <div className="flex flex-wrap items-center gap-2">
               {pickups.length > 0 && (
-                <span className="text-[11px] text-neutral-400">{formatRupees(pickupValue)} reserved</span>
+                <span className="text-[11px] text-muted">{formatRupees(pickupValue)} reserved</span>
               )}
-              <label className="flex items-center gap-2 text-[11px] text-neutral-500">
+              <label className="flex items-center gap-2 text-[11px] text-faint">
                 Billed as
                 <select
                   value={pickupMethod}
                   onChange={(e) => setPickupMethod(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                  className="vy-input-sm text-sm focus:outline-none focus:border-violet-500"
                 >
                   {PAYMENT_METHODS.map((method) => (
                     <option key={method} value={method}>
@@ -785,7 +785,7 @@ export default function GymStorePage() {
               </label>
               <button
                 onClick={() => loadPickups(tenantId)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-300 hover:text-white text-[11px] font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface border border-line text-ink-2 hover:text-ink text-[11px] font-semibold transition"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh
               </button>
@@ -794,14 +794,14 @@ export default function GymStorePage() {
 
           {pickups.length === 0 ? (
             <div className="p-8 text-center">
-              <Package className="w-7 h-7 text-neutral-600 mx-auto mb-3" />
-              <p className="text-sm text-neutral-300 font-semibold">The desk queue is clear</p>
-              <p className="text-xs text-neutral-500 mt-1">
+              <Package className="w-7 h-7 text-faint mx-auto mb-3" />
+              <p className="text-sm text-ink-2 font-semibold">The desk queue is clear</p>
+              <p className="text-[11px] text-faint mt-1">
                 Nothing is waiting for collection. Reservations made in the member app show up here.
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-neutral-800 max-h-[360px] overflow-y-auto">
+            <div className="divide-y divide-line max-h-[360px] overflow-y-auto">
               {pickups.map((entry) => {
                 const stale = entry.waiting_minutes >= 30;
                 const stockShort = Number(entry.stock_available ?? 0) < Number(entry.quantity);
@@ -810,26 +810,26 @@ export default function GymStorePage() {
                 return (
                   <div
                     key={entry.id}
-                    className="p-3.5 flex flex-wrap items-center gap-3 hover:bg-neutral-950/60 transition"
+                    className="p-3.5 flex flex-wrap items-center gap-3 hover:bg-surface/60 transition"
                   >
-                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-300 shrink-0">
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 shrink-0">
                       <Package className="w-5 h-5" />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold truncate">
                         {entry.quantity} × {entry.product_name}
-                        <span className="ml-2 font-bold text-amber-300">
+                        <span className="ml-2 font-bold text-amber-700">
                           {formatRupees(entry.total_amount)}
                         </span>
                       </p>
-                      <p className="text-[10px] text-neutral-500 truncate">
+                      <p className="text-[10px] text-faint truncate">
                         {entry.member_name}
                         {entry.member_phone ? ` · ${entry.member_phone}` : ''}
                         {entry.member_username ? ` · @${entry.member_username}` : ''}
                       </p>
                       <p className="text-[10px] mt-0.5">
-                        <span className={stale ? 'text-amber-400 font-semibold' : 'text-neutral-500'}>
+                        <span className={stale ? 'text-amber-400 font-semibold' : 'text-faint'}>
                           waiting {waitingLabel(entry.waiting_minutes)}
                         </span>
                         {stockShort ? (
@@ -838,7 +838,7 @@ export default function GymStorePage() {
                             · not enough on the shelf to complete
                           </span>
                         ) : (
-                          <span className="text-neutral-500">
+                          <span className="text-faint">
                             {' '}
                             · {entry.stock_available ?? 0} in stock
                           </span>
@@ -850,7 +850,7 @@ export default function GymStorePage() {
                       <button
                         onClick={() => handOverPickup(entry)}
                         disabled={busy}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500 hover:bg-violet-600 disabled:opacity-60 text-white text-[11px] font-bold transition shadow-lg shadow-violet-500/20"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500 hover:bg-violet-600 disabled:opacity-60 text-ink text-[11px] font-bold transition shadow-lg shadow-violet-500/20"
                       >
                         {busy ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -863,7 +863,7 @@ export default function GymStorePage() {
                         onClick={() => dropPickup(entry)}
                         disabled={busy}
                         title="Close the reservation without billing"
-                        className="px-2.5 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-400 hover:text-rose-300 hover:border-rose-500/30 disabled:opacity-60 transition"
+                        className="px-2.5 py-2 rounded-xl bg-surface border border-line text-muted hover:text-rose-700 hover:border-rose-500/30 disabled:opacity-60 transition"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -874,7 +874,7 @@ export default function GymStorePage() {
             </div>
           )}
 
-          <p className="px-4 py-3 border-t border-neutral-800 text-[11px] text-neutral-500">
+          <p className="px-4 py-3 border-t border-line text-[11px] text-faint">
             Reserved from the companion app. Completing a pickup bills it to the member, takes the
             stock off the shelf and writes the order in one step.
           </p>
@@ -884,24 +884,24 @@ export default function GymStorePage() {
           {/* Catalogue / till grid */}
           <div className="xl:col-span-2">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
-              <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 flex-1">
-                <Search className="w-4 h-4 text-neutral-500" />
+              <div className="flex items-center gap-2 rounded-xl border border-line bg-surface rounded-xl px-3 py-2 flex-1">
+                <Search className="w-4 h-4 text-faint" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search by name, SKU or category…"
-                  className="bg-transparent text-sm w-full focus:outline-none placeholder:text-neutral-600"
+                  className="bg-transparent text-sm w-full focus:outline-none placeholder:text-faint"
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    className="text-neutral-500 hover:text-white transition"
+                    className="text-faint hover:text-ink transition"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-              <p className="text-[11px] text-neutral-500 shrink-0">
+              <p className="text-[11px] text-faint shrink-0">
                 {visibleProducts.length} of {products.length} shown
               </p>
             </div>
@@ -912,7 +912,7 @@ export default function GymStorePage() {
                 className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition ${
                   category === 'all'
                     ? 'bg-white text-black border-white'
-                    : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                    : 'bg-surface text-muted border-line hover:text-ink'
                 }`}
               >
                 All
@@ -927,7 +927,7 @@ export default function GymStorePage() {
                     className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition ${
                       active
                         ? 'bg-white text-black border-white'
-                        : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                        : 'bg-surface text-muted border-line hover:text-ink'
                     }`}
                   >
                     {meta.emoji} {meta.label}
@@ -937,18 +937,18 @@ export default function GymStorePage() {
             </div>
 
             {loading ? (
-              <div className="flex items-center gap-2 text-sm text-neutral-400 py-16 justify-center">
+              <div className="flex items-center gap-2 text-sm text-muted py-16 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading the catalogue…
               </div>
             ) : visibleProducts.length === 0 ? (
-              <div className="bg-neutral-900 border border-dashed border-neutral-800 rounded-2xl p-10 text-center">
-                <Package className="w-8 h-8 text-neutral-600 mx-auto mb-3" />
-                <p className="text-sm text-neutral-300 font-semibold">
+              <div className="vy-empty rounded-2xl p-10 text-center">
+                <Package className="w-8 h-8 text-faint mx-auto mb-3" />
+                <p className="text-sm text-ink-2 font-semibold">
                   {products.length === 0
                     ? 'The store shelf is empty'
                     : 'Nothing matches that filter'}
                 </p>
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-[11px] text-faint mt-1">
                   {products.length === 0
                     ? 'Add your first product to start selling at the counter.'
                     : 'Try another search term or clear the category chips.'}
@@ -956,7 +956,7 @@ export default function GymStorePage() {
                 {products.length === 0 && (
                   <button
                     onClick={openAddProduct}
-                    className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white font-bold rounded-xl text-xs transition"
+                    className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-ink font-bold rounded-xl text-xs transition"
                   >
                     <Plus className="w-4 h-4" /> Add Product
                   </button>
@@ -974,14 +974,14 @@ export default function GymStorePage() {
                   return (
                     <div
                       key={product.id}
-                      className={`bg-neutral-900 border rounded-2xl p-4 flex flex-col ${
-                        soldOut ? 'border-neutral-800/60 opacity-70' : 'border-neutral-800'
+                      className={`bg-surface border rounded-2xl p-4 flex flex-col ${
+                        soldOut ? 'border-line opacity-70' : 'border-line'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           {product.image_url ? (
-                            <span className="shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 flex items-center justify-center">
+                            <span className="shrink-0 w-10 h-10 rounded-xl overflow-hidden bg-surface border border-line flex items-center justify-center">
                               <img
                                 src={product.image_url}
                                 alt=""
@@ -989,13 +989,13 @@ export default function GymStorePage() {
                               />
                             </span>
                           ) : (
-                            <span className="shrink-0 w-10 h-10 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-lg">
+                            <span className="shrink-0 w-10 h-10 rounded-xl bg-surface border border-line flex items-center justify-center text-lg">
                               {meta.emoji}
                             </span>
                           )}
                           <div className="min-w-0">
                             <p className="font-bold truncate">{product.name}</p>
-                            <p className="text-[10px] text-neutral-500 font-mono truncate">
+                            <p className="text-[10px] text-faint font-mono truncate">
                               {product.sku ?? 'no SKU'}
                             </p>
                           </div>
@@ -1008,10 +1008,10 @@ export default function GymStorePage() {
                       </div>
 
                       <div className="mt-3 flex items-end justify-between">
-                        <p className="text-lg font-black text-emerald-300">
+                        <p className="text-lg font-black text-emerald-700">
                           {formatRupees(product.selling_price)}
                         </p>
-                        <p className="text-[10px] text-neutral-500">
+                        <p className="text-[10px] text-faint">
                           {marginPercent(product)}% margin
                         </p>
                       </div>
@@ -1023,14 +1023,14 @@ export default function GymStorePage() {
                               ? 'text-rose-400 font-bold'
                               : low
                                 ? 'text-amber-400 font-bold'
-                                : 'text-neutral-400'
+                                : 'text-muted'
                           }
                         >
                           {soldOut ? 'Out of stock' : `${product.stock_quantity} in stock`}
                           {!soldOut && low && <span className="ml-1">· re-order</span>}
                         </span>
                         {inCart > 0 && (
-                          <span className="text-violet-300 font-bold">{inCart} in cart</span>
+                          <span className="text-violet-700 font-bold">{inCart} in cart</span>
                         )}
                       </div>
 
@@ -1045,14 +1045,14 @@ export default function GymStorePage() {
                         <button
                           onClick={() => openRestock(product)}
                           title="Receive stock"
-                          className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
+                          className="p-2 rounded-xl bg-wash hover:bg-line-strong text-ink-2 transition"
                         >
                           <Boxes className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => openEditProduct(product)}
                           title="Edit product"
-                          className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
+                          className="p-2 rounded-xl bg-wash hover:bg-line-strong text-ink-2 transition"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -1069,17 +1069,17 @@ export default function GymStorePage() {
           <div className="xl:col-span-1">
             <form
               onSubmit={completeSale}
-              className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 xl:sticky xl:top-24"
+              className="rounded-xl border border-line bg-surface rounded-2xl p-4 xl:sticky xl:top-24"
             >
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-violet-300" /> Current Bill
+                <h2 className="vy-eyebrow flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-violet-700" /> Current Bill
                 </h2>
                 {cart.length > 0 && (
                   <button
                     type="button"
                     onClick={clearCart}
-                    className="text-[11px] font-semibold text-neutral-400 hover:text-rose-300 transition"
+                    className="text-[11px] font-semibold text-muted hover:text-rose-700 transition"
                   >
                     Clear
                   </button>
@@ -1087,10 +1087,10 @@ export default function GymStorePage() {
               </div>
 
               {cart.length === 0 ? (
-                <div className="border border-dashed border-neutral-800 rounded-2xl p-6 text-center">
-                  <ShoppingBag className="w-7 h-7 text-neutral-600 mx-auto mb-2" />
-                  <p className="text-xs text-neutral-400">
-                    Scan or tap <span className="text-neutral-200 font-semibold">Add to bill</span>{' '}
+                <div className="border border-dashed border-line rounded-2xl p-6 text-center">
+                  <ShoppingBag className="w-7 h-7 text-faint mx-auto mb-2" />
+                  <p className="text-[12px] text-muted">
+                    Scan or tap <span className="text-ink-2 font-semibold">Add to bill</span>{' '}
                     and the line items land here.
                   </p>
                 </div>
@@ -1099,19 +1099,19 @@ export default function GymStorePage() {
                   {cart.map((line) => (
                     <div
                       key={line.product.id}
-                      className="bg-neutral-950 border border-neutral-800 rounded-xl p-2.5"
+                      className="bg-surface border border-line rounded-xl p-2.5"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">{line.product.name}</p>
-                          <p className="text-[10px] text-neutral-500">
+                          <p className="text-[10px] text-faint">
                             {formatRupees(line.product.selling_price)} each
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeLine(line.product.id)}
-                          className="p-1 rounded-lg text-neutral-500 hover:text-rose-400 transition"
+                          className="p-1 rounded-lg text-faint hover:text-rose-400 transition"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1122,7 +1122,7 @@ export default function GymStorePage() {
                           <button
                             type="button"
                             onClick={() => decreaseLine(line.product.id)}
-                            className="p-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                            className="p-1 rounded-lg bg-wash hover:bg-line-strong text-ink-2 transition"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
@@ -1132,17 +1132,17 @@ export default function GymStorePage() {
                             max={line.product.stock_quantity}
                             value={line.quantity}
                             onChange={(e) => setLineQuantity(line.product.id, e.target.value)}
-                            className="w-14 text-center bg-neutral-900 border border-neutral-800 rounded-lg py-1 text-xs font-mono focus:outline-none focus:border-violet-500"
+                            className="w-14 text-center rounded-lg border border-line bg-surface py-1 text-xs font-mono focus:outline-none focus:border-violet-500"
                           />
                           <button
                             type="button"
                             onClick={() => addToCart(line.product)}
-                            className="p-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                            className="p-1 rounded-lg bg-wash hover:bg-line-strong text-ink-2 transition"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <p className="text-sm font-bold text-emerald-300">
+                        <p className="text-sm font-bold text-emerald-700">
                           {formatRupees(Number(line.product.selling_price) * line.quantity)}
                         </p>
                       </div>
@@ -1152,15 +1152,15 @@ export default function GymStorePage() {
               )}
 
 
-              <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
+              <div className="mt-4 space-y-3 border-t border-line pt-4">
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Sell to
                   </label>
                   <select
                     value={memberId}
                     onChange={(e) => setMemberId(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm focus:outline-none focus:border-violet-500"
                   >
                     <option value="">Walk-in guest</option>
                     {members.map((member) => (
@@ -1172,7 +1172,7 @@ export default function GymStorePage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Payment
                   </label>
                   <div className="flex flex-wrap gap-1.5">
@@ -1183,25 +1183,25 @@ export default function GymStorePage() {
                         onClick={() => setPaymentMethod(method)}
                         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${
                           paymentMethod === method
-                            ? 'bg-violet-500 text-white border-violet-500'
-                            : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white'
+                            ? 'bg-violet-500 text-ink border-violet-500'
+                            : 'bg-surface text-muted border-line hover:text-ink'
                         }`}
                       >
                         {method}
                       </button>
                     ))}
                   </div>
-                  <p className="text-[10px] text-neutral-500 mt-1.5">
+                  <p className="text-[10px] text-faint mt-1.5">
                     Walk-in money is still recorded in the day&apos;s takings; it just carries no
                     member link.
                   </p>
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs uppercase tracking-wider text-neutral-400">
+                  <span className="text-xs uppercase tracking-wider text-muted">
                     Total ({cartCount} item{cartCount === 1 ? '' : 's'})
                   </span>
-                  <span className="text-2xl font-black text-emerald-300">
+                  <span className="text-2xl font-black text-emerald-700">
                     {formatRupees(cartValue)}
                   </span>
                 </div>
@@ -1222,7 +1222,7 @@ export default function GymStorePage() {
                   )}
                 </button>
 
-                <p className="text-[10px] text-neutral-500 text-center">
+                <p className="text-[10px] text-faint text-center">
                   Stock, the order row and the receipt are written together in one server-side
                   transaction.
                 </p>
@@ -1234,25 +1234,25 @@ export default function GymStorePage() {
 
         {/* Inventory ledger */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
-          <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
-            <div className="p-4 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-                <Boxes className="w-4 h-4 text-violet-300" /> Inventory
+          <div className="lg:col-span-2 vy-card overflow-hidden">
+            <div className="p-4 border-b border-line flex flex-wrap items-center justify-between gap-2">
+              <h2 className="vy-eyebrow flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-violet-700" /> Inventory
               </h2>
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[11px] text-faint">
                 {products.length} SKUs &middot; {shelfCount} units &middot;{' '}
                 {formatRupees(stockAtCost)} tied up at cost
               </p>
             </div>
 
             {products.length === 0 ? (
-              <p className="p-8 text-center text-sm text-neutral-500">
+              <p className="p-8 text-center text-sm text-faint">
                 No stock on the books yet.
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs min-w-[720px]">
-                  <thead className="bg-neutral-950 text-neutral-400 uppercase text-[10px] tracking-wider">
+                  <thead className="bg-surface text-muted uppercase text-[10px] tracking-wider">
                     <tr>
                       <th className="text-left px-4 py-2.5">Product</th>
                       <th className="text-right px-3 py-2.5">Cost</th>
@@ -1262,27 +1262,27 @@ export default function GymStorePage() {
                       <th className="text-right px-4 py-2.5">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-800">
+                  <tbody className="divide-y divide-line">
                     {products.map((product) => {
                       const low = isLowStock(product);
                       const busy = busyId === product.id;
 
                       return (
-                        <tr key={product.id} className="hover:bg-neutral-950/60 transition">
+                        <tr key={product.id} className="hover:bg-surface/60 transition">
                           <td className="px-4 py-2.5">
-                            <p className="font-semibold text-neutral-100">{product.name}</p>
-                            <p className="text-[10px] text-neutral-500">
+                            <p className="font-semibold text-ink">{product.name}</p>
+                            <p className="text-[10px] text-faint">
                               {categoryLabel(product.category)}
                               {product.sku ? ` · ${product.sku}` : ''}
                             </p>
                           </td>
-                          <td className="text-right px-3 py-2.5 text-neutral-400">
+                          <td className="text-right px-3 py-2.5 text-muted">
                             {formatRupees(product.cost_price)}
                           </td>
-                          <td className="text-right px-3 py-2.5 text-neutral-200">
+                          <td className="text-right px-3 py-2.5 text-ink-2">
                             {formatRupees(product.selling_price)}
                           </td>
-                          <td className="text-right px-3 py-2.5 text-emerald-300">
+                          <td className="text-right px-3 py-2.5 text-emerald-700">
                             {marginPercent(product)}%
                           </td>
                           <td className="text-right px-3 py-2.5">
@@ -1292,12 +1292,12 @@ export default function GymStorePage() {
                                   ? 'text-rose-400'
                                   : low
                                     ? 'text-amber-400'
-                                    : 'text-neutral-200'
+                                    : 'text-ink-2'
                               }`}
                             >
                               {product.stock_quantity}
                             </span>
-                            <span className="block text-[10px] text-neutral-500">
+                            <span className="block text-[10px] text-faint">
                               re-order at {product.low_stock_threshold}
                             </span>
                           </td>
@@ -1305,14 +1305,14 @@ export default function GymStorePage() {
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 onClick={() => openRestock(product)}
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-wash hover:bg-line-strong text-ink-2 transition"
                               >
                                 Restock
                               </button>
                               <button
                                 onClick={() => openEditProduct(product)}
                                 title="Edit product"
-                                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
+                                className="vy-icon-btn-sm"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
@@ -1337,37 +1337,37 @@ export default function GymStorePage() {
 
 
           {/* Recent sales */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden h-fit">
-            <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+          <div className="vy-card overflow-hidden h-fit">
+            <div className="p-4 border-b border-line flex items-center justify-between">
+              <h2 className="vy-eyebrow flex items-center gap-2">
                 <Receipt className="w-4 h-4 text-emerald-400" /> Recent Sales
               </h2>
-              <span className="text-[11px] text-neutral-500">{orders.length} shown</span>
+              <span className="text-[11px] text-faint">{orders.length} shown</span>
             </div>
 
             {orders.length === 0 ? (
-              <p className="p-8 text-center text-sm text-neutral-500">
+              <p className="p-8 text-center text-sm text-faint">
                 Nothing has been billed yet. Sales show up here the moment the till rings them up.
               </p>
             ) : (
-              <div className="divide-y divide-neutral-800 max-h-[520px] overflow-y-auto">
+              <div className="divide-y divide-line max-h-[520px] overflow-y-auto">
                 {orders.map((order) => (
-                  <div key={order.id} className="p-3.5 hover:bg-neutral-950/60 transition">
+                  <div key={order.id} className="p-3.5 hover:bg-surface/60 transition">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs font-semibold truncate">
                           {order.member_name ?? 'Walk-in guest'}
                         </p>
-                        <p className="text-[10px] text-neutral-500">
+                        <p className="text-[10px] text-faint">
                           {formatStamp(order.created_at)} &middot; {order.payment_method} &middot;{' '}
                           {order.items.length} line{order.items.length === 1 ? '' : 's'}
                         </p>
                       </div>
-                      <p className="text-sm font-bold text-emerald-300 shrink-0">
+                      <p className="text-sm font-bold text-emerald-700 shrink-0">
                         {formatRupees(order.total_amount)}
                       </p>
                     </div>
-                    <p className="mt-1.5 text-[10px] text-neutral-500 truncate">
+                    <p className="mt-1.5 text-[10px] text-faint truncate">
                       {order.items
                         .map((item) => `${item.quantity}× ${item.name}`)
                         .join(' · ') || 'no line items'}
@@ -1384,24 +1384,24 @@ export default function GymStorePage() {
       {/* Add / edit product */}
       {productFormId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl my-8">
-            <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
+          <div className="w-full max-w-lg rounded-xl border border-line bg-surface rounded-3xl overflow-hidden shadow-2xl my-8">
+            <div className="p-5 border-b border-line flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-300">
+                <div className="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-700">
                   <Package className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold">
                     {productFormId ? 'Edit product' : 'Add a product'}
                   </h3>
-                  <p className="text-[11px] text-neutral-400">
+                  <p className="text-[11px] text-muted">
                     Selling price must cover the cost price.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setProductFormId(null)}
-                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
+                className="p-1.5 rounded-lg bg-wash hover:bg-line-strong text-muted hover:text-ink transition"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1410,7 +1410,7 @@ export default function GymStorePage() {
             <form onSubmit={saveProduct} className="p-5 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Name
                   </label>
                   <input
@@ -1418,12 +1418,12 @@ export default function GymStorePage() {
                     value={productForm.name}
                     onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g. Whey Protein 1kg"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm focus:outline-none focus:border-violet-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Category
                   </label>
                   <select
@@ -1431,7 +1431,7 @@ export default function GymStorePage() {
                     onChange={(e) =>
                       setProductForm((prev) => ({ ...prev, category: e.target.value }))
                     }
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm focus:outline-none focus:border-violet-500"
                   >
                     {PRODUCT_CATEGORIES.map((option) => (
                       <option key={option} value={option}>
@@ -1442,23 +1442,23 @@ export default function GymStorePage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     SKU (optional)
                   </label>
                   <input
                     value={productForm.sku}
                     onChange={(e) => setProductForm((prev) => ({ ...prev, sku: e.target.value }))}
                     placeholder="WHEY-1KG"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-violet-500"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Photo (optional)
                   </label>
                   <div className="flex items-center gap-3">
-                    <div className="shrink-0 w-14 h-14 rounded-xl bg-neutral-950 border border-neutral-800 overflow-hidden flex items-center justify-center">
+                    <div className="shrink-0 w-14 h-14 rounded-xl bg-surface border border-line overflow-hidden flex items-center justify-center">
                       {productForm.imageUrl ? (
                         <img
                           src={productForm.imageUrl}
@@ -1466,12 +1466,12 @@ export default function GymStorePage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <Camera className="w-5 h-5 text-neutral-600" />
+                        <Camera className="w-5 h-5 text-faint" />
                       )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 cursor-pointer transition">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-wash hover:bg-line-strong text-ink-2 cursor-pointer transition">
                         {uploadingImage ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
@@ -1495,14 +1495,14 @@ export default function GymStorePage() {
                         <button
                           type="button"
                           onClick={() => setProductForm((prev) => ({ ...prev, imageUrl: '' }))}
-                          className="px-3 py-2 rounded-xl text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-rose-300 transition"
+                          className="px-3 py-2 rounded-xl text-[11px] font-bold bg-wash hover:bg-line-strong text-muted hover:text-rose-700 transition"
                         >
                           Remove
                         </button>
                       )}
                     </div>
                   </div>
-                  <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">
+                  <p className="mt-1.5 text-[10px] text-faint leading-relaxed">
                     JPEG, PNG, WebP, AVIF or GIF up to 5 MB. The photo shows on the till cards;
                     skip it and the category emoji is used instead.
                   </p>
@@ -1510,7 +1510,7 @@ export default function GymStorePage() {
 
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Cost price
                   </label>
                   <input
@@ -1523,12 +1523,12 @@ export default function GymStorePage() {
                       setProductForm((prev) => ({ ...prev, costPrice: e.target.value }))
                     }
                     placeholder="0"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-violet-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Selling price
                   </label>
                   <input
@@ -1541,12 +1541,12 @@ export default function GymStorePage() {
                       setProductForm((prev) => ({ ...prev, sellingPrice: e.target.value }))
                     }
                     placeholder="0"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-violet-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Opening stock
                   </label>
                   <input
@@ -1557,12 +1557,12 @@ export default function GymStorePage() {
                     onChange={(e) =>
                       setProductForm((prev) => ({ ...prev, stockQuantity: e.target.value }))
                     }
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-violet-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Re-order at
                   </label>
                   <input
@@ -1573,7 +1573,7 @@ export default function GymStorePage() {
                     onChange={(e) =>
                       setProductForm((prev) => ({ ...prev, lowStockThreshold: e.target.value }))
                     }
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-violet-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-violet-500"
                   />
                 </div>
               </div>
@@ -1582,14 +1582,14 @@ export default function GymStorePage() {
                 <button
                   type="button"
                   onClick={() => setProductFormId(null)}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-wash hover:bg-line-strong text-ink-2 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingProduct}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-violet-500 hover:bg-violet-600 text-white transition disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-violet-500 hover:bg-violet-600 text-ink transition disabled:opacity-50"
                 >
                   {savingProduct ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1608,22 +1608,22 @@ export default function GymStorePage() {
       {/* Restock */}
       {restockTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
+          <div className="w-full max-w-sm rounded-xl border border-line bg-surface rounded-3xl overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-line flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                   <Boxes className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold">Receive stock</h3>
-                  <p className="text-[11px] text-neutral-400 truncate max-w-[200px]">
+                  <p className="text-[11px] text-muted truncate max-w-[200px]">
                     {restockTarget.name} · {restockTarget.stock_quantity} on hand
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setRestockId(null)}
-                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
+                className="p-1.5 rounded-lg bg-wash hover:bg-line-strong text-muted hover:text-ink transition"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1631,7 +1631,7 @@ export default function GymStorePage() {
 
             <form onSubmit={submitRestock} className="p-5 space-y-3">
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Units in / out
                 </label>
                 <input
@@ -1640,7 +1640,7 @@ export default function GymStorePage() {
                   step={1}
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500"
+                  className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -1650,7 +1650,7 @@ export default function GymStorePage() {
                     key={quick}
                     type="button"
                     onClick={() => setRestockQty(String(quick))}
-                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-wash hover:bg-line-strong text-ink-2 transition"
                   >
                     +{quick}
                   </button>
@@ -1658,13 +1658,13 @@ export default function GymStorePage() {
                 <button
                   type="button"
                   onClick={() => setRestockQty(`${-1 * restockTarget.stock_quantity}`)}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-wash hover:bg-line-strong text-ink-2 transition"
                 >
                   Write off all
                 </button>
               </div>
 
-              <p className="text-[10px] text-neutral-500 leading-relaxed">
+              <p className="text-[10px] text-faint leading-relaxed">
                 The change is applied as a delta inside Postgres, so two people receiving the same
                 delivery add up instead of overwriting one another. Use a negative number after a
                 stocktake.
@@ -1674,7 +1674,7 @@ export default function GymStorePage() {
                 <button
                   type="button"
                   onClick={() => setRestockId(null)}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-wash hover:bg-line-strong text-ink-2 transition"
                 >
                   Cancel
                 </button>
@@ -1700,35 +1700,35 @@ export default function GymStorePage() {
       {/* Receipt */}
       {receipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-dashed border-neutral-800 text-center">
+          <div className="w-full max-w-sm bg-surface border border-line rounded-3xl overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-dashed border-line text-center">
               <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-3">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <h3 className="font-black text-lg">Payment received</h3>
               {'reservation_kind' in receipt && receipt.reservation_kind === 'desk_pickup' && (
-                <p className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-bold">
+                <p className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-700 text-[10px] font-bold">
                   <ClipboardList className="w-3.5 h-3.5" /> Desk pickup
                 </p>
               )}
-              <p className="text-[11px] text-neutral-400">
+              <p className="text-[11px] text-muted">
                 {session?.tenantName || 'Your gym'} &middot; {formatStamp(receipt.created_at)}
               </p>
-              <p className="text-[10px] text-neutral-500 font-mono mt-1">
+              <p className="text-[10px] text-faint font-mono mt-1">
                 Order #{receipt.order_id.slice(0, 8).toUpperCase()}
               </p>
             </div>
 
-            <div className="p-5 space-y-2 border-b border-dashed border-neutral-800">
+            <div className="p-5 space-y-2 border-b border-dashed border-line">
               {receipt.items.map((item) => (
                 <div key={item.product_id} className="flex items-start justify-between gap-3 text-xs">
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{item.name}</p>
-                    <p className="text-[10px] text-neutral-500">
+                    <p className="text-[10px] text-faint">
                       {item.quantity} × {formatRupees(item.price)}
                     </p>
                   </div>
-                  <p className="font-bold text-neutral-200 shrink-0">
+                  <p className="font-bold text-ink-2 shrink-0">
                     {formatRupees(item.subtotal)}
                   </p>
                 </div>
@@ -1736,30 +1736,30 @@ export default function GymStorePage() {
             </div>
 
             <div className="p-5 space-y-2">
-              <div className="flex items-center justify-between text-xs text-neutral-400">
+              <div className="flex items-center justify-between text-[12px] text-muted">
                 <span>Sold to</span>
-                <span className="text-neutral-200">
+                <span className="text-ink-2">
                   {receipt.is_walk_in ? 'Walk-in guest' : (receipt.member_name ?? 'Member')}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-xs text-neutral-400">
+              <div className="flex items-center justify-between text-[12px] text-muted">
                 <span>Payment</span>
-                <span className="text-neutral-200">{receipt.payment_method}</span>
+                <span className="text-ink-2">{receipt.payment_method}</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-neutral-400">
+              <div className="flex items-center justify-between text-[12px] text-muted">
                 <span>Lines</span>
-                <span className="text-neutral-200">{receipt.line_count}</span>
+                <span className="text-ink-2">{receipt.line_count}</span>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
-                <span className="text-sm font-bold uppercase tracking-wider text-neutral-300">
+              <div className="flex items-center justify-between pt-2 border-t border-line">
+                <span className="vy-eyebrow">
                   Total
                 </span>
-                <span className="text-2xl font-black text-emerald-300">
+                <span className="text-2xl font-black text-emerald-700">
                   {formatRupees(receipt.total_amount)}
                 </span>
               </div>
 
-              <p className="text-[10px] text-neutral-500">
+              <p className="text-[10px] text-faint">
                 {receipt.invoice_id
                   ? 'A paid invoice was filed against the member for this sale.'
                   : 'Walk-in sale — takings were logged without a member invoice.'}
@@ -1767,7 +1767,7 @@ export default function GymStorePage() {
 
               <button
                 onClick={() => setReceipt(null)}
-                className="w-full mt-2 py-3 rounded-xl text-xs font-bold bg-white text-black hover:bg-neutral-200 transition"
+                className="w-full mt-2 py-3 rounded-xl text-xs font-bold bg-ink text-white hover:bg-black transition"
               >
                 Done
               </button>

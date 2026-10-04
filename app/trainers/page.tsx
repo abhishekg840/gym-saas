@@ -370,23 +370,23 @@ export default function TrainersPayoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white font-sans">
+    <div className="vy-page vy-noscroll font-sans">
       {/* Header */}
-      <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
+      <div className="vy-topbar">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
               href="/admin"
-              className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition"
+              className="p-2.5 rounded-xl rounded-xl border border-line bg-surface text-muted hover:text-ink transition"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-wash text-ink-2">
               <Dumbbell className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight">Trainers &amp; PT Payroll</h1>
-              <p className="text-xs text-neutral-400">
+              <h1 className="text-[17px] font-semibold tracking-tight text-ink">Trainers &amp; PT Payroll</h1>
+              <p className="text-[12px] text-muted">
                 {session?.tenantName || 'Your gym'} &middot; {activeTrainers} of {trainers.length}{' '}
                 trainers active
               </p>
@@ -394,25 +394,25 @@ export default function TrainersPayoutPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5">
-              <CalendarClock className="w-4 h-4 text-neutral-500" />
+            <div className="flex items-center gap-2 rounded-xl border border-line bg-surface rounded-xl px-3 py-1.5">
+              <CalendarClock className="w-4 h-4 text-faint" />
               <input
                 type="date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="bg-transparent text-xs text-neutral-200 focus:outline-none"
+                className="bg-transparent text-xs text-ink-2 focus:outline-none"
               />
-              <span className="text-neutral-600 text-xs">&rarr;</span>
+              <span className="text-faint text-xs">&rarr;</span>
               <input
                 type="date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="bg-transparent text-xs text-neutral-200 focus:outline-none"
+                className="bg-transparent text-xs text-ink-2 focus:outline-none"
               />
               <button
                 onClick={refreshReport}
                 title="Rebuild the payout report for this window"
-                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
+                className="vy-icon-btn-sm"
               >
                 {reportBusy ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -424,7 +424,7 @@ export default function TrainersPayoutPage() {
 
             <button
               onClick={openAddTrainer}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20"
+              className="vy-btn vy-btn-lg vy-btn-brand"
             >
               <UserPlus className="w-4 h-4" /> Add Trainer
             </button>
@@ -432,13 +432,13 @@ export default function TrainersPayoutPage() {
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
+      <div className="vy-shell-wide">
         {notice && (
           <div
-            className={`mb-5 flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm ${
+            className={`mb-5 vy-notice ${
               noticeKind === 'ok'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700'
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-700'
             }`}
           >
             {noticeKind === 'ok' ? (
@@ -449,7 +449,7 @@ export default function TrainersPayoutPage() {
             <span className="flex-1">{notice}</span>
             <button
               onClick={() => setNotice(null)}
-              className="text-neutral-400 hover:text-white transition"
+              className="text-muted hover:text-ink transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -459,45 +459,45 @@ export default function TrainersPayoutPage() {
 
         {/* Metrics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400">
               <Dumbbell className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Trainers</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">Trainers</p>
               <p className="text-xl font-bold">
                 {activeTrainers}
-                <span className="text-sm font-normal text-neutral-500"> / {trainers.length}</span>
+                <span className="text-sm font-normal text-faint"> / {trainers.length}</span>
               </p>
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400">
               <BadgeCheck className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">PT Packages Live</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">PT Packages Live</p>
               <p className="text-xl font-bold">{openSubscriptions}</p>
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400">
               <CalendarClock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Sessions Left</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">Sessions Left</p>
               <p className="text-xl font-bold">{sessionsLeft}</p>
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-4 flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
               <IndianRupee className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Commission Due</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">Commission Due</p>
               <p className="text-xl font-bold">{formatRupees(report?.total_commission ?? 0)}</p>
             </div>
           </div>
@@ -507,23 +507,23 @@ export default function TrainersPayoutPage() {
         {/* Roster */}
         <div className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+            <h2 className="vy-eyebrow flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" /> Trainer Roster
             </h2>
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[11px] text-faint">
               Commission is earned on PT packages sold inside the selected window.
             </p>
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-2 text-sm text-neutral-400 py-10 justify-center">
+            <div className="flex items-center gap-2 text-sm text-muted py-10 justify-center">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading the roster…
             </div>
           ) : trainers.length === 0 ? (
-            <div className="bg-neutral-900 border border-dashed border-neutral-800 rounded-2xl p-10 text-center">
-              <Dumbbell className="w-8 h-8 text-neutral-600 mx-auto mb-3" />
-              <p className="text-sm text-neutral-300 font-semibold">No trainers on the roster yet</p>
-              <p className="text-xs text-neutral-500 mt-1">
+            <div className="vy-empty rounded-2xl p-10 text-center">
+              <Dumbbell className="w-8 h-8 text-faint mx-auto mb-3" />
+              <p className="text-sm text-ink-2 font-semibold">No trainers on the roster yet</p>
+              <p className="text-[11px] text-faint mt-1">
                 Add a trainer to start assigning PT packages and tracking commission.
               </p>
               <button
@@ -543,18 +543,18 @@ export default function TrainersPayoutPage() {
                 return (
                   <div
                     key={trainer.id}
-                    className={`bg-neutral-900 border rounded-2xl p-4 ${
-                      trainer.is_active ? 'border-neutral-800' : 'border-neutral-800/60 opacity-60'
+                    className={`bg-surface border rounded-2xl p-4 ${
+                      trainer.is_active ? 'border-line' : 'border-line opacity-60'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-700 flex items-center justify-center font-bold shrink-0">
                           {trainer.name.slice(0, 1).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <p className="font-bold truncate">{trainer.name}</p>
-                          <p className="text-[11px] text-neutral-400 font-mono truncate">
+                          <p className="text-[11px] text-muted font-mono truncate">
                             {trainer.phone}
                           </p>
                         </div>
@@ -562,26 +562,26 @@ export default function TrainersPayoutPage() {
                       <span
                         className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           trainer.is_active
-                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                            : 'bg-neutral-500/10 text-neutral-400 border-neutral-500/30'
+                            ? 'vy-chip-emerald'
+                            : 'vy-chip-slate'
                         }`}
                       >
                         {trainer.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
 
-                    <p className="mt-3 text-[11px] text-neutral-400 truncate">
+                    <p className="mt-3 text-[11px] text-muted truncate">
                       {trainer.specialization ?? 'General training'}
                     </p>
 
                     <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5">
-                        <p className="text-neutral-500">Clients</p>
-                        <p className="font-bold text-neutral-100">{stats?.clients ?? 0}</p>
+                      <div className="vy-input-sm">
+                        <p className="text-faint">Clients</p>
+                        <p className="font-bold text-ink">{stats?.clients ?? 0}</p>
                       </div>
-                      <div className="bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5">
-                        <p className="text-neutral-500">Commission</p>
-                        <p className="font-bold text-amber-300">{trainer.commission_rate_percent}%</p>
+                      <div className="vy-input-sm">
+                        <p className="text-faint">Commission</p>
+                        <p className="font-bold text-amber-700">{trainer.commission_rate_percent}%</p>
                       </div>
                     </div>
 
@@ -589,14 +589,14 @@ export default function TrainersPayoutPage() {
                       <button
                         onClick={() => toggleTrainerActive(trainer)}
                         disabled={busy}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition disabled:opacity-50"
+                        className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-wash hover:bg-line-strong text-ink-2 transition disabled:opacity-50"
                       >
                         {trainer.is_active ? 'Pause' : 'Reactivate'}
                       </button>
                       <button
                         onClick={() => openEditTrainer(trainer)}
                         title="Edit trainer"
-                        className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
+                        className="vy-icon-btn-sm"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -618,12 +618,12 @@ export default function TrainersPayoutPage() {
 
 
         {/* Payout report */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden mb-6">
-          <div className="p-4 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+        <div className="vy-card overflow-hidden mb-6">
+          <div className="p-4 border-b border-line flex flex-wrap items-center justify-between gap-2">
+            <h2 className="vy-eyebrow flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-emerald-400" /> Payout Report
             </h2>
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[11px] text-faint">
               {report ? `${report.from} &rarr; ${report.to}` : 'Loading window…'} &middot; the
               commission maths runs in Postgres, not in the browser
             </p>
@@ -631,7 +631,7 @@ export default function TrainersPayoutPage() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[760px]">
-              <thead className="bg-neutral-950 text-neutral-400 uppercase text-[10px] tracking-wider">
+              <thead className="bg-surface text-muted uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="text-left px-4 py-2.5">Trainer</th>
                   <th className="text-right px-3 py-2.5">Clients</th>
@@ -642,34 +642,34 @@ export default function TrainersPayoutPage() {
                   <th className="text-right px-4 py-2.5">Payout</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800">
+              <tbody className="divide-y divide-line">
                 {(report?.trainers ?? []).map((row) => (
-                  <tr key={row.id} className="hover:bg-neutral-950/60 transition">
+                  <tr key={row.id} className="hover:bg-surface/60 transition">
                     <td className="px-4 py-2.5">
-                      <p className="font-semibold text-neutral-100">{row.name}</p>
-                      <p className="text-[10px] text-neutral-500">
+                      <p className="font-semibold text-ink">{row.name}</p>
+                      <p className="text-[10px] text-faint">
                         {row.specialization ?? 'General training'}
                         {row.is_active ? '' : ' · inactive'}
                       </p>
                     </td>
-                    <td className="text-right px-3 py-2.5 text-neutral-300">{row.clients}</td>
-                    <td className="text-right px-3 py-2.5 text-neutral-300">{row.subscriptions}</td>
-                    <td className="text-right px-3 py-2.5 text-neutral-300">
+                    <td className="text-right px-3 py-2.5 text-ink-2">{row.clients}</td>
+                    <td className="text-right px-3 py-2.5 text-ink-2">{row.subscriptions}</td>
+                    <td className="text-right px-3 py-2.5 text-ink-2">
                       {row.sessions_completed}
-                      <span className="text-neutral-600"> / {row.sessions_total}</span>
+                      <span className="text-faint"> / {row.sessions_total}</span>
                       {row.sessions_remaining > 0 && (
-                        <span className="block text-[10px] text-neutral-500">
+                        <span className="block text-[10px] text-faint">
                           {row.sessions_remaining} left
                         </span>
                       )}
                     </td>
-                    <td className="text-right px-3 py-2.5 text-neutral-200">
+                    <td className="text-right px-3 py-2.5 text-ink-2">
                       {formatRupees(row.revenue)}
                     </td>
-                    <td className="text-right px-3 py-2.5 text-neutral-400">
+                    <td className="text-right px-3 py-2.5 text-muted">
                       {row.commission_rate_percent}%
                     </td>
-                    <td className="text-right px-4 py-2.5 font-bold text-amber-300">
+                    <td className="text-right px-4 py-2.5 font-bold text-amber-700">
                       {formatRupees(row.commission)}
                     </td>
                   </tr>
@@ -677,7 +677,7 @@ export default function TrainersPayoutPage() {
 
                 {(report?.trainers ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-neutral-500">
+                    <td colSpan={7} className="px-4 py-10 text-center text-faint">
                       {reportBusy
                         ? 'Building the payout report…'
                         : 'No trainers on the roster — add one to start tracking payouts.'}
@@ -686,19 +686,19 @@ export default function TrainersPayoutPage() {
                 )}
               </tbody>
               {(report?.trainers ?? []).length > 0 && (
-                <tfoot className="bg-neutral-950 border-t border-neutral-800 font-bold">
+                <tfoot className="bg-surface border-t border-line font-bold">
                   <tr>
-                    <td className="px-4 py-3 text-neutral-300">Gym total</td>
+                    <td className="px-4 py-3 text-ink-2">Gym total</td>
                     <td className="px-3 py-3" />
-                    <td className="text-right px-3 py-3 text-neutral-200">{report?.subscriptions ?? 0}</td>
-                    <td className="text-right px-3 py-3 text-neutral-200">
+                    <td className="text-right px-3 py-3 text-ink-2">{report?.subscriptions ?? 0}</td>
+                    <td className="text-right px-3 py-3 text-ink-2">
                       {report?.sessions_completed ?? 0}
                     </td>
-                    <td className="text-right px-3 py-3 text-neutral-200">
+                    <td className="text-right px-3 py-3 text-ink-2">
                       {formatRupees(report?.total_revenue ?? 0)}
                     </td>
                     <td className="px-3 py-3" />
-                    <td className="text-right px-4 py-3 text-amber-300">
+                    <td className="text-right px-4 py-3 text-amber-700">
                       {formatRupees(report?.total_commission ?? 0)}
                     </td>
                   </tr>
@@ -711,20 +711,20 @@ export default function TrainersPayoutPage() {
 
         {/* Personal training */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 h-fit">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2 mb-4">
+          <div className="rounded-xl border border-line bg-surface rounded-2xl p-5 h-fit">
+            <h2 className="vy-eyebrow flex items-center gap-2 mb-4">
               <Plus className="w-4 h-4 text-emerald-400" /> Sell a PT Package
             </h2>
 
             <form onSubmit={sellPtPackage} className="space-y-3">
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Member
                 </label>
                 <select
                   value={ptForm.memberId || members[0]?.id || ''}
                   onChange={(e) => setPtForm((prev) => ({ ...prev, memberId: e.target.value }))}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                  className="w-full vy-input-sm text-sm focus:outline-none focus:border-emerald-500"
                 >
                   {members.length === 0 ? (
                     <option value="">No members enrolled yet</option>
@@ -739,13 +739,13 @@ export default function TrainersPayoutPage() {
               </div>
 
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Trainer
                 </label>
                 <select
                   value={ptForm.trainerId || trainers.find((t) => t.is_active)?.id || ''}
                   onChange={(e) => setPtForm((prev) => ({ ...prev, trainerId: e.target.value }))}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                  className="w-full vy-input-sm text-sm focus:outline-none focus:border-emerald-500"
                 >
                   {trainers.length === 0 ? (
                     <option value="">Add a trainer first</option>
@@ -762,7 +762,7 @@ export default function TrainersPayoutPage() {
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Sessions
                   </label>
                   <input
@@ -771,11 +771,11 @@ export default function TrainersPayoutPage() {
                     max={500}
                     value={ptForm.totalSessions}
                     onChange={(e) => setPtForm((prev) => ({ ...prev, totalSessions: e.target.value }))}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Fee Paid
                   </label>
                   <input
@@ -784,37 +784,37 @@ export default function TrainersPayoutPage() {
                     value={ptForm.amountPaid}
                     onChange={(e) => setPtForm((prev) => ({ ...prev, amountPaid: e.target.value }))}
                     placeholder="0"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Start
                   </label>
                   <input
                     type="date"
                     value={ptForm.startDate}
                     onChange={(e) => setPtForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
+                    className="w-full vy-input-sm text-xs focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                     Valid Until
                   </label>
                   <input
                     type="date"
                     value={ptForm.endDate}
                     onChange={(e) => setPtForm((prev) => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
+                    className="w-full vy-input-sm text-xs focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
 
-              <p className="text-[10px] text-neutral-500 leading-relaxed">
+              <p className="text-[10px] text-faint leading-relaxed">
                 Leave the dates blank and the server stamps today (with a 30-day validity window).
                 A non-zero fee writes a paid PT invoice for the member.
               </p>
@@ -838,26 +838,26 @@ export default function TrainersPayoutPage() {
           </div>
 
 
-          <div className="lg:col-span-2 bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
-            <div className="p-4 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+          <div className="lg:col-span-2 vy-card overflow-hidden">
+            <div className="p-4 border-b border-line flex flex-wrap items-center justify-between gap-2">
+              <h2 className="vy-eyebrow flex items-center gap-2">
                 <CalendarClock className="w-4 h-4 text-blue-400" /> PT Packages
               </h2>
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[11px] text-faint">
                 {openSubscriptions} active &middot; {sessionsLeft} sessions pending
               </p>
             </div>
 
             {subscriptions.length === 0 ? (
               <div className="p-10 text-center">
-                <BadgeCheck className="w-8 h-8 text-neutral-600 mx-auto mb-3" />
-                <p className="text-sm text-neutral-300 font-semibold">No PT packages sold yet</p>
-                <p className="text-xs text-neutral-500 mt-1">
+                <BadgeCheck className="w-8 h-8 text-faint mx-auto mb-3" />
+                <p className="text-sm text-ink-2 font-semibold">No PT packages sold yet</p>
+                <p className="text-[11px] text-faint mt-1">
                   Sell a package on the left and it will show up here for session punching.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-neutral-800 max-h-[560px] overflow-y-auto">
+              <div className="divide-y divide-line max-h-[560px] overflow-y-auto">
                 {subscriptions.map((sub) => {
                   const meta = PT_STATUS_META[sub.status];
                   const done = sub.completed_sessions >= sub.total_sessions;
@@ -868,7 +868,7 @@ export default function TrainersPayoutPage() {
                   const busy = busyId === sub.id;
 
                   return (
-                    <div key={sub.id} className="p-4 hover:bg-neutral-950/60 transition">
+                    <div key={sub.id} className="p-4 hover:bg-surface/60 transition">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -881,11 +881,11 @@ export default function TrainersPayoutPage() {
                               {meta.label}
                             </span>
                           </div>
-                          <p className="text-[11px] text-neutral-400 mt-0.5">
+                          <p className="text-[11px] text-muted mt-0.5">
                             {sub.trainer_name ?? 'Unassigned trainer'} &middot;{' '}
                             {formatRupees(sub.amount_paid)} &middot; sold {formatStamp(sub.created_at)}
                           </p>
-                          <p className="text-[10px] text-neutral-500 mt-0.5">
+                          <p className="text-[10px] text-faint mt-0.5">
                             {sub.start_date} &rarr; {sub.end_date}
                             {sub.status === 'active' && dLeft >= 0 && (
                               <span className={dLeft <= 7 ? ' text-amber-400' : ''}>
@@ -901,11 +901,11 @@ export default function TrainersPayoutPage() {
 
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="text-right">
-                            <p className="text-sm font-bold text-neutral-100">
+                            <p className="text-sm font-bold text-ink">
                               {sub.completed_sessions}
-                              <span className="text-neutral-500"> / {sub.total_sessions}</span>
+                              <span className="text-faint"> / {sub.total_sessions}</span>
                             </p>
-                            <p className="text-[10px] text-neutral-500">sessions</p>
+                            <p className="text-[10px] text-faint">sessions</p>
                           </div>
                           <button
                             onClick={() => punchSession(sub)}
@@ -917,7 +917,7 @@ export default function TrainersPayoutPage() {
                                   ? 'Only active packages can be punched'
                                   : 'Log one session'
                             }
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 border border-blue-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             {busy ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -929,7 +929,7 @@ export default function TrainersPayoutPage() {
                         </div>
                       </div>
 
-                      <div className="mt-3 h-1.5 rounded-full bg-neutral-800 overflow-hidden">
+                      <div className="mt-3 h-1.5 rounded-full bg-wash overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${
                             done ? 'bg-emerald-500' : 'bg-blue-500'
@@ -950,24 +950,24 @@ export default function TrainersPayoutPage() {
       {/* Add / edit trainer */}
       {trainerFormId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
+          <div className="w-full max-w-md rounded-xl border border-line bg-surface rounded-3xl overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-line flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line bg-wash text-ink-2">
                   {trainerFormId ? <Pencil className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
                 </div>
                 <div>
                   <h3 className="font-bold">
                     {trainerFormId ? 'Edit trainer' : 'Add a trainer'}
                   </h3>
-                  <p className="text-[11px] text-neutral-400">
+                  <p className="text-[11px] text-muted">
                     Commission is a percentage of every PT package they sell.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setTrainerFormId(null)}
-                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
+                className="p-1.5 rounded-lg bg-wash hover:bg-line-strong text-muted hover:text-ink transition"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -975,7 +975,7 @@ export default function TrainersPayoutPage() {
 
             <form onSubmit={saveTrainer} className="p-5 space-y-3">
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Name
                 </label>
                 <input
@@ -983,12 +983,12 @@ export default function TrainersPayoutPage() {
                   value={trainerForm.name}
                   onChange={(e) => setTrainerForm((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g. Ravi Menon"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  className="w-full vy-input-sm text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Phone
                 </label>
                 <input
@@ -996,12 +996,12 @@ export default function TrainersPayoutPage() {
                   value={trainerForm.phone}
                   onChange={(e) => setTrainerForm((prev) => ({ ...prev, phone: e.target.value }))}
                   placeholder="9876543210"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-500"
+                  className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Specialization
                 </label>
                 <select
@@ -1009,7 +1009,7 @@ export default function TrainersPayoutPage() {
                   onChange={(e) =>
                     setTrainerForm((prev) => ({ ...prev, specialization: e.target.value }))
                   }
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  className="w-full vy-input-sm text-sm focus:outline-none focus:border-amber-500"
                 >
                   {TRAINER_SPECIALITIES.map((option) => (
                     <option key={option} value={option}>
@@ -1020,7 +1020,7 @@ export default function TrainersPayoutPage() {
               </div>
 
               <div>
-                <label className="text-[10px] text-neutral-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">
                   Commission %
                 </label>
                 <input
@@ -1036,7 +1036,7 @@ export default function TrainersPayoutPage() {
                       commission_rate_percent: e.target.value,
                     }))
                   }
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-500"
+                  className="w-full vy-input-sm text-sm font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -1044,7 +1044,7 @@ export default function TrainersPayoutPage() {
                 <button
                   type="button"
                   onClick={() => setTrainerFormId(null)}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition"
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-wash hover:bg-line-strong text-ink-2 transition"
                 >
                   Cancel
                 </button>

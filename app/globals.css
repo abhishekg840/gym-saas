@@ -1,6 +1,47 @@
 @import "tailwindcss";
 
-:root {
+/* ===========================================================================
+   Vyroniq design tokens — the single source of truth for the owner console.
+
+   The staff product is one light surface. Every page used to spell its own hex
+   values (and most of them spelled dark ones), which is how a "premium" admin
+   ends up looking like eleven unrelated apps. These tokens are named by ROLE,
+   not by colour, so a page asks for "muted text" rather than remembering that
+   muted means #6B7280.
+
+   Deliberately NOT tokenised: the accent ramps (emerald/amber/rose/violet/...).
+   They carry meaning — access granted, expiring soon, needs attention — so they
+   stay as Tailwind's palette and are applied deliberately, never by default.
+   ======================================================================== */
+
+@theme {
+  /* Surfaces, from the page backdrop up to a raised panel. */
+  --color-canvas: #f7f8fa; /* the page itself */
+  --color-surface: #ffffff; /* cards, tables, menus, modals */
+  --color-subtle: #f9fafb; /* inset panels inside a card */
+  --color-wash: #f3f4f6; /* hover fills, icon tiles, ghost surfaces */
+
+  /* Hairlines. Two weights: a rule you read, and one you only feel. */
+  --color-line: #e5e7eb;
+  --color-line-strong: #d1d5db;
+
+  /* Ink, from the most assertive to the most recessed.
+     `muted` and `faint` are nudged darker than Tailwind's defaults (gray-500 /
+     gray-400) on purpose: every one of these four is used for text a desk has
+     to read — phone numbers, relative times, footnotes — not decoration, and
+     the default greys fall under 4.5:1 once they sit on the recessed wash and
+     subtle surfaces. Each now clears WCAG AA on white, canvas, subtle AND
+     wash, while `faint` stays one step lighter than `muted` so the hierarchy
+     still reads at a glance. */
+  --color-ink: #111827;
+  --color-ink-2: #374151;
+  --color-muted: #656d77;
+  --color-faint: #69707b;
+
+  /* Brand + overlay. */
+  --color-brand: #059669; /* emerald-600 */
+  --color-scrim: #0f172a; /* modal backdrop */
+
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -23,4 +64,206 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Keyboard focus is a visible ring, not a browser default that vanishes on the
+   dark surfaces. :where() keeps specificity at zero so a component class can
+   still opt out (the inputs mark focus with a border instead). */
+@layer base {
+  :where(a, button, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* ---- Page shell ------------------------------------------------------- */
+  .vy-page {
+    @apply min-h-screen bg-canvas text-ink;
+  }
+  .vy-shell {
+    @apply mx-auto w-full max-w-[1400px] px-4 sm:px-6;
+  }
+  /* The Kanban needs more room than a settings form does. */
+  .vy-shell-wide {
+    @apply mx-auto w-full max-w-[1600px] px-4 sm:px-6;
+  }
+  /* Guarantee a page never scrolls sideways; boards manage their own overflow. */
+  .vy-noscroll {
+    overflow-x: clip;
+  }
+
+  /* ---- Top bar ---------------------------------------------------------- */
+  .vy-topbar {
+    @apply sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur;
+  }
+  .vy-topbar-inner {
+    @apply mx-auto flex h-16 w-full items-center gap-4 px-4 sm:px-6;
+  }
+  .vy-brand-mark {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand;
+  }
+  .vy-nav-link {
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink;
+  }
+  .vy-nav-link-active {
+    @apply rounded-lg bg-wash px-3 py-1.5 text-[13px] font-semibold text-ink;
+  }
+
+  /* ---- Cards ------------------------------------------------------------ */
+  .vy-card {
+    @apply rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+  .vy-card-head {
+    @apply flex items-center justify-between gap-3 border-b border-line px-5 py-3.5;
+  }
+  .vy-card-title {
+    @apply text-[13px] font-semibold text-ink;
+  }
+  .vy-card-body {
+    @apply p-5;
+  }
+  /* A recessed block for numbers and read-outs inside a card. */
+  .vy-panel {
+    @apply rounded-lg border border-line bg-subtle px-3 py-2.5;
+  }
+
+  /* ---- Type ------------------------------------------------------------- */
+  .vy-page-title {
+    @apply text-lg font-semibold tracking-tight text-ink;
+  }
+  .vy-section-title {
+    @apply text-base font-semibold tracking-tight text-ink;
+  }
+  .vy-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-muted;
+  }
+  .vy-meta {
+    @apply text-[11px] text-faint;
+  }
+  .vy-sub {
+    @apply text-[12px] leading-relaxed text-muted;
+  }
+  .vy-num {
+    @apply text-[26px] font-semibold leading-none tracking-tight tabular-nums text-ink;
+  }
+
+  /* ---- Badges and notices ------------------------------------------------ */
+  .vy-chip {
+    @apply inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-semibold;
+  }
+  .vy-chip-emerald {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  }
+  .vy-chip-amber {
+    @apply border-amber-200 bg-amber-50 text-amber-700;
+  }
+  .vy-chip-rose {
+    @apply border-rose-200 bg-rose-50 text-rose-700;
+  }
+  .vy-chip-blue {
+    @apply border-blue-200 bg-blue-50 text-blue-700;
+  }
+  .vy-chip-violet {
+    @apply border-violet-200 bg-violet-50 text-violet-700;
+  }
+  .vy-chip-cyan {
+    @apply border-cyan-200 bg-cyan-50 text-cyan-700;
+  }
+  .vy-chip-slate {
+    @apply border-slate-200 bg-slate-50 text-slate-600;
+  }
+  .vy-notice {
+    @apply flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-[13px];
+  }
+  .vy-notice-ok {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+  }
+  .vy-notice-bad {
+    @apply border-rose-200 bg-rose-50 text-rose-800;
+  }
+
+  /* ---- Empty state ------------------------------------------------------- */
+  .vy-empty {
+    @apply rounded-xl border border-dashed border-line bg-surface px-6 py-12 text-center;
+  }
+
+  /* ---- Buttons ---------------------------------------------------------- */
+  .vy-btn {
+    @apply inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .vy-btn-lg {
+    @apply px-4 py-2.5 text-sm font-semibold;
+  }
+  .vy-btn-primary {
+    @apply bg-ink text-white hover:bg-black;
+  }
+  .vy-btn-secondary {
+    @apply border border-line bg-surface text-ink-2 hover:bg-wash;
+  }
+  .vy-btn-brand {
+    @apply bg-brand text-white hover:bg-emerald-700;
+  }
+  .vy-btn-ghost {
+    @apply text-muted hover:bg-wash hover:text-ink;
+  }
+  .vy-btn-danger {
+    @apply border border-rose-200 bg-surface text-rose-600 hover:bg-rose-50;
+  }
+  .vy-icon-btn {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-wash hover:text-ink;
+  }
+  .vy-icon-btn-sm {
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-wash hover:text-ink;
+  }
+
+  /* ---- Forms ------------------------------------------------------------ */
+  .vy-label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted;
+  }
+  .vy-input {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none;
+  }
+  .vy-input-sm {
+    @apply w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] text-ink placeholder:text-faint focus:border-brand focus:outline-none;
+  }
+  .vy-textarea {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-brand focus:outline-none;
+  }
+  .vy-select {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-ink focus:border-brand focus:outline-none;
+  }
+
+  /* ---- Menus ------------------------------------------------------------- */
+  .vy-menu {
+    @apply absolute top-full z-50 mt-1 rounded-lg border border-line bg-surface py-1 shadow-xl shadow-[#0F172A]/10;
+  }
+  .vy-menu-item {
+    @apply flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-ink-2 transition hover:bg-wash hover:text-ink;
+  }
+
+  /* ---- Modals ------------------------------------------------------------ */
+  .vy-scrim {
+    @apply fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-scrim/45 p-4 sm:items-center;
+  }
+  .vy-modal {
+    @apply my-4 w-full rounded-xl border border-line bg-surface shadow-2xl shadow-[#0F172A]/15;
+  }
+  .vy-modal-head {
+    @apply flex items-center justify-between gap-3 border-b border-line px-5 py-4;
+  }
+  .vy-modal-body {
+    @apply p-5;
+  }
+
+  /* ---- Tables ------------------------------------------------------------ */
+  .vy-th {
+    @apply px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted;
+  }
+  .vy-tr {
+    @apply border-b border-line transition last:border-0 hover:bg-subtle;
+  }
+  .vy-td {
+    @apply px-3 py-3.5;
+  }
 }

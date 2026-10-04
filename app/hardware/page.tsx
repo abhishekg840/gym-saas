@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   Cctv,
   Copy,
   Cpu,
@@ -27,6 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { readSession, type GymSession } from '@/lib/session';
+import PageHeader from '@/components/page-header';
 import {
   DEFAULT_GEOFENCE_RADIUS,
   evaluateGeofence,
@@ -61,10 +61,10 @@ const TYPE_ICONS: Record<HardwareDeviceType, typeof Fingerprint> = {
 const REFRESH_MS = 4_000;
 
 const STATUS_DOT: Record<HardwareDevice['status'], string> = {
-  online: 'bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]',
-  offline: 'bg-zinc-600',
-  error: 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)]',
-  maintenance: 'bg-amber-400',
+  online: 'bg-emerald-500',
+  offline: 'bg-faint',
+  error: 'bg-rose-500',
+  maintenance: 'bg-amber-500',
 };
 
 /**
@@ -73,10 +73,10 @@ const STATUS_DOT: Record<HardwareDevice['status'], string> = {
  * Syncing. `error` is the one case worth spelling out, because it needs a human.
  */
 const STATUS_PILL: Record<HardwareDevice['status'], { label: string; tone: string }> = {
-  online: { label: 'Online', tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
-  offline: { label: 'Offline', tone: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30' },
-  error: { label: 'Needs Attention', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
-  maintenance: { label: 'Ready', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
+  online: { label: 'Online', tone: 'vy-chip-emerald' },
+  offline: { label: 'Offline', tone: 'vy-chip-slate' },
+  error: { label: 'Needs Attention', tone: 'vy-chip-rose' },
+  maintenance: { label: 'Ready', tone: 'vy-chip-amber' },
 };
 
 function emptyGeofenceForm() {
@@ -410,11 +410,11 @@ export default function HardwareConsole() {
   // --- Render -----------------------------------------------------------------
   if (!session) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
-        <div className="max-w-sm bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center">
+      <div className="vy-page vy-noscroll flex items-center justify-center p-6">
+        <div className="vy-card max-w-sm p-6 text-center">
           <ShieldAlert className="w-9 h-9 text-rose-400 mx-auto mb-3" />
-          <h1 className="text-base font-bold mb-1">Sign in required</h1>
-          <p className="text-xs text-neutral-400 mb-4">
+          <h1 className="text-[15px] font-semibold tracking-tight text-ink mb-1">Sign in required</h1>
+          <p className="text-[12px] text-muted mb-4">
             The hardware console is scoped to one gym, so it needs your operator session.
           </p>
           <Link href="/login" className="inline-block bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-4 py-2 rounded-xl active:scale-95 transition-all duration-150">
@@ -426,51 +426,41 @@ export default function HardwareConsole() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div>
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white transition mb-2"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
-            </Link>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2">
-              <ServerCog className="w-6 h-6 text-emerald-400" />
-              Gate Access & Security — {session.tenantName ?? 'Gate Access'}
-            </h1>
-            <p className="text-xs text-neutral-500 mt-1">
-              Live gate status, connected readers, and the gym radius that unlocks a member pass.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => void refresh()}
-              className="flex items-center gap-1.5 px-3 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl text-xs transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" /> Refresh
-            </button>
-            {canManage && (
+    <div className="vy-page vy-noscroll font-sans">
+      <div className="vy-shell">
+        <PageHeader
+          icon={<ServerCog className="h-5 w-5" />}
+          title={`Gate Access & Security — ${session.tenantName ?? 'Gate Access'}`}
+          subtitle="Live gate status, connected readers, and the gym radius that unlocks a member pass"
+          actions={
+            <>
               <button
-                onClick={() => {
-                  setRegisterError(null);
-                  setRegisterOpen(true);
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-xl text-xs transition shadow-lg shadow-emerald-500/20"
+                onClick={() => void refresh()}
+                className="vy-btn vy-btn-secondary"
               >
-                <Plus className="w-4 h-4" /> Register Device
+                <RefreshCw className="h-3.5 w-3.5" /> Refresh
               </button>
-            )}
-          </div>
-        </div>
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setRegisterError(null);
+                    setRegisterOpen(true);
+                  }}
+                  className="vy-btn vy-btn-lg vy-btn-brand"
+                >
+                  <Plus className="w-4 h-4" /> Register Device
+                </button>
+              )}
+            </>
+          }
+        />
 
         {notice && (
           <div
             className={`mb-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-xs ${
               noticeKind === 'ok'
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
-                : 'bg-rose-500/10 border-rose-500/20 text-rose-200'
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700'
+                : 'bg-rose-500/10 border-rose-500/20 text-rose-700'
             }`}
           >
             <span>{notice}</span>
@@ -481,7 +471,7 @@ export default function HardwareConsole() {
         )}
 
         {!tenantId && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-xs text-amber-200">
+          <div className="mb-5 flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-xs text-amber-700">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             This session has no gym attached, so no terminals can be listed. Sign in again.
           </div>
@@ -501,14 +491,14 @@ export default function HardwareConsole() {
 
         {/* ---- Live terminal grid ------------------------------------------- */}
         {!loaded ? (
-          <div className="flex items-center justify-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900 py-14 text-sm text-neutral-500">
+          <div className="flex items-center justify-center gap-2 vy-card py-14 text-sm text-faint">
             <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> Reading the terminal registry…
           </div>
         ) : devices.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/60 p-8 text-center mb-8">
-            <ServerCog className="w-9 h-9 text-neutral-700 mx-auto mb-3" />
+          <div className="rounded-2xl border border-dashed border-line bg-subtle p-8 text-center mb-8">
+            <ServerCog className="w-9 h-9 text-faint mx-auto mb-3" />
             <h2 className="text-sm font-bold mb-1">No terminals registered yet</h2>
-            <p className="text-xs text-neutral-500 max-w-md mx-auto">
+            <p className="text-[11px] text-faint max-w-md mx-auto">
               Register the turnstile relay, fingerprint reader, RFID pad or the browser kiosk at the
               door. Each one gets an access key shown once — paste that into the reader software and
               it will check in here every 30 seconds.
@@ -535,20 +525,20 @@ export default function HardwareConsole() {
                   key={device.id}
                   className={`rounded-2xl border p-4 transition ${
                     live
-                      ? 'bg-neutral-900 border-emerald-500/25'
-                      : 'bg-neutral-900/70 border-neutral-800'
+                      ? 'bg-surface border-emerald-500/25'
+                      : 'bg-surface/70 border-line'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-2 bg-neutral-950 border border-neutral-800 rounded-xl shrink-0">
+                      <div className="p-2 bg-surface border border-line rounded-xl shrink-0">
                         <Icon className="w-4 h-4 text-emerald-400" />
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-sm font-bold truncate">{device.device_name}</h3>
                         <span
                           className={`inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded border ${
-                            meta ? meta.badge : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                            meta ? meta.badge : 'bg-wash text-muted border-line-strong'
                           }`}
                         >
                           {meta ? meta.label : device.device_type}
@@ -564,36 +554,36 @@ export default function HardwareConsole() {
                   </div>
 
                   <dl className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-[11px] mb-3">
-                    <dt className="text-neutral-500">Last ping</dt>
-                    <dd className={`text-right font-mono ${live ? 'text-emerald-400' : 'text-neutral-300'}`}>
+                    <dt className="text-faint">Last ping</dt>
+                    <dd className={`text-right font-mono ${live ? 'text-emerald-400' : 'text-ink-2'}`}>
                       {formatSince(seconds)}
                     </dd>
-                    <dt className="text-neutral-500">Network</dt>
-                    <dd className="text-right font-mono text-neutral-300 truncate">
+                    <dt className="text-faint">Network</dt>
+                    <dd className="text-right font-mono text-ink-2 truncate">
                       {device.ip_address ?? '—'}
                     </dd>
-                    <dt className="text-neutral-500">Software</dt>
-                    <dd className="text-right font-mono text-neutral-300">{device.firmware_version}</dd>
-                    <dt className="text-neutral-500">Access key</dt>
-                    <dd className="text-right font-mono text-neutral-400 truncate">
+                    <dt className="text-faint">Software</dt>
+                    <dd className="text-right font-mono text-ink-2">{device.firmware_version}</dd>
+                    <dt className="text-faint">Access key</dt>
+                    <dd className="text-right font-mono text-muted truncate">
                       {device.api_key_masked}
                     </dd>
                   </dl>
 
                   {confirmId === device.id ? (
                     <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/25 px-3 py-2">
-                      <span className="text-[11px] text-rose-200 flex-1">
+                      <span className="text-[11px] text-rose-700 flex-1">
                         Remove? A reader holding this key stops working instantly.
                       </span>
                       <button
                         onClick={() => void handleForget(device)}
-                        className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600 shrink-0"
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-rose-500 text-ink hover:bg-rose-600 shrink-0"
                       >
                         Remove
                       </button>
                       <button
                         onClick={() => setConfirmId(null)}
-                        className="text-[11px] px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 shrink-0"
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-wash hover:bg-line-strong shrink-0"
                       >
                         Keep
                       </button>
@@ -602,7 +592,7 @@ export default function HardwareConsole() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => void handleCopyKey(device)}
-                        className="flex items-center gap-1 flex-1 justify-center text-[11px] px-2 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition"
+                        className="flex items-center gap-1 flex-1 justify-center text-[11px] px-2 py-1.5 rounded-lg bg-surface border border-line hover:border-line-strong transition"
                       >
                         <Copy className="w-3 h-3 text-blue-400" />
                         {copiedId === device.id ? 'Copied' : 'Copy access key'}
@@ -611,7 +601,7 @@ export default function HardwareConsole() {
                         onClick={() => void handlePing(device)}
                         disabled={busyId === device.id}
                         title="Write one heartbeat from the console"
-                        className="flex items-center gap-1 flex-1 justify-center text-[11px] px-2 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-emerald-500/40 disabled:opacity-50 transition"
+                        className="flex items-center gap-1 flex-1 justify-center text-[11px] px-2 py-1.5 rounded-lg bg-surface border border-line hover:border-emerald-500/40 disabled:opacity-50 transition"
                       >
                         {busyId === device.id ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -639,12 +629,12 @@ export default function HardwareConsole() {
 
         {/* ---- Geofence + gate test ---------------------------------------- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-          <form onSubmit={handleSaveGeofence} className="rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md p-5">
+          <form onSubmit={handleSaveGeofence} className="vy-card p-5">
             <div className="flex items-center gap-2 mb-1">
               <MapPin className="w-4 h-4 text-emerald-400" />
               <h2 className="text-sm font-bold">Gym Geofence</h2>
             </div>
-            <p className="text-[11px] text-neutral-500 mb-4">
+            <p className="text-[11px] text-faint mb-4">
               Where this gym physically sits, and how far away a member may still open a pass.
               {geofence &&
                 (geofence.latitude === null || geofence.longitude === null
@@ -656,7 +646,7 @@ export default function HardwareConsole() {
 
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label htmlFor="geo-lat" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="geo-lat" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Latitude
                 </label>
                 <input
@@ -665,11 +655,11 @@ export default function HardwareConsole() {
                   onChange={(e) => setGeoForm({ ...geoForm, latitude: e.target.value })}
                   placeholder="19.0760900"
                   inputMode="decimal"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs font-mono outline-none focus:border-emerald-500/50"
                 />
               </div>
               <div>
-                <label htmlFor="geo-lon" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="geo-lon" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Longitude
                 </label>
                 <input
@@ -678,14 +668,14 @@ export default function HardwareConsole() {
                   onChange={(e) => setGeoForm({ ...geoForm, longitude: e.target.value })}
                   placeholder="72.8777100"
                   inputMode="decimal"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs font-mono outline-none focus:border-emerald-500/50"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <label htmlFor="geo-radius" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="geo-radius" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Radius (metres)
                 </label>
                 <input
@@ -696,19 +686,19 @@ export default function HardwareConsole() {
                   min={10}
                   max={20000}
                   step={5}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs font-mono outline-none focus:border-emerald-500/50"
                 />
               </div>
-              <label className="flex items-center gap-2 rounded-xl bg-neutral-950 border border-neutral-800 px-3 py-2 cursor-pointer">
+              <label className="flex items-center gap-2 rounded-xl bg-surface border border-line px-3 py-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={geoForm.enforce_geofence}
                   onChange={(e) => setGeoForm({ ...geoForm, enforce_geofence: e.target.checked })}
                   className="w-4 h-4 accent-emerald-500"
                 />
-                <span className="text-[11px] text-neutral-300">
+                <span className="text-[11px] text-ink-2">
                   Enforce
-                  <span className="block text-[10px] text-neutral-500">Locks passes outside the radius</span>
+                  <span className="block text-[10px] text-faint">Locks passes outside the radius</span>
                 </span>
               </label>
             </div>
@@ -717,7 +707,7 @@ export default function HardwareConsole() {
               <button
                 type="button"
                 onClick={captureCurrentLocation}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 hover:border-emerald-500/40 text-xs transition"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface border border-line hover:border-emerald-500/40 text-xs transition"
               >
                 <Navigation className="w-3.5 h-3.5 text-emerald-400" /> Capture my location
               </button>
@@ -733,14 +723,14 @@ export default function HardwareConsole() {
               )}
             </div>
 
-            {geoNote && <p className="mt-3 text-[11px] text-neutral-400">{geoNote}</p>}
+            {geoNote && <p className="mt-3 text-[11px] text-muted">{geoNote}</p>}
 
             {selfCheck && (
               <div
                 className={`mt-3 rounded-xl border px-3 py-2 text-[11px] ${
                   selfCheck.unlocked
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
-                    : 'bg-rose-500/10 border-rose-500/20 text-rose-200'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700'
+                    : 'bg-rose-500/10 border-rose-500/20 text-rose-700'
                 }`}
               >
                 <span className="font-bold uppercase tracking-wide mr-1">
@@ -757,12 +747,12 @@ export default function HardwareConsole() {
             )}
           </form>
 
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/80 backdrop-blur-md p-5">
+          <div className="vy-card p-5">
             <div className="flex items-center gap-2 mb-1">
               <ScanLine className="w-4 h-4 text-emerald-400" />
               <h2 className="text-sm font-bold">Gate Test Panel</h2>
             </div>
-            <p className="text-[11px] text-neutral-500 mb-4">
+            <p className="text-[11px] text-faint mb-4">
               A gate reader sends: an access key plus a fingerprint slot or a card serial.
               the gate check
               decides — freeze, expiry, attendance row and heartbeat included.
@@ -770,14 +760,14 @@ export default function HardwareConsole() {
 
             <form onSubmit={handleTestPunch} className="space-y-3">
               <div>
-                <label htmlFor="punch-device" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="punch-device" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Terminal
                 </label>
                 <select
                   id="punch-device"
                   value={punchDeviceId}
                   onChange={(e) => setPunchDeviceId(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs outline-none focus:border-emerald-500/50"
                 >
                   <option value="">Choose a registered terminal…</option>
                   {devices.map((device) => (
@@ -789,11 +779,11 @@ export default function HardwareConsole() {
               </div>
 
               <div>
-                <label htmlFor="punch-key" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="punch-key" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Access key
                 </label>
                 <div className="relative">
-                  <KeyRound className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-2.5" />
+                  <KeyRound className="w-3.5 h-3.5 text-faint absolute left-3 top-2.5" />
                   <input
                     id="punch-key"
                     value={punchKey}
@@ -801,10 +791,10 @@ export default function HardwareConsole() {
                     placeholder="fgs_hw_… (shown once at registration)"
                     autoComplete="off"
                     spellCheck={false}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-9 pr-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                    className="w-full bg-surface border border-line rounded-xl pl-9 pr-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
                   />
                 </div>
-                <p className="text-[10px] text-neutral-600 mt-1">
+                <p className="text-[10px] text-faint mt-1">
                   Saved keys cannot be shown again — paste the one you saved on the device,
                   or register a new terminal to have this field filled in.
                 </p>
@@ -812,7 +802,7 @@ export default function HardwareConsole() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="punch-bio" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                  <label htmlFor="punch-bio" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                     Fingerprint slot
                   </label>
                   <input
@@ -821,11 +811,11 @@ export default function HardwareConsole() {
                     onChange={(e) => setPunchCredential({ ...punchCredential, biometric_id: e.target.value })}
                     placeholder="42"
                     inputMode="numeric"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                    className="w-full vy-input-sm text-xs font-mono outline-none focus:border-emerald-500/50"
                   />
                 </div>
                 <div>
-                  <label htmlFor="punch-rfid" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                  <label htmlFor="punch-rfid" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                     RFID card
                   </label>
                   <input
@@ -833,7 +823,7 @@ export default function HardwareConsole() {
                     value={punchCredential.rfid_card}
                     onChange={(e) => setPunchCredential({ ...punchCredential, rfid_card: e.target.value })}
                     placeholder="0012345678"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                    className="w-full vy-input-sm text-xs font-mono outline-none focus:border-emerald-500/50"
                   />
                 </div>
               </div>
@@ -884,7 +874,7 @@ export default function HardwareConsole() {
           </div>
         </div>
 
-        <p className="text-[11px] text-neutral-600 mb-8">
+        <p className="text-[10px] text-faint mb-8">
           A reader shows Online while its last heartbeat is under {ONLINE_WINDOW_SECONDS} seconds
           old. A reader should ping /api/hardware/heartbeat every 30 seconds and
           /api/hardware/punch on every scan — the punch itself counts as a heartbeat, so a reader that
@@ -897,19 +887,19 @@ export default function HardwareConsole() {
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <form
             onSubmit={handleRegister}
-            className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-2xl"
+            className="w-full max-w-md rounded-xl border border-line bg-surface rounded-3xl p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-base font-bold">Register a terminal</h2>
-                <p className="text-[11px] text-neutral-500 mt-0.5">
+                <h2 className="text-[15px] font-semibold tracking-tight text-ink">Register a terminal</h2>
+                <p className="text-[11px] text-faint mt-0.5">
                   A new device key is generated and shown once. Copy it into the reader software.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setRegisterOpen(false)}
-                className="text-neutral-500 hover:text-white"
+                className="text-faint hover:text-ink"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -917,7 +907,7 @@ export default function HardwareConsole() {
 
             <div className="space-y-3">
               <div>
-                <label htmlFor="reg-name" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="reg-name" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Device name
                 </label>
                 <input
@@ -927,12 +917,12 @@ export default function HardwareConsole() {
                   placeholder="Main door relay"
                   maxLength={80}
                   required
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs outline-none focus:border-emerald-500/50"
                 />
               </div>
 
               <div>
-                <label htmlFor="reg-type" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="reg-type" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Device type
                 </label>
                 <select
@@ -941,7 +931,7 @@ export default function HardwareConsole() {
                   onChange={(e) =>
                     setRegisterForm({ ...registerForm, device_type: e.target.value as HardwareDeviceType })
                   }
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs outline-none focus:border-emerald-500/50"
                 >
                   {(Object.keys(DEVICE_TYPE_META) as HardwareDeviceType[]).map((type) => (
                     <option key={type} value={type}>
@@ -949,13 +939,13 @@ export default function HardwareConsole() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-neutral-600 mt-1">
+                <p className="text-[10px] text-faint mt-1">
                   {DEVICE_TYPE_META[registerForm.device_type].hint}
                 </p>
               </div>
 
               <div>
-                <label htmlFor="reg-fw" className="block text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+                <label htmlFor="reg-fw" className="block text-[10px] uppercase tracking-wider text-faint mb-1">
                   Software version
                 </label>
                 <input
@@ -964,12 +954,12 @@ export default function HardwareConsole() {
                   onChange={(e) => setRegisterForm({ ...registerForm, firmware_version: e.target.value })}
                   placeholder="v1.0.0"
                   maxLength={24}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500/50"
+                  className="w-full vy-input-sm text-xs font-mono outline-none focus:border-emerald-500/50"
                 />
               </div>
 
               {registerError && (
-                <p className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
+                <p className="text-[11px] text-rose-700 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
                   {registerError}
                 </p>
               )}
@@ -979,7 +969,7 @@ export default function HardwareConsole() {
               <button
                 type="button"
                 onClick={() => setRegisterOpen(false)}
-                className="flex-1 px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs transition"
+                className="flex-1 px-4 py-2 rounded-xl bg-wash hover:bg-line-strong text-xs transition"
               >
                 Cancel
               </button>
@@ -999,29 +989,29 @@ export default function HardwareConsole() {
       {/* ---- One-time key modal --------------------------------------------- */}
       {issued && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-neutral-900 border border-emerald-500/30 rounded-3xl p-6 shadow-2xl">
+          <div className="w-full max-w-md bg-surface border border-emerald-500/30 rounded-3xl p-6 shadow-2xl">
             <div className="flex items-center gap-2 mb-3">
               <KeyRound className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-base font-bold">{issued.device_name} registered</h2>
+              <h2 className="text-[15px] font-semibold tracking-tight text-ink">{issued.device_name} registered</h2>
             </div>
 
-            <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2 mb-4">
+            <p className="text-[11px] text-amber-700 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2 mb-4">
               Copy this code into the reader software now. The console can only show a masked form of it
               afterwards — a lost key means registering the terminal again.
             </p>
 
-            <div className="bg-black/60 border border-neutral-800 rounded-xl p-3 mb-4 break-all font-mono text-xs text-emerald-300 select-all">
+            <div className="rounded-xl border border-line bg-subtle p-3 mb-4 break-all font-mono text-xs text-emerald-700 select-all">
               {issued.api_key}
             </div>
 
             <dl className="grid grid-cols-2 gap-y-1 text-[11px] mb-5">
-              <dt className="text-neutral-500">Type</dt>
+              <dt className="text-faint">Type</dt>
               <dd className="text-right">
                 {DEVICE_TYPE_META[issued.device_type]?.label ?? issued.device_type}
               </dd>
-              <dt className="text-neutral-500">Software</dt>
+              <dt className="text-faint">Software</dt>
               <dd className="text-right font-mono">{issued.firmware_version}</dd>
-              <dt className="text-neutral-500">Device id</dt>
+              <dt className="text-faint">Device id</dt>
               <dd className="text-right font-mono truncate">{issued.id}</dd>
             </dl>
 
@@ -1043,7 +1033,7 @@ export default function HardwareConsole() {
               </button>
               <button
                 onClick={() => setIssued(null)}
-                className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs transition"
+                className="px-4 py-2 rounded-xl bg-wash hover:bg-line-strong text-xs transition"
               >
                 Close
               </button>
@@ -1071,16 +1061,16 @@ function StatCard({
     emerald: 'border-emerald-500/20 text-emerald-400',
     amber: 'border-amber-500/20 text-amber-400',
     rose: 'border-rose-500/20 text-rose-400',
-    neutral: 'border-neutral-800 text-neutral-300',
+    neutral: 'border-line text-ink-2',
   }[tone];
 
   return (
-    <div className={`rounded-2xl border bg-neutral-900 px-4 py-3 ${toneClass}`}>
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+    <div className={`rounded-2xl border bg-surface px-4 py-3 ${toneClass}`}>
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-faint mb-1">
         {icon}
         {label}
       </div>
-      <p className="text-2xl font-black text-white leading-none">{value}</p>
+      <p className="text-2xl font-black text-ink leading-none">{value}</p>
     </div>
   );
 }

@@ -1,11 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
-  ArrowLeft,
   Bell,
   CalendarClock,
   Check,
@@ -19,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { isUuid, readSession } from '@/lib/session';
+import PageHeader from '@/components/page-header';
 import {
   DAY_KEYS,
   DAY_LABELS,
@@ -57,7 +56,7 @@ import {
  */
 
 const INPUT =
-  'w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-amber-500';
+  'w-full rounded-xl border border-line bg-surface rounded-xl px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:border-amber-500';
 
 const EMPTY_NOTICE = {
   id: null as string | null,
@@ -81,13 +80,13 @@ function DayEditor({
 }) {
   return (
     <div
-      className={`rounded-2xl border p-3.5 ${
-        day.closed ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-800 bg-neutral-900'
+      className={`vy-card p-3.5 ${
+        day.closed ? 'border-line bg-subtle' : 'border-line bg-surface'
       }`}
     >
       <div className="flex items-center justify-between gap-2 mb-2.5">
-        <span className="text-xs font-bold text-white">{DAY_LABELS[dayKey]}</span>
-        <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold text-neutral-400">
+        <span className="text-[11px] font-semibold text-ink">{DAY_LABELS[dayKey]}</span>
+        <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold text-muted">
           <input
             type="checkbox"
             checked={day.closed}
@@ -105,20 +104,20 @@ function DayEditor({
           disabled={day.closed}
           onChange={(event) => onPatch({ open: event.target.value })}
           aria-label={`${DAY_LABELS[dayKey]} opening time`}
-          className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-emerald-500 disabled:opacity-40"
+          className="w-full vy-input-sm disabled:opacity-40"
         />
-        <span className="text-neutral-600 text-xs">&ndash;</span>
+        <span className="text-faint text-xs">&ndash;</span>
         <input
           type="time"
           value={day.close}
           disabled={day.closed}
           onChange={(event) => onPatch({ close: event.target.value })}
           aria-label={`${DAY_LABELS[dayKey]} closing time`}
-          className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-emerald-500 disabled:opacity-40"
+          className="w-full vy-input-sm disabled:opacity-40"
         />
       </div>
 
-      <p className="mt-2 text-[10px] text-neutral-600">
+      <p className="mt-2 text-[10px] text-faint">
         {day.closed
           ? 'Rest day'
           : `${formatClock(day.open)} – ${formatClock(day.close)}`}
@@ -158,14 +157,14 @@ function NoticeRow({
   return (
     <li
       className={`rounded-2xl border p-4 ${
-        item.is_published ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-800/60 bg-neutral-900/40'
+        item.is_published ? 'border-line bg-surface' : 'border-line bg-subtle'
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {item.is_pinned && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
                 <Pin className="w-3 h-3" /> Pinned
               </span>
             )}
@@ -173,22 +172,22 @@ function NoticeRow({
               {NOTICE_TYPES.find((t) => t.id === item.type)?.label ?? item.type}
             </span>
             {!item.is_published && (
-              <span className="rounded-md border border-neutral-700 bg-neutral-800 px-1.5 py-0.5 text-[10px] font-bold text-neutral-400">
+              <span className="rounded-md border border-line-strong bg-wash px-1.5 py-0.5 text-[10px] font-bold text-muted">
                 Draft
               </span>
             )}
             {expired && item.is_published && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
                 <AlertTriangle className="w-3 h-3" /> Expired
               </span>
             )}
           </div>
 
-          <h3 className="mt-1.5 text-sm font-bold text-white">{item.title}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-neutral-400 whitespace-pre-wrap">
+          <h3 className="mt-1.5 text-[13px] font-semibold text-ink">{item.title}</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted whitespace-pre-wrap">
             {item.body}
           </p>
-          <p className="mt-2 text-[10px] text-neutral-600">
+          <p className="mt-2 text-[10px] text-faint">
             Posted {new Date(item.created_at).toLocaleString('en-IN')}
             {item.expires_at && ` · expires ${new Date(item.expires_at).toLocaleDateString('en-IN')}`}
           </p>
@@ -199,7 +198,7 @@ function NoticeRow({
             onClick={onTogglePin}
             disabled={busy}
             title={item.is_pinned ? 'Unpin' : 'Pin to top'}
-            className="p-2 rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-400 hover:text-amber-300 transition disabled:opacity-50"
+            className="vy-icon-btn-sm border border-line bg-surface hover:text-amber-600 disabled:opacity-50"
           >
             {item.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
           </button>
@@ -210,7 +209,7 @@ function NoticeRow({
             className={`p-2 rounded-lg border transition disabled:opacity-50 ${
               item.is_published
                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                : 'border-neutral-800 bg-neutral-950 text-neutral-500 hover:text-white'
+                : 'border-line bg-surface text-faint hover:text-ink'
             }`}
           >
             {item.is_published ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
@@ -218,7 +217,7 @@ function NoticeRow({
           <button
             onClick={onEdit}
             disabled={busy}
-            className="px-3 py-1.5 rounded-lg border border-neutral-800 bg-neutral-950 text-[11px] font-semibold text-neutral-300 hover:border-neutral-700 transition disabled:opacity-50"
+            className="vy-btn !px-3 !py-1.5 text-[11px] border border-line bg-surface hover:border-line-strong disabled:opacity-50"
           >
             Edit
           </button>
@@ -226,7 +225,7 @@ function NoticeRow({
             onClick={onDelete}
             disabled={busy}
             title="Delete notice"
-            className="p-2 rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-500 hover:text-rose-400 hover:border-rose-500/30 transition disabled:opacity-50"
+            className="p-2 rounded-lg border border-line bg-surface text-faint hover:text-rose-400 hover:border-rose-500/30 transition disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -428,45 +427,25 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white font-sans">
-      <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/admin"
-              className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition"
-              aria-label="Back to the dashboard"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Settings className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tight">Gym Settings</h1>
-              <p className="text-xs text-neutral-400">
-                {gymName || 'Your gym'} &middot; announcements &amp; opening hours
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={openNewNotice}
-            className="flex items-center gap-1.5 self-start px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20"
-          >
-            <Plus className="w-4 h-4" /> New Notice
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+    <div className="vy-page vy-noscroll font-sans">
+      <div className="vy-shell">
+        <PageHeader
+          icon={<Settings className="h-5 w-5" />}
+          title="Gym Settings"
+          subtitle={`${gymName || 'Your gym'} · announcements & opening hours`}
+          actions={
+            <button onClick={openNewNotice} className="vy-btn vy-btn-lg vy-btn-brand self-start">
+              <Plus className="h-4 w-4" /> New Notice
+            </button>
+          }
+        />
         {notice && (
           <div
             role="status"
-            className={`rounded-xl border px-3.5 py-2.5 text-xs font-medium ${
+            className={`vy-notice !px-3.5 !py-2.5 text-xs ${
               notice.kind === 'ok'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+                : 'border-rose-500/30 bg-rose-500/10 text-rose-700'
             }`}
           >
             {notice.message}
@@ -478,24 +457,24 @@ export default function AdminSettingsPage() {
           <div className="flex items-center gap-2 mb-3">
             <Megaphone className="w-5 h-5 text-amber-400" />
             <h2 className="text-lg font-black tracking-tight">Gym Announcements</h2>
-            <span className="text-xs text-neutral-500">
+            <span className="text-[11px] text-faint">
               {notices.length} total &middot; {notices.filter((n) => n.is_published).length} live
             </span>
           </div>
-          <p className="text-xs text-neutral-500 mb-4 max-w-3xl">
+          <p className="text-[11px] text-faint mb-4 max-w-3xl">
             These appear on every member&apos;s Home tab, pinned notices first. Unpublish
             hides a notice without deleting it, and an expiry removes it automatically.
           </p>
 
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-neutral-400">
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading settings…
             </div>
           ) : notices.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/50 p-10 text-center">
-              <Bell className="mx-auto mb-3 w-9 h-9 text-neutral-700" />
-              <p className="text-sm font-bold text-neutral-300">No notices yet</p>
-              <p className="mt-1 text-xs text-neutral-500">
+            <div className="vy-empty p-10 text-center">
+              <Bell className="mx-auto mb-3 w-9 h-9 text-faint" />
+              <p className="text-sm font-bold text-ink-2">No notices yet</p>
+              <p className="mt-1 text-[11px] text-faint">
                 Members currently see &ldquo;No notices from the gym today&rdquo;.
               </p>
               <button
@@ -529,7 +508,7 @@ export default function AdminSettingsPage() {
             <CalendarClock className="w-5 h-5 text-emerald-400" />
             <h2 className="text-lg font-black tracking-tight">Operating Hours</h2>
           </div>
-          <p className="text-xs text-neutral-500 mb-4 max-w-3xl">
+          <p className="text-[11px] text-faint mb-4 max-w-3xl">
             Drives the &ldquo;Open now / Closed&rdquo; indicator on every member&apos;s
             Home tab and gate pass. Times are the gym&apos;s local time (IST). Tick
             &ldquo;Closed&rdquo; for a rest day — the hours you set are remembered, so
@@ -549,7 +528,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[11px] text-faint">
                 {hoursDirty
                   ? 'Unsaved changes — members still see the previous schedule.'
                   : 'Saved. Members see this schedule.'}
@@ -582,7 +561,7 @@ export default function AdminSettingsPage() {
           <form
             onSubmit={submitNotice}
             onClick={(event) => event.stopPropagation()}
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-900 p-5 sm:rounded-2xl"
+            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 sm:rounded-2xl"
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-black tracking-tight">
@@ -592,7 +571,7 @@ export default function AdminSettingsPage() {
                 type="button"
                 onClick={() => setFormOpen(false)}
                 aria-label="Close"
-                className="rounded-xl border border-neutral-800 bg-neutral-950 p-2 text-neutral-400 hover:text-white transition"
+                className="rounded-xl border border-line bg-surface p-2 text-muted hover:text-ink transition"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -600,7 +579,7 @@ export default function AdminSettingsPage() {
 
             <div className="space-y-3.5">
               <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-neutral-400">
+                <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
                   Title
                 </label>
                 <input
@@ -615,7 +594,7 @@ export default function AdminSettingsPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-neutral-400">
+                <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
                   Notice
                 </label>
                 <textarea
@@ -627,14 +606,14 @@ export default function AdminSettingsPage() {
                   required
                   className={`${INPUT} resize-none`}
                 />
-                <p className="mt-1 text-[10px] text-neutral-600">
+                <p className="mt-1 text-[10px] text-faint">
                   {form.body.length}/2000
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-neutral-400">
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
                     Type
                   </label>
                   <select
@@ -652,7 +631,7 @@ export default function AdminSettingsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-neutral-400">
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
                     Expires (optional)
                   </label>
                   <input
@@ -664,8 +643,8 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-4 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
-                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-300">
+              <div className="flex flex-wrap gap-4 rounded-xl border border-line bg-surface p-3">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-2">
                   <input
                     type="checkbox"
                     checked={form.is_pinned}
@@ -674,7 +653,7 @@ export default function AdminSettingsPage() {
                   />
                   Pin to top
                 </label>
-                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-neutral-300">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-2">
                   <input
                     type="checkbox"
                     checked={form.is_published}
@@ -684,7 +663,7 @@ export default function AdminSettingsPage() {
                   Visible to members
                 </label>
               </div>
-              <p className="text-[10px] text-neutral-600">
+              <p className="text-[10px] text-faint">
                 Leave the expiry empty for a standing notice. A dated notice is hidden
                 automatically at the end of the day you picked.
               </p>
@@ -694,7 +673,7 @@ export default function AdminSettingsPage() {
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}
-                className="rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-2.5 text-xs font-semibold text-neutral-300 hover:border-neutral-700 transition"
+                className="vy-btn vy-btn-lg vy-btn-secondary"
               >
                 Cancel
               </button>

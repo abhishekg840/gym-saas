@@ -227,11 +227,10 @@ function daysUntil(dateStr: string): number {
 
 /** Quiet ghost button used by the Quick Actions row. */
 const QA_CLASS =
-  'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]';
+  'vy-btn vy-btn-ghost !px-2.5 !py-1.5 text-[12px]';
 
 /** Menu row styling shared by the profile dropdown and row menus. */
-const MENU_ITEM =
-  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]';
+const MENU_ITEM = 'vy-menu-item';
 
 export default function GymDashboard() {
   const router = useRouter();
@@ -915,10 +914,10 @@ export default function GymDashboard() {
 
   const emptyRoster = (
     <div className="px-6 py-14 text-center">
-      <p className="text-sm text-[#6B7280]">No members match this view.</p>
-      <p className="mt-1 text-xs text-[#9CA3AF]">
+      <p className="text-sm text-muted">No members match this view.</p>
+      <p className="mt-1 text-xs text-faint">
         Enrol your first member with{' '}
-        <span className="text-[#6B7280]">Add Member</span> — the roster
+        <span className="text-muted">Add Member</span> — the roster
         refreshes the moment they are created.
       </p>
     </div>
@@ -941,7 +940,7 @@ export default function GymDashboard() {
     const isProcessing = actionId === member.id;
     const isOpen = openRowMenu === member.id;
     const item =
-      'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827] disabled:opacity-40 disabled:hover:bg-transparent';
+      'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-ink-2 transition hover:bg-wash hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent';
 
     return (
       <div className="relative" data-menu-root>
@@ -951,7 +950,7 @@ export default function GymDashboard() {
           aria-expanded={isOpen}
           title="More actions"
           onClick={() => setOpenRowMenu(isOpen ? null : member.id)}
-          className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+          className="rounded-lg p-1.5 text-muted transition hover:bg-wash hover:text-ink"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
@@ -959,7 +958,7 @@ export default function GymDashboard() {
         {isOpen && (
           <div
             role="menu"
-            className="absolute right-0 top-full z-30 mt-1 w-52 rounded-lg border border-[#E5E7EB] bg-white py-1 shadow-xl shadow-[#0F172A]/10"
+            className="absolute right-0 top-full z-30 mt-1 w-52 rounded-lg border border-line bg-white py-1 shadow-xl shadow-[#0F172A]/10"
           >
             <button
               type="button"
@@ -970,7 +969,7 @@ export default function GymDashboard() {
               }}
               className={item}
             >
-              <CreditCard className="h-3.5 w-3.5 text-[#6B7280]" />
+              <CreditCard className="h-3.5 w-3.5 text-muted" />
               Link RFID / Biometric
             </button>
             <button
@@ -983,7 +982,7 @@ export default function GymDashboard() {
               className={item}
             >
               <RotateCw
-                className={`h-3.5 w-3.5 text-[#6B7280] ${isProcessing ? 'animate-spin' : ''}`}
+                className={`h-3.5 w-3.5 text-muted ${isProcessing ? 'animate-spin' : ''}`}
               />
               Extend 30 days
             </button>
@@ -998,7 +997,7 @@ export default function GymDashboard() {
                 className={item}
                 title={`Resume membership${member.freeze_end_date ? ` (frozen until ${member.freeze_end_date})` : ''}`}
               >
-                <Unlock className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Unlock className="h-3.5 w-3.5 text-muted" />
                 Resume membership
               </button>
             ) : (
@@ -1012,7 +1011,7 @@ export default function GymDashboard() {
                 className={item}
                 title="Freeze membership — gate access stops immediately"
               >
-                <Snowflake className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Snowflake className="h-3.5 w-3.5 text-muted" />
                 Freeze
               </button>
             )}
@@ -1024,7 +1023,7 @@ export default function GymDashboard() {
               }}
               className={item}
             >
-              <FileText className="h-3.5 w-3.5 text-[#6B7280]" />
+              <FileText className="h-3.5 w-3.5 text-muted" />
               Invoice / receipt
             </button>
 
@@ -1037,7 +1036,7 @@ export default function GymDashboard() {
                 }}
                 className={item}
               >
-                <ArrowRightLeft className="h-3.5 w-3.5 text-[#6B7280]" />
+                <ArrowRightLeft className="h-3.5 w-3.5 text-muted" />
                 Transfer membership
               </button>
             )}
@@ -1051,14 +1050,14 @@ export default function GymDashboard() {
                 }}
                 className={item}
               >
-                <Send className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Send className="h-3.5 w-3.5 text-muted" />
                 WhatsApp UPI reminder
               </button>
             )}
 
             {currentRole === 'owner' && (
               <>
-                <div className="my-1 border-t border-[#E5E7EB]" />
+                <div className="my-1 border-t border-line" />
                 <button
                   type="button"
                   disabled={isProcessing}
@@ -1080,7 +1079,7 @@ export default function GymDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] text-[#111827]">
+    <div className="min-h-screen bg-canvas text-ink">
       {/* ---- Tap-to-enroll / credential linking (Phase 12) -----------------
           Mounted at the page root so the desk can open it from any row without
           the table needing to own the modal's state. */}
@@ -1097,67 +1096,63 @@ export default function GymDashboard() {
       )}
 
       {transferTarget && (
-        <div className="fixed inset-0 bg-[#0F172A]/45 z-50 flex items-center justify-center p-4">
-          <form
-            onSubmit={submitTransfer}
-            className="bg-white border border-[#E5E7EB] p-6 rounded-lg w-full max-w-md"
-          >
-            <h3 className="text-sm font-bold text-[#111827] mb-1 flex items-center gap-2">
-              <ArrowRightLeft className="w-4 h-4 text-amber-600" /> Transfer Membership
+        <div className="vy-scrim">
+          <form onSubmit={submitTransfer} className="vy-modal max-w-md">
+            <div className="vy-modal-body">
+            <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
+              <ArrowRightLeft className="h-4 w-4 text-amber-600" /> Transfer Membership
             </h3>
-            <p className="text-xs text-[#6B7280] mb-5 leading-relaxed">
+            <p className="mb-5 text-xs leading-relaxed text-muted">
               {transferTarget.full_name}&apos;s remaining valid days move onto a new member profile.
-              The current profile is closed as <span className="text-[#374151]">transferred</span>.
+              The current profile is closed as <span className="text-ink-2">transferred</span>.
             </p>
 
-            <label className="block text-[10px] uppercase tracking-wider text-[#6B7280] mb-1.5">
-              Recipient Name
-            </label>
+            <label className="vy-label">Recipient Name</label>
             <input
               autoFocus
               value={transferName}
               onChange={(e) => setTransferName(e.target.value)}
               placeholder="Full name"
-              className="w-full bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-emerald-500 mb-4"
+              className="vy-input mb-4"
             />
 
-            <label className="block text-[10px] uppercase tracking-wider text-[#6B7280] mb-1.5">
-              Recipient Phone (10 digits)
-            </label>
+            <label className="vy-label">Recipient Phone (10 digits)</label>
             <input
               value={transferPhone}
               onChange={(e) => setTransferPhone(e.target.value)}
               placeholder="9876543210"
               inputMode="numeric"
-              className="w-full bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-emerald-500 font-mono mb-6"
+              className="vy-input mb-6 font-mono"
             />
 
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setTransferTarget(null)}
-                className="flex-1 bg-[#F3F4F6] hover:bg-[#E5E7EB] border border-[#E5E7EB] text-[#374151] py-2 rounded-lg text-xs font-semibold transition"
+                className="vy-btn vy-btn-lg flex-1 vy-btn-secondary"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={transferBusy}
-                className="flex-1 bg-[#111827] hover:bg-black text-white py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition disabled:opacity-50"
+                className="vy-btn vy-btn-lg vy-btn-primary flex-1 uppercase tracking-wider"
               >
                 {transferBusy ? 'Transferring...' : 'Confirm Transfer'}
               </button>
+            </div>
             </div>
           </form>
         </div>
       )}
 
       {pinPrompt && (
-        <div className="fixed inset-0 bg-[#0F172A]/45 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E5E7EB] p-6 rounded-lg w-full max-w-xs text-center">
-            <Lock className="w-8 h-8 text-amber-600 mx-auto mb-2" />
-            <h3 className="font-bold text-base mb-1">Enter Owner PIN</h3>
-            <p className="text-xs text-[#6B7280] mb-4">Required to switch to full Owner Admin mode.</p>
+        <div className="vy-scrim">
+          <div className="vy-modal max-w-xs text-center">
+            <div className="vy-modal-body">
+            <Lock className="mx-auto mb-2 h-8 w-8 text-amber-600" />
+            <h3 className="mb-1 text-base font-semibold">Enter Owner PIN</h3>
+            <p className="mb-4 text-xs text-muted">Required to switch to full Owner Admin mode.</p>
             <form onSubmit={verifyPin} className="space-y-3">
               <input
                 type="password"
@@ -1166,24 +1161,25 @@ export default function GymDashboard() {
                 value={enteredPin}
                 onChange={e => setEnteredPin(e.target.value)}
                 placeholder="****"
-                className="w-full bg-white border border-[#E5E7EB] text-center tracking-widest text-xl rounded-lg py-2 focus:border-emerald-500 focus:outline-none"
+                className="vy-input text-center text-xl tracking-widest"
               />
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setPinPrompt(false)}
-                  className="w-1/2 bg-[#F3F4F6] py-2 rounded-lg text-xs"
+                  className="vy-btn vy-btn-lg w-1/2 vy-btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-[#111827] font-bold text-white py-2 rounded-lg text-xs"
+                  className="vy-btn vy-btn-lg vy-btn-primary w-1/2"
                 >
                   Verify
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -1193,24 +1189,24 @@ export default function GymDashboard() {
           in the middle, utilities on the right. Everything secondary sits in
           "More" and the profile menu, so the bar never becomes a pill wall.
           Every target is a route the old toolbar already linked to. */}
-      <header className="sticky top-0 z-40 border-b border-[#E5E7EB] bg-white">
-        <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-4 px-5 sm:px-6">
+      <header className="vy-topbar">
+        <div className="vy-topbar-inner">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600">
+            <div className="vy-brand-mark">
               <Dumbbell className="h-4 w-4 text-white" />
             </div>
             <div className="min-w-0 leading-tight">
-              <p className="truncate text-[14px] font-semibold tracking-tight text-[#111827]">
+              <p className="truncate text-[14px] font-semibold tracking-tight text-ink">
                 {session?.tenantName || 'Gym'}
               </p>
-              <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+              <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-faint">
                 Vyroniq
                 <span aria-hidden="true">·</span>
                 <button
                   type="button"
                   onClick={handleSwitchRole}
                   title="Switch desk role (Owner / Reception)"
-                  className="inline-flex items-center gap-1 text-[#6B7280] transition hover:text-[#111827]"
+                  className="inline-flex items-center gap-1 text-muted transition hover:text-ink"
                 >
                   {currentRole === 'owner' ? (
                     <Unlock className="h-2.5 w-2.5" />
@@ -1227,39 +1223,39 @@ export default function GymDashboard() {
             aria-label="Dashboard sections"
             className="hidden flex-1 items-center justify-center gap-1 lg:flex"
           >
-            <span className="rounded-lg bg-[#F3F4F6] px-3 py-1.5 text-[13px] font-semibold text-[#111827]">
+            <span className="rounded-lg bg-wash px-3 py-1.5 text-[13px] font-semibold text-ink">
               Overview
             </span>
             <button
               type="button"
               onClick={scrollToMembers}
-              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink"
             >
               Members
             </button>
             <Link
               href="/attendance"
-              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink"
             >
               Attendance
             </Link>
             <Link
               href="/store"
               title="Counter, POS and payments"
-              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink"
             >
               Payments
             </Link>
             <Link
               href="/trainers"
-              className="rounded-lg px-3 py-1.5 text-[13px] text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+              className="rounded-lg px-3 py-1.5 text-[13px] text-muted transition hover:bg-wash hover:text-ink"
             >
               Trainers
             </Link>
             {currentRole === 'owner' && (
               <Link
                 href="/analytics"
-                className="rounded-lg px-3 py-1.5 text-[13px] text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="rounded-lg px-3 py-1.5 text-[13px] text-muted transition hover:bg-wash hover:text-ink"
               >
                 Analytics
               </Link>
@@ -1273,8 +1269,8 @@ export default function GymDashboard() {
                 }
                 className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-[13px] transition ${
                   openDropdown === 'more'
-                    ? 'bg-white text-[#111827]'
-                    : 'text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]'
+                    ? 'bg-white text-ink'
+                    : 'text-muted hover:bg-wash hover:text-ink'
                 }`}
               >
                 More
@@ -1287,28 +1283,28 @@ export default function GymDashboard() {
               {openDropdown === 'more' && (
                 <div
                   role="menu"
-                  className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-[#E5E7EB] bg-white py-1 shadow-xl shadow-[#0F172A]/10"
+                  className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-line bg-white py-1 shadow-xl shadow-[#0F172A]/10"
                 >
                   <Link
                     href="/leads"
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
                   >
-                    <Target className="h-3.5 w-3.5 text-[#6B7280]" />
+                    <Target className="h-3.5 w-3.5 text-muted" />
                     Leads CRM
                   </Link>
                   <Link
                     href="/admin/challenges"
                     title="Launch and manage 30-day gym challenges"
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
                   >
-                    <Trophy className="h-3.5 w-3.5 text-[#6B7280]" />
+                    <Trophy className="h-3.5 w-3.5 text-muted" />
                     Challenges
                   </Link>
                   <Link
                     href="/plans"
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
                   >
-                    <Tag className="h-3.5 w-3.5 text-[#6B7280]" />
+                    <Tag className="h-3.5 w-3.5 text-muted" />
                     Packages
                   </Link>
                   {(currentRole === 'owner' ||
@@ -1316,9 +1312,9 @@ export default function GymDashboard() {
                     <Link
                       href="/hardware"
                       title="Terminals, machine keys and the gym geofence"
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
                     >
-                      <ServerCog className="h-3.5 w-3.5 text-[#6B7280]" />
+                      <ServerCog className="h-3.5 w-3.5 text-muted" />
                       Hardware
                     </Link>
                   )}
@@ -1332,7 +1328,7 @@ export default function GymDashboard() {
               href="/scan"
               target="_blank"
               title="Open the QR scanner"
-              className="hidden items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-[12px] font-medium text-[#374151] transition hover:border-[#D1D5DB] hover:bg-[#F3F4F6] sm:inline-flex"
+              className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink-2 transition hover:border-line-strong hover:bg-wash sm:inline-flex"
             >
               <QrCode className="h-3.5 w-3.5" />
               Scan
@@ -1348,7 +1344,7 @@ export default function GymDashboard() {
                 onClick={() =>
                   setOpenDropdown(openDropdown === 'notif' ? null : 'notif')
                 }
-                className="relative rounded-lg p-2 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="relative rounded-lg p-2 text-muted transition hover:bg-wash hover:text-ink"
               >
                 <Bell className="h-4 w-4" />
                 {expiringCount > 0 && (
@@ -1358,16 +1354,16 @@ export default function GymDashboard() {
               {openDropdown === 'notif' && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-[#E5E7EB] bg-white shadow-xl shadow-[#0F172A]/10"
+                  className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-line bg-white shadow-xl shadow-[#0F172A]/10"
                 >
-                  <div className="border-b border-[#E5E7EB] px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                  <div className="border-b border-line px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                       Needs attention
                     </p>
                   </div>
                   <div className="max-h-72 overflow-y-auto">
                     {expiringSoon.length === 0 ? (
-                      <p className="px-3 py-4 text-xs leading-relaxed text-[#6B7280]">
+                      <p className="px-3 py-4 text-xs leading-relaxed text-muted">
                         Nothing needs attention — no membership expires in the
                         next seven days.
                       </p>
@@ -1383,13 +1379,13 @@ export default function GymDashboard() {
                               setFilterTab('expiring');
                               scrollToMembers();
                             }}
-                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-[#F3F4F6]"
+                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-wash"
                           >
                             <span className="min-w-0">
-                              <span className="block truncate text-xs text-[#374151]">
+                              <span className="block truncate text-xs text-ink-2">
                                 {member.full_name}
                               </span>
-                              <span className="block text-[11px] text-[#9CA3AF]">
+                              <span className="block text-[11px] text-faint">
                                 expires {member.membership_end}
                               </span>
                             </span>
@@ -1408,7 +1404,7 @@ export default function GymDashboard() {
             <Link
               href="/admin/settings"
               title="Gym announcements and opening hours"
-              className="hidden rounded-lg p-2 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827] sm:block"
+              className="hidden rounded-lg p-2 text-muted transition hover:bg-wash hover:text-ink sm:block"
             >
               <Settings className="h-4 w-4" />
             </Link>
@@ -1421,20 +1417,20 @@ export default function GymDashboard() {
                   setOpenDropdown(openDropdown === 'profile' ? null : 'profile')
                 }
                 title="Account"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[11px] font-semibold text-[#374151] transition hover:border-[#D1D5DB]"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white text-[11px] font-semibold text-ink-2 transition hover:border-line-strong"
               >
                 {initialsOf(session?.name)}
               </button>
               {openDropdown === 'profile' && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-[#E5E7EB] bg-white py-1 shadow-xl shadow-[#0F172A]/10"
+                  className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-line bg-white py-1 shadow-xl shadow-[#0F172A]/10"
                 >
-                  <div className="border-b border-[#E5E7EB] px-3 py-2">
-                    <p className="truncate text-xs font-semibold text-[#111827]">
+                  <div className="border-b border-line px-3 py-2">
+                    <p className="truncate text-xs font-semibold text-ink">
                       {session?.name || 'Owner'}
                     </p>
-                    <p className="truncate text-[11px] text-[#6B7280]">
+                    <p className="truncate text-[11px] text-muted">
                       {session?.phone}
                     </p>
                   </div>
@@ -1444,9 +1440,9 @@ export default function GymDashboard() {
                     className={MENU_ITEM}
                   >
                     {currentRole === 'owner' ? (
-                      <Unlock className="h-3.5 w-3.5 text-[#6B7280]" />
+                      <Unlock className="h-3.5 w-3.5 text-muted" />
                     ) : (
-                      <Lock className="h-3.5 w-3.5 text-[#6B7280]" />
+                      <Lock className="h-3.5 w-3.5 text-muted" />
                     )}
                     {currentRole === 'owner'
                       ? 'Switch to Reception'
@@ -1457,7 +1453,7 @@ export default function GymDashboard() {
                     title="Open your Vyroniq member pass and app"
                     className={MENU_ITEM}
                   >
-                    <UserRound className="h-3.5 w-3.5 text-[#6B7280]" />
+                    <UserRound className="h-3.5 w-3.5 text-muted" />
                     Member Pass &amp; App
                   </Link>
                   {session?.role === 'super_admin' && (
@@ -1470,10 +1466,10 @@ export default function GymDashboard() {
                     onClick={exportToCSV}
                     className={MENU_ITEM}
                   >
-                    <Download className="h-3.5 w-3.5 text-[#6B7280]" />
+                    <Download className="h-3.5 w-3.5 text-muted" />
                     Export CSV
                   </button>
-                  <div className="my-1 border-t border-[#E5E7EB]" />
+                  <div className="my-1 border-t border-line" />
                   <button
                     type="button"
                     onClick={handleLogout}
@@ -1494,7 +1490,7 @@ export default function GymDashboard() {
               onClick={() =>
                 setOpenDropdown(openDropdown === 'mobile' ? null : 'mobile')
               }
-              className="rounded-lg p-2 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827] lg:hidden"
+              className="rounded-lg p-2 text-muted transition hover:bg-wash hover:text-ink lg:hidden"
             >
               <Menu className="h-4 w-4" />
             </button>
@@ -1504,10 +1500,10 @@ export default function GymDashboard() {
 
       <main className="mx-auto max-w-[1400px] space-y-5 px-4 pb-16 pt-5 sm:px-6">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-[#111827]">
+          <h1 className="text-lg font-semibold tracking-tight text-ink">
             Overview
           </h1>
-          <p className="mt-0.5 text-xs text-[#6B7280]">
+          <p className="mt-0.5 text-xs text-muted">
             {session
               ? new Intl.DateTimeFormat('en-GB', {
                   weekday: 'long',
@@ -1524,9 +1520,9 @@ export default function GymDashboard() {
         {/* Quick actions — one quiet row; every item is a real workflow. */}
         <section
           aria-label="Quick actions"
-          className="flex items-center gap-1 overflow-x-auto rounded-lg border border-[#E5E7EB] bg-white px-2 py-1.5"
+          className="flex items-center gap-1 overflow-x-auto rounded-lg border border-line bg-white px-2 py-1.5"
         >
-          <span className="shrink-0 px-2 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+          <span className="shrink-0 px-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
             Quick actions
           </span>
           <Link href="/scan" target="_blank" className={QA_CLASS}>
@@ -1577,46 +1573,46 @@ export default function GymDashboard() {
           aria-label="Today at a glance"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="flex items-start justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 Members
               </p>
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#F3F4F6] text-[#6B7280]">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-wash text-muted">
                 <Users className="h-3.5 w-3.5" />
               </span>
             </div>
-            <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-[#111827]">
+            <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-ink">
               {members.length}
             </p>
-            <p className="mt-1.5 text-[11px] text-[#9CA3AF]">
+            <p className="mt-1.5 text-[11px] text-faint">
               <span className="text-rose-600">{expiredCount} expired</span>
               {' · '}
               <span className="text-sky-600">{frozenCount} frozen</span>
             </p>
           </div>
 
-          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="flex items-start justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 Active Access
               </p>
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                 <ShieldCheck className="h-3.5 w-3.5" />
               </span>
             </div>
-            <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-[#111827]">
+            <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-ink">
               {activeCount}
             </p>
-            <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-[#9CA3AF]">
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-faint">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               Gate access granted
             </p>
           </div>
 
-          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="flex items-start justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 Expiring Soon
               </p>
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
@@ -1625,31 +1621,31 @@ export default function GymDashboard() {
             </div>
             <p
               className={`mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums ${
-                expiringCount > 0 ? 'text-amber-600' : 'text-[#111827]'
+                expiringCount > 0 ? 'text-amber-600' : 'text-ink'
               }`}
             >
               {expiringCount}
             </p>
-            <p className="mt-1.5 text-[11px] text-[#9CA3AF]">
+            <p className="mt-1.5 text-[11px] text-faint">
               Within the next 7 days
             </p>
           </div>
 
-          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="flex items-start justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 Today&apos;s Revenue
               </p>
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
                 <IndianRupee className="h-3.5 w-3.5" />
               </span>
             </div>
-            <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-[#111827]">
+            <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-ink">
               {todayRevenue === null
                 ? '—'
                 : `₹${todayRevenue.toLocaleString('en-IN')}`}
             </p>
-            <p className="mt-1.5 text-[11px] text-[#9CA3AF]">
+            <p className="mt-1.5 text-[11px] text-faint">
               {paymentCount === null
                 ? '…'
                 : paymentCount === 0
@@ -1662,11 +1658,11 @@ export default function GymDashboard() {
         {/* Attendance — live occupancy and today's numbers side by side. */}
         <section className="grid gap-5 lg:grid-cols-2" aria-label="Attendance">
           {/* Attendance Live */}
-          <div className="flex flex-col rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-3.5">
+          <div className="flex flex-col rounded-xl border border-line bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
               <div className="flex items-center gap-2">
-                <Activity className="h-3.5 w-3.5 text-[#9CA3AF]" />
-                <h2 className="text-[13px] font-semibold text-[#111827]">
+                <Activity className="h-3.5 w-3.5 text-faint" />
+                <h2 className="text-[13px] font-semibold text-ink">
                   Attendance Live
                 </h2>
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
@@ -1677,12 +1673,12 @@ export default function GymDashboard() {
                   Live
                 </span>
                 {crowd.loading && (
-                  <RotateCw className="h-3 w-3 animate-spin text-[#9CA3AF]" />
+                  <RotateCw className="h-3 w-3 animate-spin text-faint" />
                 )}
               </div>
               <Link
                 href="/attendance"
-                className="inline-flex items-center gap-1 text-[12px] font-medium text-[#6B7280] transition hover:text-[#111827]"
+                className="inline-flex items-center gap-1 text-[12px] font-medium text-muted transition hover:text-ink"
               >
                 View all
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -1691,10 +1687,10 @@ export default function GymDashboard() {
 
             <div className="flex flex-1 flex-col p-5">
               <div className="flex items-baseline gap-2">
-                <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-[#111827]">
+                <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-ink">
                   {crowd.inside}
                 </span>
-                <span className="text-[13px] text-[#6B7280]">
+                <span className="text-[13px] text-muted">
                   currently inside
                 </span>
               </div>
@@ -1704,7 +1700,7 @@ export default function GymDashboard() {
                   {crowd.error}
                 </p>
               ) : crowd.members.length === 0 ? (
-                <p className="mt-3 text-xs text-[#6B7280]">
+                <p className="mt-3 text-xs text-muted">
                   No one inside right now.
                 </p>
               ) : (
@@ -1712,17 +1708,17 @@ export default function GymDashboard() {
                   {crowd.members.map((member, index) => (
                     <li
                       key={`${member.phone}-${member.at}-${index}`}
-                      className="flex items-center gap-3 border-b border-[#F3F4F6] py-2 last:border-0"
+                      className="flex items-center gap-3 border-b border-line py-2 last:border-0"
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[10px] font-semibold text-[#374151]">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-wash text-[10px] font-semibold text-ink-2">
                         {initialsOf(member.full_name)}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-[#111827]">
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
                         {member.full_name}
                       </span>
-                      <span className="shrink-0 text-right text-[11px] tabular-nums text-[#6B7280]">
+                      <span className="shrink-0 text-right text-[11px] tabular-nums text-muted">
                         <span className="block">{gymClock(member.at)}</span>
-                        <span className="block text-[#9CA3AF]">
+                        <span className="block text-faint">
                           {relativeTime(member.at)}
                         </span>
                       </span>
@@ -1731,18 +1727,18 @@ export default function GymDashboard() {
                 </ul>
               )}
 
-              <p className="mt-auto pt-3 text-[10px] text-[#9CA3AF]">
+              <p className="mt-auto pt-3 text-[10px] text-faint">
                 Counted out automatically 3 hours after the last entry.
               </p>
             </div>
           </div>
           {/* Today's attendance — a real analytics card, not a stat dump. */}
-          <div className="flex flex-col rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-3.5">
-              <h2 className="text-[13px] font-semibold text-[#111827]">
+          <div className="flex flex-col rounded-xl border border-line bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+              <h2 className="text-[13px] font-semibold text-ink">
                 Today&apos;s Attendance
               </h2>
-              <span className="text-[11px] text-[#9CA3AF]">
+              <span className="text-[11px] text-faint">
                 {attStats
                   ? `${attStats.checkins} check-ins today`
                   : 'loading…'}
@@ -1751,27 +1747,27 @@ export default function GymDashboard() {
 
             <div className="p-5">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                <div className="rounded-lg border border-line bg-subtle px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                     Today&apos;s Check-ins
                   </p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-[#111827]">
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
                     {attStats ? attStats.checkins : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                <div className="rounded-lg border border-line bg-subtle px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                     Peak Time
                   </p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-[#111827]">
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
                     {attStats?.peak ?? '—'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                <div className="rounded-lg border border-line bg-subtle px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                     Average Visit
                   </p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-[#111827]">
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
                     {attStats?.avgVisit ?? '—'}
                   </p>
                 </div>
@@ -1797,13 +1793,13 @@ export default function GymDashboard() {
                 </div>
               ) : (
                 <div className="mt-5 flex h-[190px] items-center justify-center">
-                  <p className="text-xs text-[#9CA3AF]">
+                  <p className="text-xs text-faint">
                     Loading today&apos;s attendance…
                   </p>
                 </div>
               )}
 
-              <p className="mt-3 text-[10px] text-[#9CA3AF]">
+              <p className="mt-3 text-[10px] text-faint">
                 Entries and exits as recorded at the gate, on the gym clock.
               </p>
             </div>
@@ -1812,33 +1808,33 @@ export default function GymDashboard() {
         {/* ---- Members workspace ------------------------------------------- */}
         <section
           id="members"
-          className="scroll-mt-20 rounded-xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+          className="scroll-mt-20 rounded-xl border border-line bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         >
           <div className="flex flex-col gap-4 px-5 pt-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-baseline gap-2">
-                <h2 className="text-base font-semibold tracking-tight text-[#111827]">
+                <h2 className="text-base font-semibold tracking-tight text-ink">
                   Members
                 </h2>
-                <span className="text-xs text-[#6B7280]">
+                <span className="text-xs text-muted">
                   {members.length} total
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9CA3AF]" />
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
                   <input
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     placeholder="Search members or phone"
                     aria-label="Search members or phone"
-                    className="h-9 w-52 rounded-lg border border-[#E5E7EB] bg-white pl-8 pr-3 text-[13px] text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#D1D5DB] focus:outline-none sm:w-64"
+                    className="h-9 w-52 rounded-lg border border-line bg-white pl-8 pr-3 text-[13px] text-ink placeholder:text-faint focus:border-line-strong focus:outline-none sm:w-64"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => setEnrollOpen(true)}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3.5 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
                 >
                   <Plus className="h-4 w-4" />
                   Add Member
@@ -1849,7 +1845,7 @@ export default function GymDashboard() {
             <div
               role="tablist"
               aria-label="Member filters"
-              className="flex items-center gap-1 overflow-x-auto border-b border-[#E5E7EB]"
+              className="flex items-center gap-1 overflow-x-auto border-b border-line"
             >
               {(
                 [
@@ -1868,12 +1864,12 @@ export default function GymDashboard() {
                   onClick={() => setFilterTab(id)}
                   className={`-mb-px shrink-0 border-b-2 px-3 pb-2.5 pt-1.5 text-[13px] transition ${
                     filterTab === id
-                      ? 'border-emerald-600 font-semibold text-[#111827]'
-                      : 'border-transparent text-[#6B7280] hover:text-[#374151]'
+                      ? 'border-emerald-600 font-semibold text-ink'
+                      : 'border-transparent text-muted hover:text-ink-2'
                   }`}
                 >
                   {label}{' '}
-                  <span className="tabular-nums text-[#9CA3AF]">
+                  <span className="tabular-nums text-faint">
                     ({count})
                   </span>
                 </button>
@@ -1886,8 +1882,8 @@ export default function GymDashboard() {
               would clip the row "More" dropdown. */}
           <div className="hidden md:block">
             <table className="w-full table-auto border-collapse text-left">
-              <thead className="bg-[#F9FAFB]">
-                <tr className="border-b border-[#E5E7EB] text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <thead className="bg-subtle">
+                <tr className="border-b border-line text-[10px] font-semibold uppercase tracking-wider text-muted">
                   <th scope="col" className="px-5 py-3 font-semibold">
                     Member
                   </th>
@@ -1920,7 +1916,7 @@ export default function GymDashboard() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F3F4F6]">
+              <tbody className="divide-y divide-line">
                 {filteredMembers.length === 0 ? (
                   <tr>
                     <td colSpan={7}>{emptyRoster}</td>
@@ -1939,45 +1935,45 @@ export default function GymDashboard() {
                     return (
                       <tr
                         key={member.id}
-                        className="transition hover:bg-[#F9FAFB]"
+                        className="transition hover:bg-subtle"
                       >
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-[11px] font-semibold text-[#374151]">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-wash text-[11px] font-semibold text-ink-2">
                               {initialsOf(member.full_name)}
                             </span>
                             <div className="min-w-0">
-                              <p className="truncate text-[13px] font-semibold text-[#111827]">
+                              <p className="truncate text-[13px] font-semibold text-ink">
                                 {member.full_name}
                               </p>
-                              <p className="truncate text-[12px] tabular-nums text-[#6B7280]">
+                              <p className="truncate text-[12px] tabular-nums text-muted">
                                 {member.phone}
                               </p>
                             </div>
                           </div>
                         </td>
                         <td className="hidden px-3 py-3.5 xl:table-cell">
-                          <p className="max-w-[150px] truncate text-[13px] text-[#374151]">
+                          <p className="max-w-[150px] truncate text-[13px] text-ink-2">
                             {member.email || '—'}
                           </p>
                           {member.emergency_contact && (
-                            <p className="max-w-[150px] truncate text-[11px] tabular-nums text-[#9CA3AF]">
+                            <p className="max-w-[150px] truncate text-[11px] tabular-nums text-faint">
                               Emg {member.emergency_contact}
                             </p>
                           )}
                         </td>
                         <td className="px-3 py-3.5">
-                          <p className="truncate text-[13px] text-[#374151]">
+                          <p className="truncate text-[13px] text-ink-2">
                             {member.plans?.name || 'Standard'}
                           </p>
                           {member.amount_paid ? (
-                            <p className="text-[11px] tabular-nums text-[#9CA3AF]">
+                            <p className="text-[11px] tabular-nums text-faint">
                               ₹{member.amount_paid}
                             </p>
                           ) : null}
                         </td>
                         <td className="px-3 py-3.5">
-                          <p className="text-[13px] tabular-nums text-[#374151]">
+                          <p className="text-[13px] tabular-nums text-ink-2">
                             {member.membership_end}
                           </p>
                           <p
@@ -1986,7 +1982,7 @@ export default function GymDashboard() {
                                 ? 'text-rose-600'
                                 : left <= 7
                                   ? 'text-amber-600'
-                                  : 'text-[#9CA3AF]'
+                                  : 'text-faint'
                             }`}
                           >
                             {isExpired
@@ -2008,17 +2004,17 @@ export default function GymDashboard() {
                         </td>
                         <td className="hidden px-3 py-3.5 lg:table-cell">
                           {member.biometric_id ? (
-                            <p className="text-[12px] font-medium tabular-nums text-[#374151]">
+                            <p className="text-[12px] font-medium tabular-nums text-ink-2">
                               BIO #{member.biometric_id}
                             </p>
                           ) : null}
                           {member.rfid_card ? (
-                            <p className="max-w-[100px] truncate text-[11px] tabular-nums text-[#9CA3AF]">
+                            <p className="max-w-[100px] truncate text-[11px] tabular-nums text-faint">
                               RFID {member.rfid_card}
                             </p>
                           ) : null}
                           {!member.biometric_id && !member.rfid_card ? (
-                            <span className="text-[#9CA3AF]">—</span>
+                            <span className="text-faint">—</span>
                           ) : null}
                         </td>
                         <td className="px-5 py-3.5">
@@ -2026,7 +2022,7 @@ export default function GymDashboard() {
                             <button
                               type="button"
                               onClick={() => setViewTarget(member)}
-                              className="rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                              className="rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-ink-2 transition hover:bg-wash hover:text-ink"
                             >
                               View
                             </button>
@@ -2043,7 +2039,7 @@ export default function GymDashboard() {
 
                             {/* Below md the table would overflow, so the roster becomes a list of
               the same rows — same handlers, same "More" menu. */}
-          <ul className="divide-y divide-[#F3F4F6] md:hidden">
+          <ul className="divide-y divide-line md:hidden">
             {filteredMembers.length === 0 ? (
               <li>{emptyRoster}</li>
             ) : (
@@ -2060,14 +2056,14 @@ export default function GymDashboard() {
                 return (
                   <li key={member.id} className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-[10px] font-semibold text-[#374151]">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-wash text-[10px] font-semibold text-ink-2">
                         {initialsOf(member.full_name)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium text-[#111827]">
+                        <p className="truncate text-[13px] font-medium text-ink">
                           {member.full_name}
                         </p>
-                        <p className="truncate text-[11px] tabular-nums text-[#6B7280]">
+                        <p className="truncate text-[11px] tabular-nums text-muted">
                           {member.phone}
                         </p>
                       </div>
@@ -2075,7 +2071,7 @@ export default function GymDashboard() {
                         <button
                           type="button"
                           onClick={() => setViewTarget(member)}
-                          className="rounded px-2 py-1 text-[11px] text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                          className="rounded px-2 py-1 text-[11px] text-muted transition hover:bg-wash hover:text-ink"
                         >
                           View
                         </button>
@@ -2089,13 +2085,13 @@ export default function GymDashboard() {
                         <span className={`h-1.5 w-1.5 rounded-full ${access.dot}`} />
                         {access.label}
                       </span>
-                      <span className="tabular-nums text-[#6B7280]">
+                      <span className="tabular-nums text-muted">
                         {member.membership_end}
                       </span>
-                      <span className="text-[#9CA3AF]">
+                      <span className="text-faint">
                         {member.plans?.name || 'Standard'}
                       </span>
-                      <span className="text-[#9CA3AF]">
+                      <span className="text-faint">
                         {isExpired
                           ? 'expired'
                           : left === 0
@@ -2109,14 +2105,14 @@ export default function GymDashboard() {
             )}
           </ul>
 
-          <div className="flex items-center justify-between border-t border-[#E5E7EB] px-4 py-2.5 sm:px-5">
-            <p className="text-[11px] text-[#9CA3AF]">
+          <div className="flex items-center justify-between border-t border-line px-4 py-2.5 sm:px-5">
+            <p className="text-[11px] text-faint">
               Showing {filteredMembers.length} of {members.length}
             </p>
             <button
               type="button"
               onClick={exportToCSV}
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#6B7280] transition hover:text-[#111827]"
+              className="inline-flex items-center gap-1.5 text-[11px] text-muted transition hover:text-ink"
             >
               <Download className="h-3.5 w-3.5" />
               Export CSV
@@ -2132,21 +2128,21 @@ export default function GymDashboard() {
         <>
           <div
             aria-hidden="true"
-            className="fixed inset-0 z-40 bg-[#0F172A]/35"
+            className="fixed inset-0 z-40 bg-scrim/35"
             onClick={() => setEnrollOpen(false)}
           />
           <aside
             role="dialog"
             aria-modal="true"
             aria-label="Enroll Member"
-            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[#E5E7EB] bg-white shadow-xl shadow-[#0F172A]/10"
+            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-line bg-white shadow-xl shadow-[#0F172A]/10"
           >
-            <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#E5E7EB] px-4">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
               <div>
-                <h2 className="text-sm font-semibold text-[#111827]">
+                <h2 className="text-sm font-semibold text-ink">
                   Enroll Member
                 </h2>
-                <p className="text-[11px] text-[#6B7280]">
+                <p className="text-[11px] text-muted">
                   Creates the member, the invoice and gate access
                 </p>
               </div>
@@ -2154,7 +2150,7 @@ export default function GymDashboard() {
                 type="button"
                 onClick={() => setEnrollOpen(false)}
                 aria-label="Close"
-                className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="rounded-lg p-1.5 text-muted transition hover:bg-wash hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2174,7 +2170,7 @@ export default function GymDashboard() {
 
               <form onSubmit={addMember} className="space-y-3.5">
                 <div>
-                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
                     Full Name
                   </label>
                   <input
@@ -2182,11 +2178,11 @@ export default function GymDashboard() {
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Member Full Name"
-                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
                     WhatsApp Phone
                   </label>
                   <input
@@ -2195,11 +2191,11 @@ export default function GymDashboard() {
                     onChange={e => setPhone(e.target.value)}
                     placeholder="10-digit Phone"
                     inputMode="numeric"
-                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm tabular-nums text-[#111827] placeholder:text-[#9CA3AF] focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm tabular-nums text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
                     Email (optional)
                   </label>
                   <input
@@ -2207,17 +2203,17 @@ export default function GymDashboard() {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="Optional"
-                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
                     Membership Plan
                   </label>
                   <select
                     value={selectedPlanId}
                     onChange={e => handlePlanChange(e.target.value)}
-                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink focus:border-brand focus:outline-none"
                   >
                     {plans.length === 0 ? (
                       <option value="">Standard Monthly Plan</option>
@@ -2232,7 +2228,7 @@ export default function GymDashboard() {
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="mb-1 block text-[10px] uppercase tracking-wider text-[#6B7280]">
+                    <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
                       Fee Paid (₹)
                     </label>
                     <input
@@ -2240,11 +2236,11 @@ export default function GymDashboard() {
                       value={amountPaid}
                       onChange={e => setAmountPaid(e.target.value)}
                       placeholder="0"
-                      className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm tabular-nums text-[#111827] placeholder:text-[#9CA3AF] focus:border-emerald-500 focus:outline-none"
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm tabular-nums text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#6B7280]">
+                    <label className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted">
                       <Fingerprint className="h-3.5 w-3.5" />
                       Biometric Slot
                     </label>
@@ -2253,12 +2249,12 @@ export default function GymDashboard() {
                       value={biometricId}
                       onChange={e => setBiometricId(e.target.value)}
                       placeholder="Slot #"
-                      className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm tabular-nums text-[#111827] placeholder:text-[#9CA3AF] focus:border-emerald-500 focus:outline-none"
+                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm tabular-nums text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-[#6B7280]">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
                     Emergency Phone
                   </label>
                   <input
@@ -2266,7 +2262,7 @@ export default function GymDashboard() {
                     onChange={e => setEmergencyPhone(e.target.value)}
                     placeholder="Optional"
                     inputMode="numeric"
-                    className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm tabular-nums text-[#111827] placeholder:text-[#9CA3AF] focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm tabular-nums text-ink placeholder:text-faint focus:border-brand focus:outline-none"
                   />
                 </div>
 
@@ -2285,11 +2281,11 @@ export default function GymDashboard() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="mt-1 w-full rounded-lg bg-emerald-600 py-2.5 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                  className="mt-1 w-full rounded-lg bg-brand py-2.5 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-emerald-500 disabled:opacity-50"
                 >
                   {loading ? 'Enrolling…' : 'Enroll Member'}
                 </button>
-                <p className="text-center text-[10px] text-[#9CA3AF]">
+                <p className="text-center text-[10px] text-faint">
                   Invoice and gate access are created automatically.
                 </p>
               </form>
@@ -2305,7 +2301,7 @@ export default function GymDashboard() {
                     <button
                       type="button"
                       onClick={sendOnboardingWelcome}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-[11px] font-semibold uppercase tracking-wider text-white transition hover:bg-emerald-500"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-[11px] font-semibold uppercase tracking-wider text-white transition hover:bg-emerald-500"
                     >
                       <Send className="h-3.5 w-3.5" />
                       Send welcome
@@ -2313,7 +2309,7 @@ export default function GymDashboard() {
                     <button
                       type="button"
                       onClick={() => setWelcomeInvite(null)}
-                      className="px-3 py-2 text-[11px] text-[#6B7280] transition hover:text-[#111827]"
+                      className="px-3 py-2 text-[11px] text-muted transition hover:text-ink"
                     >
                       Dismiss
                     </button>
@@ -2330,24 +2326,24 @@ export default function GymDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-[#0F172A]/40"
+            className="absolute inset-0 bg-scrim/40"
             onClick={() => setViewTarget(null)}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label={viewTarget.full_name}
-            className="relative w-full max-w-md overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-xl shadow-[#0F172A]/10"
+            className="relative w-full max-w-md overflow-hidden rounded-lg border border-line bg-white shadow-xl shadow-[#0F172A]/10"
           >
-            <div className="flex items-center gap-3 border-b border-[#E5E7EB] px-4 py-3.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-[11px] font-semibold text-[#374151]">
+            <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-wash text-[11px] font-semibold text-ink-2">
                 {initialsOf(viewTarget.full_name)}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[#111827]">
+                <p className="truncate text-sm font-semibold text-ink">
                   {viewTarget.full_name}
                 </p>
-                <p className="truncate text-[11px] tabular-nums text-[#6B7280]">
+                <p className="truncate text-[11px] tabular-nums text-muted">
                   {viewTarget.phone}
                 </p>
               </div>
@@ -2355,55 +2351,55 @@ export default function GymDashboard() {
                 type="button"
                 onClick={() => setViewTarget(null)}
                 aria-label="Close"
-                className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="rounded-lg p-1.5 text-muted transition hover:bg-wash hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-px bg-[#F3F4F6]">
+            <div className="grid grid-cols-2 gap-px bg-wash">
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   WhatsApp
                 </p>
-                <p className="truncate text-xs tabular-nums text-[#374151]">
+                <p className="truncate text-xs tabular-nums text-ink-2">
                   {viewTarget.phone}
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Email
                 </p>
-                <p className="truncate text-xs text-[#374151]">
+                <p className="truncate text-xs text-ink-2">
                   {viewTarget.email || '—'}
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Plan
                 </p>
-                <p className="truncate text-xs text-[#374151]">
+                <p className="truncate text-xs text-ink-2">
                   {viewTarget.plans?.name || 'Standard'}
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Fee paid
                 </p>
-                <p className="text-xs tabular-nums text-[#374151]">
+                <p className="text-xs tabular-nums text-ink-2">
                   {viewTarget.amount_paid ? `₹${viewTarget.amount_paid}` : '—'}
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Expires
                 </p>
-                <p className="text-xs tabular-nums text-[#374151]">
+                <p className="text-xs tabular-nums text-ink-2">
                   {viewTarget.membership_end}
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Gate access
                 </p>
                 <p
@@ -2424,41 +2420,41 @@ export default function GymDashboard() {
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Biometric
                 </p>
-                <p className="text-xs tabular-nums text-[#374151]">
+                <p className="text-xs tabular-nums text-ink-2">
                   {viewTarget.biometric_id
                     ? `BIO #${viewTarget.biometric_id}`
                     : 'Not linked'}
                 </p>
               </div>
               <div className="bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   RFID
                 </p>
-                <p className="truncate text-xs tabular-nums text-[#374151]">
+                <p className="truncate text-xs tabular-nums text-ink-2">
                   {viewTarget.rfid_card || 'Not linked'}
                 </p>
               </div>
               <div className="col-span-2 bg-white px-4 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">
+                <p className="text-[10px] uppercase tracking-wider text-muted">
                   Emergency contact
                 </p>
-                <p className="text-xs tabular-nums text-[#374151]">
+                <p className="text-xs tabular-nums text-ink-2">
                   {viewTarget.emergency_contact || '—'}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-[#E5E7EB] px-4 py-3">
+            <div className="flex flex-wrap gap-2 border-t border-line px-4 py-3">
               <button
                 type="button"
                 onClick={() => {
                   setLinkTarget(viewTarget);
                   setViewTarget(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-[11px] text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-ink-2 transition hover:bg-wash hover:text-ink"
               >
                 <CreditCard className="h-3.5 w-3.5" />
                 Link RFID / Biometric
@@ -2469,7 +2465,7 @@ export default function GymDashboard() {
                   renewMember(viewTarget);
                   setViewTarget(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-[11px] text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-ink-2 transition hover:bg-wash hover:text-ink"
               >
                 <RotateCw className="h-3.5 w-3.5" />
                 Extend 30 days
@@ -2480,7 +2476,7 @@ export default function GymDashboard() {
                   void viewLatestInvoice(viewTarget.id);
                   setViewTarget(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-[11px] text-[#374151] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-ink-2 transition hover:bg-wash hover:text-ink"
               >
                 <FileText className="h-3.5 w-3.5" />
                 Invoice
@@ -2495,23 +2491,23 @@ export default function GymDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-[#0F172A]/40"
+            className="absolute inset-0 bg-scrim/40"
             onClick={() => setPickerMode(null)}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Choose a member"
-            className="relative flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-xl shadow-[#0F172A]/10"
+            className="relative flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-line bg-white shadow-xl shadow-[#0F172A]/10"
           >
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold text-[#111827]">
+                <h2 className="text-sm font-semibold text-ink">
                   {pickerMode === 'link'
                     ? 'Link RFID / Biometric'
                     : 'Extend membership'}
                 </h2>
-                <p className="text-[11px] text-[#6B7280]">
+                <p className="text-[11px] text-muted">
                   {pickerMode === 'link'
                     ? 'Pick the member, then link their card or fingerprint.'
                     : 'Pick the member, then add 30 days and record the renewal.'}
@@ -2521,28 +2517,28 @@ export default function GymDashboard() {
                 type="button"
                 onClick={() => setPickerMode(null)}
                 aria-label="Close"
-                className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="rounded-lg p-1.5 text-muted transition hover:bg-wash hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="border-b border-[#E5E7EB] p-3">
+            <div className="border-b border-line p-3">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6B7280]" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
                 <input
                   autoFocus
                   value={pickerTerm}
                   onChange={e => setPickerTerm(e.target.value)}
                   placeholder="Search members or phone"
-                  className="h-8 w-full rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] pl-8 pr-3 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#D1D5DB] focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-line bg-canvas pl-8 pr-3 text-xs text-ink placeholder:text-faint focus:border-line-strong focus:outline-none"
                 />
               </div>
             </div>
 
-            <ul className="max-h-72 divide-y divide-[#F3F4F6] overflow-y-auto">
+            <ul className="max-h-72 divide-y divide-line overflow-y-auto">
               {pickerMembers.length === 0 ? (
-                <li className="px-4 py-8 text-center text-xs text-[#6B7280]">
+                <li className="px-4 py-8 text-center text-xs text-muted">
                   No members match that search.
                 </li>
               ) : (
@@ -2561,20 +2557,20 @@ export default function GymDashboard() {
                           void renewMember(target);
                         }
                       }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-[#F9FAFB]"
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-subtle"
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#F3F4F6] text-[10px] font-semibold text-[#374151]">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-wash text-[10px] font-semibold text-ink-2">
                         {initialsOf(member.full_name)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium text-[#111827]">
+                        <span className="block truncate text-xs font-medium text-ink">
                           {member.full_name}
                         </span>
-                        <span className="block truncate text-[11px] tabular-nums text-[#6B7280]">
+                        <span className="block truncate text-[11px] tabular-nums text-muted">
                           {member.phone}
                         </span>
                       </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-[#6B7280]">
+                      <span className="shrink-0 text-[11px] tabular-nums text-muted">
                         {member.membership_end}
                       </span>
                     </button>
@@ -2591,14 +2587,14 @@ export default function GymDashboard() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-[#0F172A]/35"
+            className="absolute inset-0 bg-scrim/35"
             onClick={() => setOpenDropdown(null)}
           />
-          <div className="absolute inset-y-0 right-0 flex w-72 flex-col border-l border-[#E5E7EB] bg-white">
-            <div className="flex h-14 items-center justify-between border-b border-[#E5E7EB] px-4">
+          <div className="absolute inset-y-0 right-0 flex w-72 flex-col border-l border-line bg-white">
+            <div className="flex h-14 items-center justify-between border-b border-line px-4">
               <div className="flex min-w-0 items-center gap-2.5">
-                <Building2 className="h-4 w-4 shrink-0 text-[#6B7280]" />
-                <p className="truncate text-sm font-semibold text-[#111827]">
+                <Building2 className="h-4 w-4 shrink-0 text-muted" />
+                <p className="truncate text-sm font-semibold text-ink">
                   {session?.tenantName || 'Gym'}
                 </p>
               </div>
@@ -2606,7 +2602,7 @@ export default function GymDashboard() {
                 type="button"
                 onClick={() => setOpenDropdown(null)}
                 aria-label="Close menu"
-                className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-[#F3F4F6] hover:text-[#111827]"
+                className="rounded-lg p-1.5 text-muted transition hover:bg-wash hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2618,7 +2614,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Dumbbell className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Dumbbell className="h-3.5 w-3.5 text-muted" />
                 Overview
               </Link>
               <button
@@ -2629,7 +2625,7 @@ export default function GymDashboard() {
                 }}
                 className={MENU_ITEM}
               >
-                <Users className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Users className="h-3.5 w-3.5 text-muted" />
                 Members
               </button>
               <Link
@@ -2637,7 +2633,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Calendar className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Calendar className="h-3.5 w-3.5 text-muted" />
                 Attendance
               </Link>
               <Link
@@ -2645,7 +2641,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <ShoppingBag className="h-3.5 w-3.5 text-[#6B7280]" />
+                <ShoppingBag className="h-3.5 w-3.5 text-muted" />
                 Payments
               </Link>
               <Link
@@ -2653,7 +2649,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Target className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Target className="h-3.5 w-3.5 text-muted" />
                 Trainers
               </Link>
               {currentRole === 'owner' && (
@@ -2662,19 +2658,19 @@ export default function GymDashboard() {
                   onClick={() => setOpenDropdown(null)}
                   className={MENU_ITEM}
                 >
-                  <BarChart3 className="h-3.5 w-3.5 text-[#6B7280]" />
+                  <BarChart3 className="h-3.5 w-3.5 text-muted" />
                   Analytics
                 </Link>
               )}
 
-              <div className="my-2 border-t border-[#E5E7EB]" />
+              <div className="my-2 border-t border-line" />
 
               <Link
                 href="/leads"
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Target className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Target className="h-3.5 w-3.5 text-muted" />
                 Leads CRM
               </Link>
               <Link
@@ -2682,7 +2678,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Trophy className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Trophy className="h-3.5 w-3.5 text-muted" />
                 Challenges
               </Link>
               <Link
@@ -2690,7 +2686,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Tag className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Tag className="h-3.5 w-3.5 text-muted" />
                 Packages
               </Link>
               {(currentRole === 'owner' || session?.role === 'super_admin') && (
@@ -2699,7 +2695,7 @@ export default function GymDashboard() {
                   onClick={() => setOpenDropdown(null)}
                   className={MENU_ITEM}
                 >
-                  <ServerCog className="h-3.5 w-3.5 text-[#6B7280]" />
+                  <ServerCog className="h-3.5 w-3.5 text-muted" />
                   Hardware
                 </Link>
               )}
@@ -2713,7 +2709,7 @@ export default function GymDashboard() {
                 </Link>
               )}
 
-              <div className="my-2 border-t border-[#E5E7EB]" />
+              <div className="my-2 border-t border-line" />
 
               <Link
                 href="/scan"
@@ -2721,7 +2717,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <QrCode className="h-3.5 w-3.5 text-[#6B7280]" />
+                <QrCode className="h-3.5 w-3.5 text-muted" />
                 Scanner
               </Link>
               <Link
@@ -2729,7 +2725,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <Settings className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Settings className="h-3.5 w-3.5 text-muted" />
                 Settings
               </Link>
               <Link
@@ -2737,7 +2733,7 @@ export default function GymDashboard() {
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
-                <UserRound className="h-3.5 w-3.5 text-[#6B7280]" />
+                <UserRound className="h-3.5 w-3.5 text-muted" />
                 Member Pass &amp; App
               </Link>
               <button
@@ -2748,7 +2744,7 @@ export default function GymDashboard() {
                 }}
                 className={MENU_ITEM}
               >
-                <Download className="h-3.5 w-3.5 text-[#6B7280]" />
+                <Download className="h-3.5 w-3.5 text-muted" />
                 Export CSV
               </button>
               <button
@@ -2762,7 +2758,7 @@ export default function GymDashboard() {
               </button>
             </nav>
 
-            <p className="border-t border-[#E5E7EB] px-4 py-3 text-[10px] uppercase tracking-wider text-[#9CA3AF]">
+            <p className="border-t border-line px-4 py-3 text-[10px] uppercase tracking-wider text-faint">
               Vyroniq Gym OS · {session?.phone}
             </p>
           </div>

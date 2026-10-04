@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Dumbbell, Plus, Trash2, ArrowLeft, Tag, Clock, IndianRupee } from 'lucide-react';
-import Link from 'next/link';
+import { Plus, Trash2, Tag, Clock, IndianRupee } from 'lucide-react';
+import PageHeader from '@/components/page-header';
 
 interface Plan {
   id: string;
@@ -12,6 +12,13 @@ interface Plan {
   price: number;
   description: string;
 }
+
+/**
+ * Membership Plans Engine — light Vyroniq surface.
+ *
+ * Reads and writes are unchanged (same `plans` table, same insert/delete, same
+ * confirm-before-delete). Only the presentation moved onto the shared tokens.
+ */
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -70,128 +77,149 @@ export default function PlansPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-6 mb-8 gap-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin"
-            className="p-2.5 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl text-neutral-400 hover:text-white transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
-            <Tag className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Membership Plans Engine</h1>
-            <p className="text-sm text-neutral-400">Create, customize, and price gym membership packages</p>
-          </div>
-        </div>
-      </div>
+return (
+    <div className="vy-page vy-noscroll">
+      <div className="vy-shell">
+        <PageHeader
+          icon={<Tag className="h-5 w-5" />}
+          title="Membership Plans"
+          subtitle="Create, customise and price the packages you sell at the desk"
+        />
 
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Create Plan Form */}
-        <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl h-fit">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Plus className="w-5 h-5 text-emerald-400" /> Add New Package
-          </h2>
-          <form onSubmit={handleAddPlan} className="space-y-4">
-            <div>
-              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Plan Name</label>
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. 3 Months Transformation"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Duration (Days)</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  placeholder="30"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Fee (₹)</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="2500"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white font-mono"
-                />
+        <div className="grid grid-cols-1 gap-5 pb-16 lg:grid-cols-3">
+          {/* Create plan — sticky on a wide screen so the form stays reachable
+              while scrolling a long list of existing packages. */}
+          <section className="vy-card h-fit lg:sticky lg:top-20">
+            <div className="vy-card-head">
+              <div className="flex items-center gap-2">
+                <Plus className="h-3.5 w-3.5 text-brand" />
+                <h2 className="vy-card-title">Add new package</h2>
               </div>
             </div>
-            <div>
-              <label className="text-xs text-neutral-400 uppercase tracking-wider block mb-1">Features / Description</label>
-              <textarea
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Cardio + Weights + Free Diet Consultation"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 text-white resize-none"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-emerald-500 hover:bg-emerald-600 text-black font-semibold py-2.5 rounded-xl transition text-sm disabled:opacity-50"
-            >
-              {loading ? 'Creating...' : 'Save Plan'}
-            </button>
-          </form>
-        </div>
 
-        {/* Existing Plans Grid */}
-        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 h-fit">
-          {plans.length === 0 ? (
-            <div className="col-span-2 bg-neutral-900 border border-neutral-800 p-8 rounded-2xl text-center text-neutral-500">
-              No packages created yet. Use the form to add your first gym plan.
-            </div>
-          ) : (
-            plans.map((plan) => (
-              <div
-                key={plan.id}
-                className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 p-5 rounded-2xl flex flex-col justify-between transition shadow-lg relative group"
-              >
+            <form onSubmit={handleAddPlan} className="vy-card-body space-y-4">
+              <div>
+                <label className="vy-label" htmlFor="plan-name">
+                  Package name
+                </label>
+                <input
+                  id="plan-name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Gold Monthly"
+                  className="vy-input"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold text-white">{plan.name}</h3>
-                    <button
-                      onClick={() => handleDeletePlan(plan.id, plan.name)}
-                      className="text-neutral-500 hover:text-rose-400 p-1 rounded-lg transition"
-                      title="Delete Plan"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-neutral-400 mb-4 min-h-[32px]">{plan.description || 'Standard Access'}</p>
+                  <label className="vy-label" htmlFor="plan-duration">
+                    Duration (days)
+                  </label>
+                  <input
+                    id="plan-duration"
+                    type="number"
+                    required
+                    min="1"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    className="vy-input"
+                  />
                 </div>
-
-                <div className="pt-4 border-t border-neutral-800 flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-xs text-neutral-400 font-mono">
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    {plan.duration_days} Days
-                  </span>
-                  <span className="flex items-center text-lg font-black text-emerald-400 font-mono">
-                    <IndianRupee className="w-4 h-4" />
-                    {plan.price.toLocaleString()}
-                  </span>
+                <div>
+                  <label className="vy-label" htmlFor="plan-price">
+                    Fee (₹)
+                  </label>
+                  <input
+                    id="plan-price"
+                    type="number"
+                    required
+                    min="0"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="2500"
+                    className="vy-input font-mono"
+                  />
                 </div>
               </div>
-            ))
-          )}
+
+              <div>
+                <label className="vy-label" htmlFor="plan-description">
+                  Features / description
+                </label>
+                <textarea
+                  id="plan-description"
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Cardio + Weights + Free Diet Consultation"
+                  className="vy-textarea resize-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="vy-btn vy-btn-lg vy-btn-brand w-full"
+              >
+                {loading ? 'Creating…' : 'Save plan'}
+              </button>
+            </form>
+          </section>
+{/* Existing plans — price is the headline, because that is what the
+              desk quotes from memory. */}
+          <section className="lg:col-span-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {plans.length === 0 ? (
+                <div className="vy-empty sm:col-span-2">
+                  <Tag className="mx-auto mb-3 h-8 w-8 text-faint" />
+                  <p className="text-sm font-semibold text-ink">No packages yet</p>
+                  <p className="mx-auto mt-1 max-w-xs text-xs text-muted">
+                    Use the form to add your first gym plan — it appears on the
+                    enrolment form and in the conversion dialog straight away.
+                  </p>
+                </div>
+              ) : (
+                plans.map((plan) => (
+                  <article
+                    key={plan.id}
+                    className="vy-card flex flex-col justify-between p-5 transition hover:border-line-strong"
+                  >
+                    <div>
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <h3 className="text-[15px] font-semibold tracking-tight text-ink">
+                          {plan.name}
+                        </h3>
+                        <button
+                          onClick={() => handleDeletePlan(plan.id, plan.name)}
+                          className="vy-icon-btn-sm -mr-1 -mt-1 hover:bg-rose-50 hover:text-rose-600"
+                          title="Delete plan"
+                          aria-label={`Delete ${plan.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <p className="mb-4 min-h-[32px] text-[12px] leading-relaxed text-muted">
+                        {plan.description || 'Standard Access'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-line pt-4">
+                      <span className="flex items-center gap-1.5 text-[12px] text-muted">
+                        <Clock className="h-3.5 w-3.5 text-brand" />
+                        {plan.duration_days} days
+                      </span>
+                      <span className="flex items-center text-[17px] font-semibold tabular-nums text-ink">
+                        <IndianRupee className="h-4 w-4 text-emerald-600" />
+                        {plan.price.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>

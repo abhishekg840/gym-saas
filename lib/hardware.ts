@@ -55,27 +55,27 @@ interface DeviceTypeMeta {
 export const DEVICE_TYPE_META: Record<HardwareDeviceType, DeviceTypeMeta> = {
   biometric_fingerprint: {
     label: 'Fingerprint',
-    badge: 'bg-purple-500/10 text-purple-300 border-purple-500/30',
+    badge: 'bg-violet-50 text-violet-700 border-violet-200',
     hint: 'Sends a template slot number (biometric_id) with every punch.',
   },
   rfid_scanner: {
     label: 'RFID',
-    badge: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
+    badge: 'bg-blue-50 text-blue-700 border-blue-200',
     hint: 'Sends a card serial (rfidCard) with every punch.',
   },
   camera_kiosk: {
     label: 'QR Kiosk',
-    badge: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     hint: 'A browser on /scan reading the rotating member pass.',
   },
   turnstile_relay: {
     label: 'Turnstile',
-    badge: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
     hint: 'Barrier relay that opens on unlock: true.',
   },
   raspberry_pi: {
     label: 'Pi Gateway',
-    badge: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
+    badge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
     hint: 'General gateway that fronts other readers on the gym LAN.',
   },
 };

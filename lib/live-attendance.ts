@@ -262,10 +262,20 @@ export function initialsOf(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Human label for the connection dot, so "polling" is not a mystery. */
-export const LIVE_STATUS_META: Record<LiveStatus, { label: string; tone: string }> = {
-  connecting: { label: 'Connecting…', tone: 'bg-amber-400 text-amber-300' },
-  live: { label: 'Live', tone: 'bg-emerald-400 text-emerald-300' },
-  polling: { label: 'Auto-refresh', tone: 'bg-amber-400 text-amber-300' },
-  offline: { label: 'Offline', tone: 'bg-rose-400 text-rose-300' },
+/**
+ * Human label for the connection dot, so "polling" is not a mystery.
+ *
+ * `dot` and `text` are separate on purpose: the dot is a saturated status colour
+ * (it has to be visible from across a desk), while the text sits on a white card
+ * and needs the darker 700 weight to pass contrast. Splitting them here stops a
+ * page from slicing a classes string apart just to get at a colour.
+ */
+export const LIVE_STATUS_META: Record<
+  LiveStatus,
+  { label: string; dot: string; text: string }
+> = {
+  connecting: { label: 'Connecting…', dot: 'bg-amber-400', text: 'text-amber-700' },
+  live: { label: 'Live', dot: 'bg-emerald-500', text: 'text-emerald-700' },
+  polling: { label: 'Auto-refresh', dot: 'bg-amber-400', text: 'text-amber-700' },
+  offline: { label: 'Offline', dot: 'bg-rose-400', text: 'text-rose-700' },
 };

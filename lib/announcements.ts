@@ -12,11 +12,11 @@
 import { isUuid } from '@/lib/session';
 
 export const NOTICE_TYPES = [
-  { id: 'general', label: 'General', tone: 'bg-slate-500/10 text-slate-300 border-slate-500/30' },
-  { id: 'alert', label: 'Alert', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
-  { id: 'event', label: 'Event', tone: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
-  { id: 'maintenance', label: 'Maintenance', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-  { id: 'offer', label: 'Offer', tone: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' },
+  { id: 'general', label: 'General', tone: 'bg-slate-50 text-slate-600 border-slate-200' },
+  { id: 'alert', label: 'Alert', tone: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { id: 'event', label: 'Event', tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { id: 'maintenance', label: 'Maintenance', tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { id: 'offer', label: 'Offer', tone: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
 ] as const;
 
 export type NoticeType = (typeof NOTICE_TYPES)[number]['id'];
@@ -24,7 +24,7 @@ export type NoticeType = (typeof NOTICE_TYPES)[number]['id'];
 export function noticeTone(type: string | null | undefined): string {
   return (
     NOTICE_TYPES.find((entry) => entry.id === type)?.tone ??
-    'bg-slate-500/10 text-slate-300 border-slate-500/30'
+    'bg-slate-50 text-slate-600 border-slate-200'
   );
 }
 

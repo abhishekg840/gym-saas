@@ -2,16 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  BarChart3, 
-  ArrowLeft, 
-  TrendingUp, 
-  IndianRupee, 
-  UserX, 
-  Clock, 
-  Calendar 
+import {
+  BarChart3,
+  TrendingUp,
+  IndianRupee,
+  UserX,
+  Clock,
+  Calendar,
 } from 'lucide-react';
-import Link from 'next/link';
+import PageHeader from '@/components/page-header';
 
 interface Stats {
   totalRevenue: number;
@@ -21,6 +20,14 @@ interface Stats {
   todayCheckins: number;
   hourlyRush: Record<string, number>;
 }
+
+/**
+ * Owner analytics — light Vyroniq surface.
+ *
+ * The numbers are untouched: same members scan, same attendance buckets, same
+ * rush split. Only the presentation moved onto the shared light tokens, since
+ * this was the last owner page still rendering as a dark terminal.
+ */
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState<Stats>({
@@ -94,8 +101,8 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
-        <p className="text-neutral-400 animate-pulse">Crunching Real-time Analytics...</p>
+      <div className="vy-page flex items-center justify-center">
+        <p className="text-sm text-muted">Crunching real-time analytics…</p>
       </div>
     );
   }
@@ -104,96 +111,115 @@ export default function AnalyticsPage() {
     ? Math.round((stats.expiredMembers / stats.totalMembers) * 100) 
     : 0;
 
+  const retention = stats.totalMembers > 0
+    ? Math.round((stats.activeMembers / stats.totalMembers) * 100)
+    : 0;
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
-      <div className="max-w-6xl mx-auto flex items-center justify-between border-b border-neutral-800 pb-6 mb-8">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin"
-            className="p-2.5 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl text-neutral-400 hover:text-white transition"
+    <div className="vy-page vy-noscroll">
+      <div className="vy-shell">
+        <PageHeader
+          icon={<BarChart3 className="h-5 w-5" />}
+          title="Analytics"
+          subtitle="Revenue, retention and today’s footfall"
+        />
+
+        <div className="space-y-5 pb-16">
+          <section
+            aria-label="Headline metrics"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
           >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
-            <BarChart3 className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Business & Gym Analytics</h1>
-            <p className="text-sm text-neutral-400">Live financial figures, retention metrics, and hourly rush trends</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
-              <span>Total Revenue</span>
-              <IndianRupee className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-3xl font-extrabold tracking-tight text-emerald-400">
-              ₹{stats.totalRevenue.toLocaleString()}
-            </p>
-            <p className="text-[11px] text-zinc-500 mt-1">Total collection to date</p>
-          </div>
-
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
-              <span>Today Check-ins</span>
-              <Calendar className="w-4 h-4 text-blue-400" />
-            </div>
-            <p className="text-3xl font-black text-white font-mono">{stats.todayCheckins}</p>
-            <p className="text-[11px] text-zinc-400 font-medium mt-1">Footfall recorded today</p>
-          </div>
-
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
-              <span>Active Retention</span>
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-3xl font-black text-white font-mono">
-              {stats.totalMembers > 0 ? Math.round((stats.activeMembers / stats.totalMembers) * 100) : 0}%
-            </p>
-            <p className="text-[11px] text-emerald-500 mt-1">{stats.activeMembers} of {stats.totalMembers} active</p>
-          </div>
-
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-neutral-400 text-xs mb-3">
-              <span>Inactive Members</span>
-              <UserX className="w-4 h-4 text-rose-400" />
-            </div>
-            <p className="text-3xl font-black text-rose-400 font-mono">{churnRate}%</p>
-            <p className="text-[11px] text-rose-500 mt-1">{stats.expiredMembers} expired members</p>
-          </div>
-        </div>
-
-        {/* Peak Hours Rush Breakdown */}
-        <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <Clock className="w-5 h-5 text-amber-400" />
-            <h2 className="text-base font-bold">Gym Traffic Distribution (Today)</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.entries(stats.hourlyRush).map(([slot, count]) => (
-              <div key={slot} className="bg-neutral-950 border border-neutral-800/80 p-4 rounded-xl">
-                <p className="text-xs text-neutral-400 font-medium mb-1">{slot}</p>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-bold font-mono text-white">{count}</span>
-                  <span className="text-xs text-neutral-500">entries</span>
-                </div>
-                <div className="w-full bg-neutral-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                  <div
-                    className="bg-amber-400 h-full rounded-full transition-all"
-                    style={{
-                      width: `${stats.todayCheckins > 0 ? (count / stats.todayCheckins) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
+            {/* Each metric keeps the console's stat-card shape: an eyebrow, one
+                big figure, and a line that says what the figure means. */}
+            <div className="vy-card p-4">
+              <div className="flex items-start justify-between">
+                <p className="vy-eyebrow">Total Revenue</p>
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <IndianRupee className="h-3.5 w-3.5" />
+                </span>
               </div>
-            ))}
-          </div>
+              <p className="vy-num mt-2 text-emerald-600">
+                ₹{stats.totalRevenue.toLocaleString('en-IN')}
+              </p>
+              <p className="mt-1.5 text-[11px] text-faint">Total collection to date</p>
+            </div>
+
+            <div className="vy-card p-4">
+              <div className="flex items-start justify-between">
+                <p className="vy-eyebrow">Today&apos;s Check-ins</p>
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <Calendar className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className="vy-num mt-2">{stats.todayCheckins}</p>
+              <p className="mt-1.5 text-[11px] text-faint">Footfall recorded today</p>
+            </div>
+
+            <div className="vy-card p-4">
+              <div className="flex items-start justify-between">
+                <p className="vy-eyebrow">Active Retention</p>
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className="vy-num mt-2">{retention}%</p>
+              <p className="mt-1.5 text-[11px] text-emerald-600">
+                {stats.activeMembers} of {stats.totalMembers} active
+              </p>
+            </div>
+
+            <div className="vy-card p-4">
+              <div className="flex items-start justify-between">
+                <p className="vy-eyebrow">Inactive Members</p>
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+                  <UserX className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className={`vy-num mt-2 ${churnRate > 0 ? 'text-rose-600' : ''}`}>
+                {churnRate}%
+              </p>
+              <p className="mt-1.5 text-[11px] text-faint">
+                {stats.expiredMembers} expired members
+              </p>
+            </div>
+          </section>
+
+          {/* Peak hours. Each bar is scaled against the busiest slot rather than
+              today's total: a slow morning should still show its own shape
+              instead of collapsing to a sliver beside an evening peak. */}
+          <section className="vy-card" aria-label="Gym traffic distribution">
+            <div className="vy-card-head">
+              <div className="flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-faint" />
+                <h2 className="vy-card-title">Gym Traffic Distribution</h2>
+              </div>
+              <span className="vy-meta">Today</span>
+            </div>
+
+            <div className="vy-card-body">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {Object.entries(stats.hourlyRush).map(([slot, count]) => {
+                  const busiest = Math.max(1, ...Object.values(stats.hourlyRush));
+
+                  return (
+                    <div key={slot} className="vy-panel">
+                      <p className="text-[11px] font-medium text-muted">{slot}</p>
+                      <div className="mt-1 flex items-baseline justify-between">
+                        <span className="vy-num">{count}</span>
+                        <span className="text-[11px] text-faint">entries</span>
+                      </div>
+                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-line">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all"
+                          style={{ width: `${(count / busiest) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>

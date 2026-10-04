@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { isUuid, readSession, type GymSession } from '@/lib/session';
@@ -21,7 +20,6 @@ import {
   type LeadStage,
 } from '@/lib/crm';
 import {
-  ArrowLeft,
   ArrowRight,
   CalendarClock,
   CheckCircle2,
@@ -36,6 +34,183 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import PageHeader from '@/components/page-header';
+
+/** Accent ramp for the four pipeline counters. Meaning, not decoration: the
+    follow-up tile is the one an owner scans for, so it is the only rose. */
+const METRIC_TONE: Record<string, string> = {
+  blue: 'bg-blue-50 text-blue-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  violet: 'bg-violet-50 text-violet-600',
+  rose: 'bg-rose-50 text-rose-600',
+};
+
+/** One pipeline counter. Presentational only — it renders what it is given. */
+function MetricTile({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  tone: keyof typeof METRIC_TONE;
+}) {
+  return (
+    <div className="vy-card flex items-center gap-3 p-4">
+      <span
+        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${METRIC_TONE[tone]}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">
+          {label}
+        </p>
+        <p className="mt-0.5 text-[20px] font-semibold leading-none tracking-tight tabular-nums text-ink">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+interface LeadCardProps {
+  lead: Lead;
+  busy: boolean;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDelete: (lead: Lead) => void;
+  onAdvance: (lead: Lead, stage: LeadStage) => void;
+  onWhatsApp: (lead: Lead) => void;
+  onCall: (lead: Lead) => void;
+  onEnroll: (lead: Lead) => void;
+}
+
+/**
+ * One lead card inside a lane.
+ *
+ * Lifted out of the board so the lane map stays readable: seven lanes of this
+ * markup inline is how a board stops being reviewable. It is still pure
+ * presentation — every action arrives as a handler, so drag/drop, WhatsApp,
+ * call and stage-move all stay in the page where they already lived.
+ */
+function LeadCard({
+  lead,
+  busy,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onDelete,
+  onAdvance,
+  onWhatsApp,
+  onCall,
+  onEnroll,
+}: LeadCardProps) {
+  const followState = followUpState(lead.follow_up_date);
+  const advance = nextStage(lead.status);
+
+  return (
+    <article
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      aria-busy={busy}
+      className={`space-y-2.5 rounded-lg border border-line bg-surface p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition ${
+        busy ? 'opacity-50' : ''
+      } ${dragging ? 'cursor-grabbing ring-2 ring-brand/40' : 'cursor-grab hover:border-line-strong'}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h4 className="truncate text-[13px] font-semibold text-ink">{lead.full_name}</h4>
+          <p className="truncate font-mono text-[11px] tabular-nums text-muted">{lead.phone}</p>
+        </div>
+        <button
+          onClick={() => onDelete(lead)}
+          aria-label={`Delete ${lead.full_name}`}
+          title="Delete lead"
+          className="vy-icon-btn-sm -mr-1 -mt-1 hover:bg-rose-50 hover:text-rose-600"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="vy-chip vy-chip-slate capitalize">{lead.source.replace(/-/g, ' ')}</span>
+
+        {followState === 'overdue' && (
+          <span className="vy-chip vy-chip-rose">Overdue {lead.follow_up_date}</span>
+        )}
+        {followState === 'today' && <span className="vy-chip vy-chip-amber">Call today</span>}
+        {lead.trial_date && <span className="vy-chip vy-chip-blue">Trial {lead.trial_date}</span>}
+      </div>
+
+      {lead.notes && (
+        <p className="line-clamp-3 rounded-lg border border-line bg-subtle p-2 text-[11px] italic leading-relaxed text-muted">
+          {lead.notes}
+        </p>
+      )}
+
+<div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-2">
+        <button
+          onClick={() => onWhatsApp(lead)}
+          title="Open a WhatsApp chat with this lead"
+          aria-label={`WhatsApp ${lead.full_name}`}
+          className="vy-icon-btn-sm border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          onClick={() => onCall(lead)}
+          title="Call this lead"
+          aria-label={`Call ${lead.full_name}`}
+          className="vy-icon-btn-sm border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+        >
+          <PhoneCall className="h-3.5 w-3.5" />
+        </button>
+
+        {advance && (
+          <button
+            onClick={() => onAdvance(lead, advance)}
+            title={`Move to ${leadStageLabel(advance)}`}
+            className="vy-btn vy-btn-secondary !px-2 !py-1 text-[10px]"
+          >
+            {leadStageLabel(advance)} <ArrowRight className="h-3 w-3" />
+          </button>
+        )}
+
+        {lead.status !== 'lost' && lead.status !== 'converted' && (
+          <button
+            onClick={() => onAdvance(lead, 'lost')}
+            title="Mark as lost"
+            aria-label={`Mark ${lead.full_name} as lost`}
+            className="vy-icon-btn-sm hover:bg-rose-50 hover:text-rose-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+
+        {lead.status === 'converted' ? (
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Member
+          </span>
+        ) : (
+          <button
+            onClick={() => onEnroll(lead)}
+            disabled={busy}
+            title="Enroll as a member"
+            className="vy-btn vy-btn-brand ml-auto !px-2 !py-1 text-[10px]"
+          >
+            <Sparkles className="h-3 w-3" /> Enroll
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
 
 interface Plan {
   id: string;
@@ -345,122 +520,109 @@ export default function LeadsPipelinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white font-sans">
-      {/* Header */}
-      <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/admin"
-              className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Target className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tight">Lead Pipeline</h1>
-              <p className="text-xs text-neutral-400">
-                {session?.tenantName || 'Your gym'} &middot; {metrics.total} inquiries tracked
-              </p>
-            </div>
-          </div>
+    <div className="vy-page vy-noscroll">
+      {/* ---- Kanban viewport --------------------------------------------------
+          The board is seven lanes wide, so it is genuinely wider than any
+          laptop. Scrolling therefore has to be CONFINED to the wrapper below:
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-2.5" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, phone, source"
-                className="w-full sm:w-64 bg-neutral-900 border border-neutral-800 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-              />
-            </div>
+            1. `min-w-0` on the shell lets it shrink below its content's
+               intrinsic width. Without it a flex/grid item refuses to shrink,
+               the overflow escapes the wrapper and starts scrolling the whole
+               page — which is exactly the bug this board used to have.
+            2. `overflow-x-auto` is the ONLY scroll container, and
+               `overscroll-x-contain` stops the horizontal gesture from
+               chaining out to the document.
+            3. Lanes are a fixed track width rather than a 1fr share, so adding
+               a stage widens the board (scroll it) instead of squashing every
+               column until the text wraps into slivers.
+            4. The page root carries `vy-noscroll` (`overflow-x: clip`) as the
+               backstop, so even a mis-sized child cannot move the layout.
+        */}
+      <div className="mx-auto w-full max-w-[1600px] min-w-0 px-4 sm:px-6">
+        <PageHeader
+          icon={<Target className="h-5 w-5" />}
+          title="Lead Pipeline"
+          subtitle={`${session?.tenantName || 'Your gym'} · ${metrics.total} inquiries tracked`}
+          actions={
+            <>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name, phone, source"
+                  aria-label="Search leads"
+                  className="vy-input w-full pl-8 sm:w-64"
+                />
+              </div>
 
-            <button
-              onClick={() => setOnlyFollowUps((value) => !value)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition ${
-                onlyFollowUps
-                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                  : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700'
-              }`}
-            >
-              <CalendarClock className="w-4 h-4" /> Follow-ups ({metrics.openFollowUps})
-            </button>
+              <button
+                onClick={() => setOnlyFollowUps((value) => !value)}
+                aria-pressed={onlyFollowUps}
+                className={`vy-btn ${onlyFollowUps ? 'vy-chip-rose' : 'vy-btn-secondary'}`}
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                Follow-ups ({metrics.openFollowUps})
+              </button>
 
-            <button
-              onClick={() => setAddOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20"
-            >
-              <Plus className="w-4 h-4" /> Add Lead
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
-        {/* Metrics */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">In Pipeline</p>
-              <p className="text-xl font-bold">{metrics.total}</p>
-            </div>
-          </div>
-
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Converted</p>
-              <p className="text-xl font-bold">{metrics.converted}</p>
-            </div>
-          </div>
-
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Conversion</p>
-              <p className="text-xl font-bold">{metrics.conversionRate}%</p>
-            </div>
-          </div>
-
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400">
-              <CalendarClock className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-neutral-400">Due / Overdue</p>
-              <p className="text-xl font-bold">{metrics.openFollowUps}</p>
-            </div>
-          </div>
-        </div>
+              <button onClick={() => setAddOpen(true)} className="vy-btn vy-btn-brand">
+                <Plus className="h-3.5 w-3.5" /> Add Lead
+              </button>
+            </>
+          }
+        />
 
         {notice && (
           <div
-            className={`mb-5 flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${
-              noticeKind === 'ok'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+            role="status"
+            className={`vy-notice mb-5 ${
+              noticeKind === 'ok' ? 'vy-notice-ok' : 'vy-notice-bad'
             }`}
           >
             <span className="break-words">{notice}</span>
-            <button onClick={() => setNotice(null)} className="shrink-0 opacity-70 hover:opacity-100">
-              <X className="w-4 h-4" />
+            <button
+              onClick={() => setNotice(null)}
+              aria-label="Dismiss"
+              className="shrink-0 rounded p-0.5 opacity-70 transition hover:opacity-100"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
         )}
 
-        {/* Kanban board. Six lanes, drag a card between them or use the arrows. */}
-        <div className="overflow-x-auto pb-4">
-          <div className="grid grid-flow-col auto-cols-[minmax(258px,1fr)] gap-4 items-stretch">
+        {/* Metrics */}
+        <section aria-label="Pipeline metrics" className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricTile
+            icon={<Users className="h-3.5 w-3.5" />}
+            tone="blue"
+            label="In Pipeline"
+            value={metrics.total}
+          />
+          <MetricTile
+            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+            tone="emerald"
+            label="Converted"
+            value={metrics.converted}
+          />
+          <MetricTile
+            icon={<TrendingUp className="h-3.5 w-3.5" />}
+            tone="violet"
+            label="Conversion"
+            value={`${metrics.conversionRate}%`}
+          />
+          <MetricTile
+            icon={<CalendarClock className="h-3.5 w-3.5" />}
+            tone="rose"
+            label="Due / Overdue"
+            value={metrics.openFollowUps}
+          />
+        </section>
+
+{/* The ONLY horizontal scroll container on the page. `w-max` lets the track
+            exceed the viewport (so lanes keep their width) while the wrapper
+            clips it; without `w-max` the grid would shrink the lanes instead. */}
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-4">
+          <div className="grid w-max grid-flow-col auto-cols-[minmax(268px,1fr)] gap-3">
             {PIPELINE_STAGES.map((stage) => {
               const stageLeads = visible.filter((lead) => lead.status === stage.key);
 
@@ -473,142 +635,41 @@ export default function LeadsPipelinePage() {
                     if (lead) moveLead(lead, stage.key);
                     setDraggingId(null);
                   }}
-                  className={`bg-neutral-900/50 border rounded-2xl p-3 flex flex-col min-h-[440px] transition ${
+                  className={`flex min-h-[440px] min-w-0 flex-col rounded-xl border bg-subtle p-3 transition ${
                     draggingId ? 'border-dashed ' + stage.lane : stage.lane
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${stage.badge}`}>
-                      {stage.label}
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className={`vy-chip ${stage.badge}`}>{stage.label}</span>
+                    <span className="text-[11px] font-semibold tabular-nums text-faint">
+                      {stageLeads.length}
                     </span>
-                    <span className="text-xs font-mono text-neutral-500">{stageLeads.length}</span>
                   </div>
-                  <p className="text-[10px] text-neutral-500 mb-3 leading-snug">{stage.hint}</p>
+                  <p className="mb-3 text-[10px] leading-snug text-faint">{stage.hint}</p>
 
-                  <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                  {/* Lanes scroll vertically on their own; the board scrolls
+                      horizontally as a whole. Two axes, two containers. */}
+                  <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-0.5">
                     {stageLeads.length === 0 ? (
-                      <div className="text-center py-10 text-[11px] text-neutral-600 border border-dashed border-neutral-800 rounded-xl">
+                      <p className="rounded-lg border border-dashed border-line px-3 py-8 text-center text-[11px] text-faint">
                         Nothing here yet
-                      </div>
+                      </p>
                     ) : (
-                      stageLeads.map((lead) => {
-                        const followState = followUpState(lead.follow_up_date);
-                        const advance = nextStage(lead.status);
-                        const busy = busyId === lead.id;
-
-                        return (
-                          <div
-                            key={lead.id}
-                            draggable
-                            onDragStart={() => setDraggingId(lead.id)}
-                            onDragEnd={() => setDraggingId(null)}
-                            className={`bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-xl p-3 space-y-2.5 transition cursor-grab active:cursor-grabbing ${
-                              busy ? 'opacity-50' : ''
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <h4 className="font-semibold text-sm text-white truncate">
-                                  {lead.full_name}
-                                </h4>
-                                <p className="font-mono text-[11px] text-neutral-400">{lead.phone}</p>
-                              </div>
-                              <button
-                                onClick={() => removeLead(lead)}
-                                title="Delete lead"
-                                className="shrink-0 text-neutral-600 hover:text-rose-400 p-1 transition"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[10px] bg-neutral-800 text-neutral-300 px-2 py-0.5 rounded-md capitalize">
-                                {lead.source.replace(/-/g, ' ')}
-                              </span>
-
-                              {followState === 'overdue' && (
-                                <span className="text-[10px] bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-md font-bold">
-                                  Overdue {lead.follow_up_date}
-                                </span>
-                              )}
-                              {followState === 'today' && (
-                                <span className="text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">
-                                  Call today
-                                </span>
-                              )}
-                              {lead.trial_date && (
-                                <span className="text-[10px] bg-purple-500/15 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-md">
-                                  Trial {lead.trial_date}
-                                </span>
-                              )}
-                            </div>
-
-                            {lead.notes && (
-                              <p className="text-[11px] text-neutral-400 italic bg-neutral-950/60 p-2 rounded-lg border border-neutral-800/60 line-clamp-3">
-                                {lead.notes}
-                              </p>
-                            )}
-
-                            <div className="pt-2 border-t border-neutral-800 flex items-center gap-1.5">
-                              <button
-                                onClick={() => sendWhatsApp(lead)}
-                                title="Open a WhatsApp chat with this lead"
-                                aria-label={`WhatsApp ${lead.full_name}`}
-                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                              </button>
-
-                              <button
-                                onClick={() => callLead(lead)}
-                                title="Call this lead"
-                                aria-label={`Call ${lead.full_name}`}
-                                className="p-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 rounded-lg transition"
-                              >
-                                <PhoneCall className="w-3.5 h-3.5" />
-                              </button>
-
-                              {advance && (
-                                <button
-                                  onClick={() => moveLead(lead, advance)}
-                                  title={`Move to ${leadStageLabel(advance)}`}
-                                  className="flex items-center gap-1 text-[10px] bg-neutral-800 hover:bg-neutral-700 px-2 py-1.5 rounded-lg text-neutral-200 transition"
-                                >
-                                  {leadStageLabel(advance)} <ArrowRight className="w-3 h-3" />
-                                </button>
-                              )}
-
-                              {lead.status !== 'lost' && lead.status !== 'converted' && (
-                                <button
-                                  onClick={() => moveLead(lead, 'lost')}
-                                  title="Mark as lost"
-                                  className="p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 rounded-lg transition"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-
-                              {lead.status === 'converted' ? (
-                                <span className="ml-auto flex items-center gap-1 text-[10px] font-bold text-emerald-400">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Member
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => openConvert(lead)}
-                                  disabled={busy}
-                                  title="Enroll as a member"
-                                  className="ml-auto flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-black rounded-lg text-[10px] font-bold transition disabled:opacity-50"
-                                >
-                                  <Sparkles className="w-3 h-3" /> Enroll
-                                </button>
-                              )}
-                            </div>
-
-                          </div>
-                        );
-                      })
-
+                      stageLeads.map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          busy={busyId === lead.id}
+                          dragging={draggingId === lead.id}
+                          onDragStart={() => setDraggingId(lead.id)}
+                          onDragEnd={() => setDraggingId(null)}
+                          onDelete={removeLead}
+                          onAdvance={moveLead}
+                          onWhatsApp={sendWhatsApp}
+                          onCall={callLead}
+                          onEnroll={openConvert}
+                        />
+                      ))
                     )}
                   </div>
                 </div>
@@ -616,131 +677,114 @@ export default function LeadsPipelinePage() {
             })}
           </div>
         </div>
-
       </div>
-
-      {addOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl my-8">
-            <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-              <h2 className="text-base font-bold flex items-center gap-2">
-                <Plus className="w-4 h-4 text-amber-400" /> New Walk-In / Inquiry
+{addOpen && (
+        <div className="vy-scrim">
+          <div className="vy-modal max-w-lg">
+            <div className="vy-modal-head">
+              <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
+                <Plus className="h-4 w-4 text-brand" /> New walk-in / inquiry
               </h2>
               <button
                 onClick={() => setAddOpen(false)}
-                className="text-neutral-500 hover:text-white transition"
-                title="Close"
+                aria-label="Close"
+                className="vy-icon-btn"
               >
-                <X className="w-5 h-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateLead} className="p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleCreateLead} className="vy-modal-body space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                    Prospect Name
+                  <label className="vy-label" htmlFor="lead-name">
+                    Prospect name
                   </label>
                   <input
+                    id="lead-name"
                     required
                     autoFocus
                     value={form.full_name}
                     onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                     placeholder="Aryan Patel"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                    className="vy-input"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                    WhatsApp Number
+                  <label className="vy-label" htmlFor="lead-phone">
+                    WhatsApp number
                   </label>
                   <input
+                    id="lead-phone"
                     required
                     inputMode="tel"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="9876543210"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:border-amber-500"
+                    className="vy-input font-mono"
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                    Email (optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="aryan@example.com"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                    Lead Source
-                  </label>
-                  <select
-                    value={form.source}
-                    onChange={(e) => setForm({ ...form, source: e.target.value })}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 capitalize"
-                  >
-                    {LEAD_SOURCES.map((source) => (
-                      <option key={source} value={source} className="capitalize">
-                        {source.replace(/-/g, ' ')}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                  Follow-up Date (optional)
+                <label className="vy-label" htmlFor="lead-source">
+                  Lead source
+                </label>
+                <select
+                  id="lead-source"
+                  value={form.source}
+                  onChange={(e) => setForm({ ...form, source: e.target.value })}
+                  className="vy-select capitalize"
+                >
+                  {LEAD_SOURCES.map((source) => (
+                    <option key={source} value={source} className="capitalize">
+                      {source.replace(/-/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="vy-label" htmlFor="lead-followup">
+                  Follow-up date (optional)
                 </label>
                 <input
+                  id="lead-followup"
                   type="date"
                   value={form.follow_up_date}
                   onChange={(e) => setForm({ ...form, follow_up_date: e.target.value })}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                  className="vy-input"
                 />
-                <p className="text-[10px] text-neutral-500 mt-1.5">
+                <p className="mt-1.5 text-[10px] text-faint">
                   The card turns red the day after this date if nobody has called yet.
                 </p>
               </div>
 
               <div>
-                <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
+                <label className="vy-label" htmlFor="lead-notes">
                   Remarks
                 </label>
                 <textarea
+                  id="lead-notes"
                   rows={3}
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   placeholder="Interested in the evening slot, wants a PT trial"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 resize-none"
+                  className="vy-textarea resize-none"
                 />
               </div>
 
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+              <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
                 <button
                   type="button"
                   onClick={() => setAddOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-sm text-neutral-300 bg-neutral-800 hover:bg-neutral-700 transition"
+                  className="vy-btn vy-btn-lg vy-btn-secondary"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 text-black transition disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Add to Pipeline'}
+                <button type="submit" disabled={saving} className="vy-btn vy-btn-lg vy-btn-brand">
+                  {saving ? 'Saving…' : 'Add to pipeline'}
                 </button>
               </div>
             </form>
@@ -748,40 +792,41 @@ export default function LeadsPipelinePage() {
         </div>
       )}
 
-      {convertTarget && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl my-8">
-            <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-              <h2 className="text-base font-bold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-400" /> Enroll as a Member
+{convertTarget && (
+        <div className="vy-scrim">
+          <div className="vy-modal max-w-lg">
+            <div className="vy-modal-head">
+              <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
+                <Sparkles className="h-4 w-4 text-brand" /> Enroll as a member
               </h2>
               <button
                 onClick={() => setConvertTarget(null)}
-                className="text-neutral-500 hover:text-white transition"
-                title="Close"
+                aria-label="Close"
+                className="vy-icon-btn"
               >
-                <X className="w-5 h-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3.5">
-                <p className="text-sm font-bold text-white">{convertTarget.full_name}</p>
-                <p className="font-mono text-xs text-neutral-400">{convertTarget.phone}</p>
+            <div className="vy-modal-body space-y-4">
+              <div className="vy-panel">
+                <p className="text-[13px] font-semibold text-ink">{convertTarget.full_name}</p>
+                <p className="font-mono text-[12px] tabular-nums text-muted">{convertTarget.phone}</p>
                 {convertTarget.email && (
-                  <p className="text-xs text-neutral-400">{convertTarget.email}</p>
+                  <p className="truncate text-[12px] text-muted">{convertTarget.email}</p>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                    Membership Plan
+                  <label className="vy-label" htmlFor="convert-plan">
+                    Membership plan
                   </label>
                   <select
+                    id="convert-plan"
                     value={convertPlanId}
                     onChange={(e) => handlePlanChange(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
+                    className="vy-select"
                   >
                     <option value="">No plan (30-day access)</option>
                     {plans.map((plan) => (
@@ -793,36 +838,37 @@ export default function LeadsPipelinePage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-neutral-400 block mb-1.5">
-                    Amount Collected
+                  <label className="vy-label" htmlFor="convert-amount">
+                    Amount collected
                   </label>
                   <input
+                    id="convert-amount"
                     inputMode="decimal"
                     value={convertAmount}
                     onChange={(e) => setConvertAmount(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:border-emerald-500"
+                    className="vy-input font-mono"
                   />
                 </div>
               </div>
 
-              <p className="text-[11px] text-neutral-500 leading-relaxed">
+              <p className="text-[11px] leading-relaxed text-faint">
                 Creates the active membership, records the fee in the revenue ledger and moves this
                 card to Converted. A lead can only be converted once, so a double click cannot
                 create two memberships.
               </p>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-3 border-t border-neutral-800">
+              <div className="flex flex-col items-stretch gap-2 border-t border-line pt-4 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   onClick={() => prefillOnDashboard(convertTarget)}
-                  className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-neutral-200 bg-neutral-800 hover:bg-neutral-700 transition"
+                  className="vy-btn vy-btn-lg vy-btn-secondary"
                 >
                   Prefill on Dashboard
                 </button>
                 <button
                   type="button"
                   onClick={() => setConvertTarget(null)}
-                  className="px-3.5 py-2.5 rounded-xl text-xs text-neutral-400 hover:text-white transition sm:ml-auto"
+                  className="vy-btn vy-btn-lg vy-btn-ghost sm:ml-auto"
                 >
                   Cancel
                 </button>
@@ -830,18 +876,15 @@ export default function LeadsPipelinePage() {
                   type="button"
                   onClick={confirmConvert}
                   disabled={converting}
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-black transition disabled:opacity-50"
+                  className="vy-btn vy-btn-lg vy-btn-brand"
                 >
-                  {converting ? 'Converting...' : 'Create Member'}
+                  {converting ? 'Converting…' : 'Create member'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
-
-
