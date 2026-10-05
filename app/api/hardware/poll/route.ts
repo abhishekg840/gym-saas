@@ -73,7 +73,12 @@ export async function POST(request: Request) {
       ? {
           job_token: job.job_token,
           slot: job.slot,
+          kind: job.kind,
           stage: job.stage,
+          // The template to erase on the sensor once this capture succeeds —
+          // a re-enroll into a NEW slot. Null on a first enrollment, and null
+          // when the job retained the member's own slot (no erase needed).
+          delete_slot: job.delete_slot ?? null,
           device_name: job.device_name,
           expires_at: job.expires_at,
           // Two passes is the R307S standard enrollment ceremony. Sent as data

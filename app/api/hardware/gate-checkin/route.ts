@@ -11,8 +11,11 @@ import { badRequest, databaseError, readDeviceBody } from '@/lib/sqlstate';
  * were promised —
  *
  *   Request:  { device_key, action: "gate_checkin", rfid_card? | rfid_uid? | slot? }
- *             Accepted aliases: api_key / apiKey, biometric_id / biometricId,
- *             rfid / rfidCard / card, rfidUid.
+ *             Accepted aliases: api_key / apiKey, fingerprint_id / fingerprintId,
+ *             biometric_id / biometricId, rfid / rfidCard / card, rfidUid.
+ *             The fingerprint slot is ONE number under four names — slot,
+ *             fingerprint_id, fingerprintId, biometric_id — so both legacy and
+ *             updated firmware payloads succeed without a reflash.
  *             ALSO accepted: application/x-www-form-urlencoded
  *             (device_key=…&rfid_card=…), and JSON sent with a text/plain or
  *             missing Content-Type. See readDeviceBody for why.
@@ -110,7 +113,18 @@ export async function POST(request: Request) {
   if (apiKey.length > 80) return badRequest('device_key is not valid.');
 
   const biometricId = normalizeBiometricId(
-    firstNonEmpty(body.slot, body.biometric_id, body.biometricId)
+    // The fingerprint slot under three names: `slot` (this codebase's own
+    // dialect), `fingerprint_id` (firmware that spells the column literally)
+    // and `biometric_id` (the legacy members column). All three are the same
+    // number, so whichever a board revision sends lands in the same argument
+    // of fn_hardware_punch below — no reflash required.
+    firstNonEmpty(
+      body.slot,
+      body.fingerprint_id,
+      body.fingerprintId,
+      body.biometric_id,
+      body.biometricId
+    )
   );
 
   // rfid_card = body.rfid_card || body.rfid_uid
@@ -135,7 +149,7 @@ export async function POST(request: Request) {
   );
 
   if (biometricId === null && rfidCredential === null) {
-    return badRequest('Send rfid_card (card serial) or rfid_uid (card key), or slot for a fingerprint.');
+    return badRequest('Send rfid_card (card serial) or rfid_uid (card key), or slot / fingerprint_id for a fingerprint.');
   }
 
   // ------------------------------------------------------------------
@@ -223,7 +237,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'online',
     contract:
-      'POST { device_key, action: "gate_checkin", rfid_card | rfid_uid | slot } -> { access: GRANTED | DENIED, reason }',
+      'POST { device_key, action: "gate_checkin", rfid_card | rfid_uid | slot | fingerprint_id } -> { access: GRANTED | DENIED, reason }',
     accepts: [
       'application/json',
       'application/x-www-form-urlencoded',
