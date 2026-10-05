@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { isUuid, readTenantCookie } from '@/lib/session';
 import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
+import type { HardwareDevice } from '@/lib/hardware';
 
 /**
  * /api/hardware/fingerprint — the desk half of R307 enrollment (Phase 17).
@@ -34,6 +35,76 @@ function resolveTenant(candidates: Array<unknown>, request: Request): string | n
   return readTenantCookie(request);
 }
 
+/** The columns the modal needs, already narrowed to fingerprint readers. */
+interface FingerprintTerminalRow {
+  id: string;
+  device_name: string;
+  status: string;
+  last_heartbeat: string | null;
+  /** Precomputed by fn_hardware_list on the same 60-second rule the Hardware tab uses. */
+  is_online: boolean;
+  seconds_since_seen: number | null;
+}
+
+type TerminalList =
+  | { ok: true; terminals: FingerprintTerminalRow[] }
+  | { ok: false; response: Response };
+
+/**
+ * This gym's fingerprint terminals, most recently seen first.
+ *
+ * WHY THIS IS NOT A TABLE SELECT
+ * ------------------------------
+ * hardware_devices is revoked from anon and authenticated (migration 0003, 5a),
+ * and lib/supabase.ts is built on the ANON key — so a direct
+ * `.from('hardware_devices').select(...)` answers "permission denied for table
+ * hardware_devices". This route did exactly that, in two places, and the desk saw
+ * the raw Postgres text in the enrollment dialog.
+ *
+ * fn_hardware_list is the supported door: SECURITY DEFINER, re-checks that the
+ * tenant owns each row, and returns api_key already masked. It is granted to anon
+ * and authenticated (0003, "Only these six doors are open").
+ *
+ * It does NOT filter by device type, and returns [] rather than null when the gym
+ * has nothing registered, so both are narrowed here. `is_online` and
+ * `seconds_since_seen` arrive PRECOMPUTED, which is the whole point: the
+ * heartbeat rule is applied once, in the database, and the modal reads the same
+ * number the Hardware tab is already showing the owner.
+ */
+async function listFingerprintTerminals(tenantId: string): Promise<TerminalList> {
+  const { data, error } = await supabase.rpc('fn_hardware_list', { p_tenant_id: tenantId });
+
+  if (error) {
+    return {
+      ok: false,
+      response: databaseError(error, 'Could not list the fingerprint terminals.'),
+    };
+  }
+
+  const terminals = ((data ?? []) as HardwareDevice[])
+    .filter((d) => d.device_type === 'biometric_fingerprint')
+    .map((d) => ({
+      id: d.id,
+      device_name: d.device_name,
+      status: d.status,
+      last_heartbeat: d.last_heartbeat,
+      is_online: Boolean(d.is_online),
+      seconds_since_seen: d.seconds_since_seen ?? null,
+    }))
+    // Freshest proof of life first, so the desk's default pick is the reader most
+    // likely to be at the front desk. A live reader outranks a dead one outright,
+    // which matters because picking a dead one costs the member ten minutes.
+    .sort((a, b) => {
+      if (a.is_online !== b.is_online) return a.is_online ? -1 : 1;
+      return (
+        (a.seconds_since_seen ?? Number.MAX_SAFE_INTEGER) -
+        (b.seconds_since_seen ?? Number.MAX_SAFE_INTEGER)
+      );
+    });
+
+  return { ok: true, terminals };
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const tenantId = resolveTenant([url.searchParams.get('tenant_id')], request);
@@ -61,23 +132,13 @@ export async function GET(request: Request) {
 
   // The fingerprint terminals this gym can enrol on, so the UI never offers a
   // device that would immediately refuse the job.
-  const { data: devices, error: deviceError } = await supabase
-    .from('hardware_devices')
-    .select('id, device_name, status, last_heartbeat')
-    .eq('tenant_id', tenantId)
-    .eq('device_type', 'biometric_fingerprint');
-
-  if (deviceError) {
-    return databaseError(
-      deviceError,
-      'Could not list fingerprint terminals. Is migration 0003 applied?'
-    );
-  }
+  const list = await listFingerprintTerminals(tenantId);
+  if (!list.ok) return list.response;
 
   return NextResponse.json({
     ok: true,
     job: (job ?? null) as Record<string, unknown> | null,
-    terminals: (devices ?? []) as unknown[],
+    terminals: list.terminals,
   });
 }
 
@@ -103,30 +164,22 @@ export async function POST(request: Request) {
   const deleteOld = body.delete_old === undefined ? true : body.delete_old !== false;
 
   // No terminal chosen: pick this gym's fingerprint reader that most recently
-  // proved it was alive. "Online" is the 60-second heartbeat rule the Hardware
-  // tab already uses, so this picks the same device the owner sees as live —
-  // the desk should not have to know which reader is at which door.
+  // proved it was alive. listFingerprintTerminals already applies the 60-second
+  // heartbeat rule in SQL and sorts live-first, so this picks the same device the
+  // owner sees as live — the desk should not have to know which reader is at which
+  // door.
   if (!deviceId) {
-    const { data: candidates, error: listError } = await supabase
-      .from('hardware_devices')
-      .select('id, status, last_heartbeat')
-      .eq('tenant_id', tenantId)
-      .eq('device_type', 'biometric_fingerprint')
-      .order('last_heartbeat', { ascending: false, nullsFirst: false })
-      .limit(1);
+    const list = await listFingerprintTerminals(tenantId);
+    if (!list.ok) return list.response;
 
-    if (listError) {
-      return databaseError(listError, 'Could not find a fingerprint terminal.');
-    }
-
-    const chosen = (candidates ?? [])[0];
+    const chosen = list.terminals[0];
     if (!chosen) {
       return badRequest(
         'No fingerprint terminal is registered for this gym. Add one on the Hardware tab first.',
         404
       );
     }
-    deviceId = chosen.id as string;
+    deviceId = chosen.id;
   }
 
   const { data, error } = await supabase.rpc('fn_hardware_create_enrollment_job', {

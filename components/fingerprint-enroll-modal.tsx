@@ -20,9 +20,7 @@ import {
   cancelFingerprintEnrollment,
   fetchFingerprintState,
   formatIdle,
-  isTerminalOnline,
   startFingerprintEnrollment,
-  terminalIdleSeconds,
   type FingerprintJob,
   type FingerprintStage,
   type FingerprintTerminal,
@@ -59,8 +57,9 @@ const STAGE_ORDER: FingerprintStage[] = ENROLLMENT_STEPS.map((s) => s.stage);
  *
  * Written out rather than imported because these maps carry Tailwind class names,
  * and the two screens must never disagree about whether a reader is live — that
- * disagreement is the entire bug this guard exists to close. The rule itself
- * (ONLINE_WINDOW_SECONDS) IS shared, via isTerminalOnline.
+ * disagreement is the entire bug this guard exists to close. The RULE behind them
+ * is not duplicated: `is_online` arrives precomputed from fn_hardware_list, the
+ * same SECURITY DEFINER function the Hardware tab reads.
  */
 const LIVE_DOT = {
   online: 'bg-emerald-500',
@@ -75,11 +74,8 @@ const LIVE_DOT = {
  * died a minute ago can still be filed as "Ready" and would send the desk
  * looking in the wrong place.
  */
-function terminalChip(
-  terminal: FingerprintTerminal,
-  now: number
-): { label: string; tone: string } {
-  if (!isTerminalOnline(terminal, now)) return { label: 'Offline', tone: 'vy-chip-slate' };
+function terminalChip(terminal: FingerprintTerminal): { label: string; tone: string } {
+  if (!terminal.is_online) return { label: 'Offline', tone: 'vy-chip-slate' };
   if (terminal.status === 'error') return { label: 'Needs attention', tone: 'vy-chip-rose' };
   if (terminal.status === 'maintenance') return { label: 'Ready', tone: 'vy-chip-amber' };
   return { label: 'Online', tone: 'vy-chip-emerald' };
@@ -121,18 +117,6 @@ export default function FingerprintEnrollModal({
   /** Why the list could not be read — never the same thing as "it was empty". */
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  /**
-   * One clock for the whole render, stamped at the moment of the read.
-   *
-   * State rather than an inline Date.now(), which the compiler rejects during
-   * render — and this is the more honest version anyway: every terminal is
-   * judged against the SAME instant, so the list can never show two readers as
-   * online and offline a millisecond apart. It stays frozen until the next read,
-   * which also stops a live reader from flickering to "offline" while the desk
-   * is reading the screen. "Check again" re-stamps it.
-   */
-  const [now, setNow] = useState(0);
-
   /** Only for the "no terminal registered" escape hatch out to /hardware. */
   const router = useRouter();
 
@@ -170,9 +154,6 @@ export default function FingerprintEnrollModal({
     // A retry (or the modal closing) has already taken ownership of the state.
     if (runId !== loadRunRef.current) return;
 
-    // Re-stamp the clock so liveness is judged as of this read, not of mount.
-    const stamped = Date.now();
-    setNow(stamped);
     setLoadingTerminals(false);
 
     if (!result) {
@@ -193,7 +174,7 @@ export default function FingerprintEnrollModal({
     setDeviceId((current) =>
       result.terminals.some((t) => t.id === current)
         ? current
-        : (result.terminals.find((t) => isTerminalOnline(t, stamped))?.id ?? null)
+        : (result.terminals.find((t) => t.is_online)?.id ?? null)
     );
   }, [tenantId]);
 
@@ -372,13 +353,16 @@ const runIdRef = useRef(0);
   const currentIndex = done ? STAGE_ORDER.length - 1 : stageIndex(job?.stage);
 
   /**
-   * Liveness of what is actually chosen, all judged against the single clock
-   * stamped by the last read.
+   * Liveness of what is actually chosen, as decided by the database.
+   *
+   * Straight off the payload: fn_hardware_list computed `is_online` and
+   * `seconds_since_seen` server-side, so there is no browser clock here to
+   * disagree with Postgres and nothing to recompute on every render.
    */
   const selectedTerminal = terminals.find((t) => t.id === deviceId) ?? null;
-  const selectedIdle = selectedTerminal ? terminalIdleSeconds(selectedTerminal, now) : null;
-  const selectedOnline = selectedTerminal ? isTerminalOnline(selectedTerminal, now) : false;
-  const anyOnline = terminals.some((t) => isTerminalOnline(t, now));
+  const selectedIdle = selectedTerminal ? selectedTerminal.seconds_since_seen : null;
+  const selectedOnline = selectedTerminal ? selectedTerminal.is_online : false;
+  const anyOnline = terminals.some((t) => t.is_online);
 
   /** The CTA is live only when there is a reader that can actually reply. */
   const canStart =
@@ -518,14 +502,10 @@ return (
                   <fieldset className="space-y-2">
                     <legend className="sr-only">Fingerprint terminal</legend>
                     {[...terminals]
-                      .sort(
-                        (a, b) =>
-                          Number(isTerminalOnline(b, now)) - Number(isTerminalOnline(a, now))
-                      )
+                      .sort((a, b) => Number(b.is_online) - Number(a.is_online))
                       .map((t) => {
-                        const online = isTerminalOnline(t, now);
-                        const chip = terminalChip(t, now);
                         const selected = deviceId === t.id;
+                        const chip = terminalChip(t);
                         return (
                           <label key={t.id} className="block cursor-pointer">
                             <input
@@ -543,7 +523,7 @@ return (
                             >
                               <span
                                 className={`h-2 w-2 shrink-0 rounded-full ${
-                                  online ? LIVE_DOT.online : LIVE_DOT.offline
+                                  t.is_online ? LIVE_DOT.online : LIVE_DOT.offline
                                 }`}
                               />
                               <span className="min-w-0 flex-1">
@@ -551,7 +531,7 @@ return (
                                   {t.device_name}
                                 </span>
                                 <span className="block text-[11px] text-faint">
-                                  Last heartbeat {formatIdle(terminalIdleSeconds(t, now))}
+                                  Last heartbeat {formatIdle(t.seconds_since_seen)}
                                 </span>
                               </span>
                               <span className={`vy-chip shrink-0 ${chip.tone}`}>{chip.label}</span>
