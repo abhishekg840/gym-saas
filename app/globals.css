@@ -182,6 +182,12 @@ body {
   .vy-notice-bad {
     @apply border-rose-200 bg-rose-50 text-rose-800;
   }
+  /* Amber is "the desk has to act, but nothing is broken yet" — a reader that is
+     registered but not checking in. Deliberately between ok and bad so it never
+     reads as either "done" or "on fire". */
+  .vy-notice-warn {
+    @apply border-amber-200 bg-amber-50 text-amber-800;
+  }
 
   /* ---- Empty state ------------------------------------------------------- */
   .vy-empty {

@@ -17,6 +17,52 @@
  * would not change.
  */
 
+import { ONLINE_WINDOW_SECONDS } from '@/lib/hardware';
+
+/**
+ * Seconds since this terminal last proved it was alive, or null if it never has.
+ *
+ * READS THE HEARTBEAT, NOT THE `status` COLUMN
+ * ------------------------------------------
+ * `status` is only rewritten when the device next talks to the server, so a
+ * reader that was unplugged an hour ago still says 'online' in the column. Only
+ * the heartbeat ages on its own, so only the heartbeat can answer "will this
+ * machine reply if I ask it to?".
+ */
+export function terminalIdleSeconds(
+  terminal: Pick<FingerprintTerminal, 'last_heartbeat'>,
+  now: number = Date.now()
+): number | null {
+  if (!terminal.last_heartbeat) return null;
+  const elapsed = now - new Date(terminal.last_heartbeat).getTime();
+  return Number.isFinite(elapsed) ? Math.max(0, Math.round(elapsed / 1000)) : null;
+}
+
+/**
+ * Whether this terminal can be expected to answer right now.
+ *
+ * Deliberately the SAME rule as `fn_hardware_list`'s `is_online` and the Hardware
+ * tab's own dot. A modal that calls a live reader "offline" (or worse, the
+ * reverse) sends the desk to power-cycle a machine that is already working.
+ */
+export function isTerminalOnline(
+  terminal: Pick<FingerprintTerminal, 'last_heartbeat'>,
+  now?: number
+): boolean {
+  const idle = terminalIdleSeconds(terminal, now);
+  return idle !== null && idle <= ONLINE_WINDOW_SECONDS;
+}
+
+/** "just now" / "4 min ago", for the liveness line under each terminal. */
+export function formatIdle(seconds: number | null): string {
+  if (seconds === null) return 'never';
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.round(minutes / 60)} hr ago`;
+}
+
 /** Stages the sensor reports, in the order they occur. */
 export type FingerprintStage =
   | 'queued'
