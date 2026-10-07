@@ -248,7 +248,7 @@ export default function RfidLinkModal({
               {!captured && enroll.status !== 'error' && (
                 <button
                   type="button"
-                  onClick={() => void enroll.arm()}
+                  onClick={() => void enroll.arm(null, 'card')}
                   disabled={enroll.status === 'arming' || enroll.status === 'waiting'}
                   className="flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 px-4 py-7 transition hover:bg-emerald-50 disabled:cursor-wait"
                 >
@@ -279,7 +279,7 @@ export default function RfidLinkModal({
                       </span>
                       <span className="text-sm font-bold text-emerald-900">Tap on Terminal</span>
                       <span className="text-[11px] text-emerald-700">
-                        Arms the front-desk reader for 60 seconds
+                        Arms the card reader for 60 seconds
                       </span>
                     </>
                   )}
@@ -337,7 +337,7 @@ export default function RfidLinkModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => void enroll.arm()}
+                    onClick={() => void enroll.arm(null, 'card')}
                     className="mt-2.5 text-[11px] font-semibold text-amber-800 hover:text-amber-950"
                   >
                     Listen again

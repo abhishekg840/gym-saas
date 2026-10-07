@@ -7,7 +7,11 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  * /api/hardware/enrollment — the owner's "Tap on Terminal" flow (Phase 12).
  *
  *   GET  ?tenant_id=&device_id=   -> { ok, devices[] }   (enrollment state only)
- *   POST { tenant_id, device_id?, seconds? } -> { ok, device }
+ *   POST { tenant_id, device_id?, seconds?, purpose? } -> { ok, device }
+ *
+ * `purpose: "card"` is the RFID link modal's "Tap on Terminal": with no
+ * device_id it arms a NON-biometric terminal (the card reader), never the
+ * fingerprint unit — see the pick inside POST.
  *
  * WHY THIS IS AN API ROUTE AND NOT A DIRECT SUPABASE CALL
  * ------------------------------------------------------
@@ -23,9 +27,10 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  * migration, so switching the console to Supabase Auth makes a socket viable
  * later without changing the contract.
  *
- * `device_id` is optional on POST: when omitted, the newest terminal that is
- * already online is armed, which is what the "Tap on Terminal" button does so
- * the owner does not have to know which reader is at which door.
+ * `device_id` is optional on POST: when omitted, the terminal most plausibly at
+ * the front desk is armed so the owner does not have to know which reader is
+ * at which door. For `purpose: "card"` the pick is restricted to readers whose
+ * device_type is not biometric_fingerprint.
  */
 
 /** Body/query tenant first, cookie second, hard 403 when neither is a UUID. */
@@ -79,6 +84,10 @@ export async function POST(request: Request) {
   const seconds = Number(body.seconds ?? 60);
   const window = Number.isFinite(seconds) ? Math.min(Math.max(seconds, 15), 300) : 60;
 
+  // "card" = the RFID link modal's "Tap on Terminal". It must arm the card
+  // reader, never the fingerprint unit — the pick below enforces it.
+  const purpose = body.purpose === 'card' ? 'card' : null;
+
   let deviceId = isUuid(body.device_id) ? body.device_id : null;
 
   // No device chosen: arm the terminal that is most plausibly at the front desk.
@@ -101,17 +110,42 @@ export async function POST(request: Request) {
       id: string;
       status?: string;
       enrollment_mode?: boolean;
+      device_type?: string;
     }>;
 
-    const online = devices.filter((d) => d.status === 'online' && !d.enrollment_mode);
-    const fallback = devices.filter((d) => !d.enrollment_mode);
+    // CARD PURPOSE: a tap arrives on whichever terminal holds the key the
+    // ESP32 was flashed with, and fn_hardware_capture_enrollment only writes
+    // last_scanned_uid when the TAPPED device's own row is armed. The old pick
+    // was name order — "Finger Print" sorts before "RFID" — so it armed the
+    // R307, the RC522's tap hit an unarmed row, captured=false, nothing was
+    // stored, and the modal timed out every time. So: exclude the biometric
+    // unit outright, and rank a dedicated rfid_scanner above any other reader
+    // type. A gym with ONLY a fingerprint unit gets an honest 404 instead of
+    // a silent 60-second wait.
+    let pool = devices;
+    if (purpose === 'card') {
+      const readers = devices.filter((d) => d.device_type !== 'biometric_fingerprint');
+      pool = [
+        ...readers.filter((d) => d.device_type === 'rfid_scanner'),
+        ...readers.filter((d) => d.device_type !== 'rfid_scanner'),
+      ];
+    }
 
-    // The already-aimed terminal wins, so a second click is a no-op rather than
+    const online = pool.filter((d) => d.status === 'online' && !d.enrollment_mode);
+    const fallback = pool.filter((d) => !d.enrollment_mode);
+    // For a card tap an already-armed reader also counts (a second click
+    // refreshes its window instead of failing); other purposes keep the
+    // original armed-excluded behaviour.
+    const armed = purpose === 'card' ? pool.filter((d) => d.enrollment_mode) : [];
+
+    // An online terminal wins, so a second click is a no-op rather than
     // re-arming a different reader and splitting the owner's attention.
-    const chosen = online[0] ?? fallback[0];
+    const chosen = online[0] ?? fallback[0] ?? armed[0];
     if (!chosen) {
       return badRequest(
-        'No terminal is available to enroll. Register a reader on the Hardware tab first.',
+        purpose === 'card'
+          ? 'No card reader terminal is available. Register a reader whose device type is not biometric_fingerprint on the Hardware tab first.'
+          : 'No terminal is available to enroll. Register a reader on the Hardware tab first.',
         404
       );
     }

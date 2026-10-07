@@ -54,7 +54,14 @@ export interface UseTapToEnroll {
   /** Seconds left on the arm window; 0 when not armed. */
   secondsLeft: number;
   error: string | null;
-  arm: (deviceId?: string | null) => Promise<void>;
+  /**
+   * Arms a terminal for the 60-second window. `purpose: 'card'` (what the RFID
+   * link modal always passes) tells the server to arm the CARD READER — a
+   * non-biometric terminal — because a tap only captures on the device that
+   * physically received it: fn_hardware_capture_enrollment writes last_scanned_uid
+   * only when the tapped device's own row is armed.
+   */
+  arm: (deviceId?: string | null, purpose?: 'card') => Promise<void>;
   cancel: () => Promise<void>;
   /** Clears a capture so the owner can retry without re-arming. */
   reset: () => void;
@@ -106,14 +113,17 @@ export function useTapToEnroll(
 /** One poll tick. Returns true when the caller should keep polling. */
   const poll = useCallback(async (): Promise<boolean> => {
     const tenant = tenantId;
-    const deviceId = deviceIdRef.current;
     if (!isUuid(tenant)) return false;
 
     try {
+      // Deliberately UNSCOPED — read every terminal of this gym on each tick.
+      // The ESP32 posts its tap with whatever API key it holds, and while our
+      // window is open that capture can land on a different row than the one
+      // this console armed (the RFID reader and the fingerprint unit are
+      // separate devices with separate keys). Asking for one device_id here
+      // was exactly how the tap went unseen.
       const response = await fetch(
-        `/api/hardware/enrollment?tenant_id=${encodeURIComponent(tenant)}${
-          deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ''
-        }`,
+        `/api/hardware/enrollment?tenant_id=${encodeURIComponent(tenant)}`,
         { credentials: 'same-origin', cache: 'no-store' }
       );
       const result = (await response.json()) as {
@@ -131,17 +141,20 @@ export function useTapToEnroll(
 
       const devices = result.devices ?? [];
 
-      // The terminal we armed — scoped strictly when the arm response carried
-      // its id (spelled `device_id` by fn_hardware_begin_enrollment, `id` by
-      // other builds). When the id was missing, the old code took
-      // `devices[0]`, which is sorted by NAME and is usually a DIFFERENT
-      // reader — so the armed device's tap was never looked at and the 60s
-      // window always timed out. Now: fall back to scanning every device for
-      // a fresh capture instead of trusting a single arbitrary row.
+      // The terminal we armed (its id is spelled `device_id` by
+      // fn_hardware_begin_enrollment, `id` by other builds) — used ONLY to pick
+      // the row the countdown reads.
       const scoped = deviceIdRef.current
         ? devices.find((d) => d.id === deviceIdRef.current) ?? null
         : null;
-      const watched = scoped ? [scoped] : devices;
+
+      // Capture acceptance scans EVERY terminal of the gym, not just the armed
+      // one, so whichever terminal key the ESP32 used to send the tap the UID
+      // is seen immediately. Safe because freshness is checked per row below:
+      // only fn_hardware_capture_enrollment ever writes last_scanned_uid, it
+      // only fires while that device itself is armed, and the window is the
+      // one this modal just opened.
+      const watched = devices;
 
       // Count down against the terminal that is actually armed when we can
       // identify it; only then fall back to the first row.
@@ -166,6 +179,18 @@ export function useTapToEnroll(
           setCapturedUid(uid);
           setStatus('captured');
           setSecondsLeft(0);
+
+          // Consume the capture: null this row's last_scanned_uid so a FUTURE
+          // modal opening cannot refill from a tap already shown here. Best
+          // effort — the freshness gate above and fn_hardware_begin_enrollment's
+          // clear-on-arm still cover a dropped call. An RPC rather than a
+          // direct .update(): hardware_devices is revoked from anon and this
+          // client IS the anon key.
+          void supabase.rpc('fn_hardware_clear_enrollment_capture', {
+            p_tenant_id: tenant,
+            p_device_id: candidate.id,
+          });
+
           onCapturedRef.current?.(uid);
           return false;
         }
@@ -236,7 +261,7 @@ export function useTapToEnroll(
   }, [scheduleFast]);
 
   const arm = useCallback(
-    async (deviceId?: string | null) => {
+    async (deviceId?: string | null, purpose?: 'card') => {
       if (!isUuid(tenantId)) {
         setError('Sign in to the gym console before enrolling a card.');
         setStatus('error');
@@ -253,7 +278,12 @@ export function useTapToEnroll(
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenant_id: tenantId, device_id: deviceId ?? null, seconds: 60 }),
+          body: JSON.stringify({
+            tenant_id: tenantId,
+            device_id: deviceId ?? null,
+            seconds: 60,
+            ...(purpose ? { purpose } : {}),
+          }),
         });
 
         const result = (await response.json()) as {
