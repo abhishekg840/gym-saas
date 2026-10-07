@@ -120,8 +120,23 @@ export default function FingerprintEnrollModal({
   /** Only for the "no terminal registered" escape hatch out to /hardware. */
   const router = useRouter();
 
-  /** The live job token, so the poll watches THIS job and not the newest one. */
-  const jobTokenRef = useRef<string | null>(null);
+  /**
+   * The live job token, so the poll watches THIS job and not the newest one.
+   *
+   * STATE, not a ref — that is the fix for the desk's "stuck at Connecting to
+   * terminal…" bug. `start()` used to stash the token in a ref after the POST
+   * resolved, but the poll effect keys off `running`, which turns true while
+   * the POST is still in flight ('starting'). The first tick therefore asked
+   * the server for "the newest job with NO token", got null, returned
+   * keep-polling=false, and the loop — which never restarts, because
+   * `running` stays true — was dead before it ever saw this job. Making the
+   * token part of state means the effect's dependency changes exactly when the
+   * token appears, so the loop starts once and only once there is something to
+   * watch.
+   */
+  const [jobToken, setJobToken] = useState<string | null>(null);
+  /** Consecutive failed reads; a blip retries, an outage fails honestly. */
+  const pollFailsRef = useRef(0);
   /** Guards onEnrolled against firing twice on a fast re-render. */
   const notifiedRef = useRef(false);
   /** Bumped per read, so a slow first load cannot overwrite a fast retry. */
@@ -221,10 +236,36 @@ const finish = useCallback(
   /** Poll the job until it reaches a terminal state. Returns keep-polling. */
   const poll = useCallback(async (): Promise<boolean> => {
     const tenant = tenantId;
-    if (!tenant) return false;
+    // No token yet means start() has not resolved — nothing to watch, and
+    // asking without one would return SOME OTHER desk's newest job.
+    if (!tenant || !jobToken) return false;
 
-    const result = await fetchFingerprintState(tenant, jobTokenRef.current);
-    if (!result.ok || !result.job) return false;
+    const result = await fetchFingerprintState(tenant, jobToken);
+
+    // A single dropped response must NOT kill the loop. It used to: one blip
+    // returned false, the effect never re-armed, and the desk sat on
+    // "Connecting to terminal…" while the terminal finished the capture in
+    // silence. Retry a few times, then fail with the server's own message.
+    if (!result.ok) {
+      pollFailsRef.current += 1;
+      if (pollFailsRef.current < 5) return true;
+      setState('failed');
+      setError(
+        result.error ?? 'Lost contact with the server while watching this enrollment.'
+      );
+      return false;
+    }
+    pollFailsRef.current = 0;
+
+    // A known token with no job: the server no longer has it (expired, or
+    // cancelled from another desk). There is genuinely nothing left to poll.
+    if (!result.job) {
+      setState('failed');
+      setError(
+        'This enrollment is no longer on the server — it may have expired. Close and start it again.'
+      );
+      return false;
+    }
 
     const current = result.job;
 
@@ -248,7 +289,7 @@ const finish = useCallback(
     setJob(current);
     setState('running');
     return true;
-  }, [tenantId, finish]);
+  }, [tenantId, jobToken, finish]);
 
   /**
  * The poll loop, as ONE effect rather than a self-rescheduling timer.
@@ -286,8 +327,10 @@ const runIdRef = useRef(0);
     }
 
     // Watch THIS job specifically — another desk may enroll someone else while
-    // this capture is running.
-    jobTokenRef.current = result.job.job_token;
+    // this capture is running. State, not a ref: setting it is what actually
+    // starts the poll loop (see the jobToken doc comment above).
+    pollFailsRef.current = 0;
+    setJobToken(result.job.job_token);
     setJob({
       ...result.job,
       status: 'pending',
@@ -309,12 +352,11 @@ const runIdRef = useRef(0);
   const close = useCallback(() => {
     runIdRef.current += 1;
     const tenant = tenantId;
-    const token = jobTokenRef.current;
-    if (tenant && token && (state === 'running' || state === 'starting')) {
-      void cancelFingerprintEnrollment(tenant, token);
+    if (tenant && jobToken && (state === 'running' || state === 'starting')) {
+      void cancelFingerprintEnrollment(tenant, jobToken);
     }
     onClose();
-  }, [tenantId, state, onClose]);
+  }, [tenantId, jobToken, state, onClose]);
 
   /**
    * Escape closes this dialog, and only this one.
@@ -398,7 +440,12 @@ const runIdRef = useRef(0);
    * effect's own cleanup stops it on unmount.
    */
   useEffect(() => {
-    if (!running) return;
+    // No job token yet: the POST that creates the job is still in flight.
+    // Starting the loop here is what froze the desk on "Connecting to
+    // terminal…" — the first read came back empty and the loop died before
+    // the job existed. The token arriving flips this effect's deps, which is
+    // the one correct moment to start watching.
+    if (!running || !jobToken) return;
 
     const runId = runIdRef.current;
     let cancelled = false;
@@ -415,7 +462,7 @@ const runIdRef = useRef(0);
     return () => {
       cancelled = true;
     };
-  }, [running, poll]);
+  }, [running, jobToken, poll]);
 
 return (
     <div className="vy-scrim">
@@ -725,7 +772,8 @@ return (
                 <button
                   onClick={() => {
                     notifiedRef.current = false;
-                    jobTokenRef.current = null;
+                    setJobToken(null);
+                    pollFailsRef.current = 0;
                     setJob(null);
                     setState('idle');
                     setError(null);

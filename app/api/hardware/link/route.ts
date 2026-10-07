@@ -8,7 +8,15 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  *
  *   GET  ?tenant_id=&member_id=  -> { ok, rfid_uid, biometric_id }
  *   POST { tenant_id, member_id,
- *          rfid_uid?, biometric_id?, clear_bio? }  -> { ok, ... }
+ *          rfid_uid?, biometric_id?, clear_bio?, clear_rfid? }  -> { ok, ... }
+ *
+ * NULL MEANS "NO CHANGE", NOT "CLEAR". fn_member_link_hardware has no
+ * "keep existing" sentinel — it writes members.rfid_card = p_rfid_uid and
+ * members.biometric_id = p_biometric_id unconditionally — so this route
+ * merges: a field the caller omits is replaced by the member's current value.
+ * Only an explicit clear_rfid/clear_bio produces a null in the payload. That
+ * is what makes "save a fingerprint without touching the card" safe even if
+ * the browser sends rfid_uid: null, and vice versa.
  *
  * Everything is written by fn_member_link_hardware, which is the ONLY writer for
  * both members.rfid_card and members.rfid_uid. Letting the browser update those
@@ -94,18 +102,39 @@ export async function POST(request: Request) {
   }
 
   const rfidUid = typeof rawUid === 'string' ? rawUid.trim() : rawUid == null ? null : String(rawUid);
+  // TRUE only when the caller explicitly asks to unlink the card — never a
+  // stand-in for "field was left empty".
+  const clearRfid = body.clear_rfid === true || body.clearRfid === true;
 
   // Refuse a no-op rather than silently clearing somebody's credential: an empty
   // POST is far more likely to be a UI bug than a deliberate unlink.
-  if (!rfidUid && biometricId === null && !clearBio) {
+  if (!rfidUid && biometricId === null && !clearBio && !clearRfid) {
     return badRequest('Send a card UID or a fingerprint slot to save.');
   }
+
+  // Merge with what the member has NOW, so a credential the caller did not
+  // send is preserved rather than overwritten with null. (See the header
+  // comment: the RPC writes whatever it is handed, unconditionally.)
+  const { data: currentRow, error: readError } = await supabase
+    .from('members')
+    .select('rfid_card, biometric_id')
+    .eq('id', memberId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+
+  if (readError) return databaseError(readError, 'Could not read that member’s credentials.');
+  if (!currentRow) return badRequest('That member is not in this gym.', 404);
+
+  const current = currentRow as { rfid_card: string | null; biometric_id: number | null };
+
+  const mergedRfid = clearRfid ? null : rfidUid || current.rfid_card || null;
+  const mergedBio = clearBio ? null : (biometricId ?? current.biometric_id);
 
   const { data, error } = await supabase.rpc('fn_member_link_hardware', {
     p_member_id: memberId,
     p_tenant_id: tenantId,
-    p_rfid_uid: rfidUid || null,
-    p_biometric_id: biometricId,
+    p_rfid_uid: mergedRfid,
+    p_biometric_id: mergedBio,
     p_clear_bio: clearBio,
   });
 

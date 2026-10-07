@@ -74,54 +74,31 @@ create index if not exists idx_hardware_enrollment
 -- scanned_at is deliberately NOT touched. app/analytics/page.tsx,
 -- app/api/cron/whatsapp and the Phase 9 streak trigger all read it.
 -- -----------------------------------------------------------------------------
--- 3. Realtime + RLS for hardware_devices (authenticated only)
--- -----------------------------------------------------------------------------
--- A table is only streamed to a client when the role can SELECT it AND a
--- permissive RLS policy exists. hardware_devices has neither today, which is why
--- a naive "subscribe to hardware_devices" would connect cleanly and then never
--- fire. Enabling both here makes the subscription work without exposing api_key
--- to the anon role.
-alter table public.hardware_devices enable row level security;
+alter table if exists public.attendances
+  add column if not exists direction text not null default 'in';
 
 do $$
 begin
   if not exists (
-    select 1 from pg_policies
-     where schemaname = 'public' and tablename = 'hardware_devices'
-       and policyname = 'hardware_devices_enrollment_read'
+    select 1 from pg_constraint
+     where conrelid = 'public.attendances'::regclass
+       and conname = 'attendances_direction_check'
   ) then
-    create policy hardware_devices_enrollment_read
-      on public.hardware_devices
-      for select
-      to authenticated
-      using (true);
+    alter table public.attendances
+      add constraint attendances_direction_check
+      check (direction in ('in', 'out'));
   end if;
 end $$;
 
--- Column-level grant: enrollment state only, never api_key. Postgres column
--- grants are enforced per column, so the machine credential cannot travel back
--- to the browser even inside a full row payload.
-grant select (id, tenant_id, device_name, device_type, status, firmware_version,
-              enrollment_mode, last_scanned_uid, last_scanned_at,
-              enrollment_expires_at)
-  on public.hardware_devices to authenticated;
+comment on column public.attendances.direction is
+  'in | out. Defaults to ''in'' so pre-existing punch inserts are unaffected.';
 
--- Publish the table. Wrapped in a pg_publication check because a self-hosted or
--- already-migrated project may have no supabase_realtime publication at all, and
--- an unguarded ALTER PUBLICATION would abort the whole transaction.
-do $$
-begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    if not exists (
-      select 1 from pg_publication_tables
-       where pubname = 'supabase_realtime'
-         and schemaname = 'public'
-         and tablename = 'hardware_devices'
-    ) then
-      execute 'alter publication supabase_realtime add table public.hardware_devices';
-      raise notice 'Realtime: added public.hardware_devices to the supabase_realtime publication.';
-    end if;
-  else
+-- The crowd tracker reads "latest row per member", so the sort key must cover
+-- both the member filter and the recency window.
+create index if not exists idx_attendances_member_direction
+  on public.attendances (member_id, direction, punch_time desc)
+  where member_id is not null;
+
 -- -----------------------------------------------------------------------------
 -- 2b. password_setup_completed must never be NULL (Phase 12)
 -- -----------------------------------------------------------------------------
@@ -178,6 +155,55 @@ end $$;
 
 comment on column public.members.password_setup_completed is
   'NOT NULL DEFAULT false. FALSE = the member has not chosen their own password yet. Drives a REMINDABLE prompt, never a dead end (Phase 12).';
+
+-- 3. Realtime + RLS for hardware_devices (authenticated only)
+-- -----------------------------------------------------------------------------
+-- A table is only streamed to a client when the role can SELECT it AND a
+-- permissive RLS policy exists. hardware_devices has neither today, which is why
+-- a naive "subscribe to hardware_devices" would connect cleanly and then never
+-- fire. Enabling both here makes the subscription work without exposing api_key
+-- to the anon role.
+alter table public.hardware_devices enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'hardware_devices'
+       and policyname = 'hardware_devices_enrollment_read'
+  ) then
+    create policy hardware_devices_enrollment_read
+      on public.hardware_devices
+      for select
+      to authenticated
+      using (true);
+  end if;
+end $$;
+
+-- Column-level grant: enrollment state only, never api_key. Postgres column
+-- grants are enforced per column, so the machine credential cannot travel back
+-- to the browser even inside a full row payload.
+grant select (id, tenant_id, device_name, device_type, status, firmware_version,
+              enrollment_mode, last_scanned_uid, last_scanned_at,
+              enrollment_expires_at)
+  on public.hardware_devices to authenticated;
+
+-- Publish the table. Wrapped in a pg_publication check because a self-hosted or
+-- already-migrated project may have no supabase_realtime publication at all, and
+-- an unguarded ALTER PUBLICATION would abort the whole transaction.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (
+      select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'hardware_devices'
+    ) then
+      execute 'alter publication supabase_realtime add table public.hardware_devices';
+      raise notice 'Realtime: added public.hardware_devices to the supabase_realtime publication.';
+    end if;
+  else
     raise notice 'Realtime: no supabase_realtime publication on this project; enrollment polling will still work.';
   end if;
 end $$;
@@ -226,6 +252,19 @@ begin
     'ok',              true,
     'device_id',       v_row.id,
     'device_name',     v_row.device_name,
+    'enrollment_mode', v_row.enrollment_mode,
+    'expires_at',      v_row.enrollment_expires_at,
+    'wait_seconds',    v_window
+  );
+end;
+$$;
+
+comment on function public.fn_hardware_begin_enrollment(uuid, uuid, integer) is
+  'Arms one terminal to capture the next card tap for enrollment. Clears any previous capture and self-disarms after p_seconds.';
+
+grant execute on function public.fn_hardware_begin_enrollment(uuid, uuid, integer)
+to anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 5. Read enrollment state (what the waiting modal polls)
 -- -----------------------------------------------------------------------------
@@ -293,6 +332,33 @@ returns integer
 language plpgsql
 security definer
 set search_path = public, pg_temp
+as $$
+declare
+  v_next integer;
+begin
+  if p_tenant_id is null then
+    raise exception 'tenant_id is required' using errcode = '22023';
+  end if;
+
+  -- Arbitrary but constant key: every caller serialises on the same lock.
+  perform pg_advisory_xact_lock(hashtextextended(p_tenant_id::text, 0));
+
+  select coalesce(max(m.biometric_id), 0) + 1
+    into v_next
+    from public.members m
+   where m.tenant_id = p_tenant_id
+     and m.biometric_id is not null;
+
+  -- Clamp to the column's own bounds so a pre-filled form cannot overflow an int.
+  return least(greatest(v_next, 1), 2147483647);
+end;
+$$;
+
+comment on function public.fn_next_biometric_slot(uuid) is
+  'Lowest unused biometric slot for a gym, allocated under an advisory lock so two concurrent desks cannot pick the same number.';
+
+grant execute on function public.fn_next_biometric_slot(uuid) to anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 7. Bind a credential to a member (tap-captured or typed)
 -- -----------------------------------------------------------------------------
@@ -386,6 +452,13 @@ begin
   );
 end;
 $$;
+
+comment on function public.fn_member_link_hardware(uuid, uuid, text, integer, boolean) is
+  'Binds a tapped or typed RFID key and/or biometric slot to one member, normalising the card to uppercase hex and refusing a card owned by another member.';
+
+grant execute on function public.fn_member_link_hardware(uuid, uuid, text, integer, boolean)
+to anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 8. LIVE INSIDE GYM (the crowd tracker)
 -- -----------------------------------------------------------------------------
@@ -471,6 +544,13 @@ begin
     'generated_at', now()
   );
 end;
+$$;
+
+comment on function public.fn_gym_live_crowd(uuid) is
+  'Members currently inside the gym: latest granted punch is direction ''in'' and within 3 hours. An ''out'' punch removes them immediately.';
+
+grant execute on function public.fn_gym_live_crowd(uuid) to anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 9. ENROLLMENT CAPTURE INTERCEPT (inside the gate)
 -- -----------------------------------------------------------------------------
@@ -553,6 +633,11 @@ end;
 $$;
 
 comment on function public.fn_hardware_capture_enrollment(text, text) is
+  'One-shot enrollment capture. Returns captured=false (not an error) when the terminal is not armed, so the caller proceeds to a normal gate punch.';
+
+grant execute on function public.fn_hardware_capture_enrollment(text, text)
+to anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 10. Checkout punch (direction = 'out')
 -- -----------------------------------------------------------------------------
@@ -631,6 +716,32 @@ begin
       'device_id',   v_device.id,
       'tenant_id',   v_device.tenant_id
     );
+  end if;
+
+  insert into public.attendances (tenant_id, member_id, method, status, device_id, direction)
+  values (v_device.tenant_id, v_member.id, v_method, 'granted', v_device.id, 'out')
+  returning id into v_attendance;
+  return jsonb_build_object(
+    'ok',             true,
+    'code',           'checked_out',
+    'reason',         'Checkout recorded. See you next time.',
+    'member_id',      v_member.id,
+    'member_name',    v_member.full_name,
+    'method',         v_method,
+    'attendance_id',  v_attendance,
+    'device_id',      v_device.id,
+    'device_name',    v_device.device_name,
+    'tenant_id',      v_device.tenant_id
+  );
+end;
+$$;
+
+comment on function public.fn_hardware_checkout(text, integer, text) is
+  'Records an exit punch (direction ''out''). Makes no membership decision -- a frozen or expired member must still be able to leave.';
+
+grant execute on function public.fn_hardware_checkout(text, integer, text)
+to anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 11. Gym branding (name + logo)
 -- -----------------------------------------------------------------------------
@@ -790,11 +901,7 @@ begin
       using (bucket_id = 'gym-logos');
   end if;
 end $$;
-  end if;
 
-  insert into public.attendances (tenant_id, member_id, method, status, device_id, direction)
-  values (v_device.tenant_id, v_member.id, v_method, 'granted', v_device.id, 'out')
-  returning id into v_attendance;
 -- -----------------------------------------------------------------------------
 -- 13. Verification — every claim above, checked against the live catalogue
 -- -----------------------------------------------------------------------------
@@ -879,102 +986,3 @@ begin
 end $$;
 
 commit;
-
-  return jsonb_build_object(
-    'ok',             true,
-    'code',           'checked_out',
-    'reason',         'Checkout recorded. See you next time.',
-    'member_id',      v_member.id,
-    'member_name',    v_member.full_name,
-    'method',         v_method,
-    'attendance_id',  v_attendance,
-    'device_id',      v_device.id,
-    'device_name',    v_device.device_name,
-    'tenant_id',      v_device.tenant_id
-  );
-end;
-$$;
-
-comment on function public.fn_hardware_checkout(text, integer, text) is
-  'Records an exit punch (direction ''out''). Makes no membership decision -- a frozen or expired member must still be able to leave.';
-
-grant execute on function public.fn_hardware_checkout(text, integer, text)
-to anon, authenticated;
-  'One-shot enrollment capture. Returns captured=false (not an error) when the terminal is not armed, so the caller proceeds to a normal gate punch.';
-
-grant execute on function public.fn_hardware_capture_enrollment(text, text)
-to anon, authenticated;
-$$;
-
-comment on function public.fn_gym_live_crowd(uuid) is
-  'Members currently inside the gym: latest granted punch is direction ''in'' and within 3 hours. An ''out'' punch removes them immediately.';
-
-grant execute on function public.fn_gym_live_crowd(uuid) to anon, authenticated;
-
-comment on function public.fn_member_link_hardware(uuid, uuid, text, integer, boolean) is
-  'Binds a tapped or typed RFID key and/or biometric slot to one member, normalising the card to uppercase hex and refusing a card owned by another member.';
-
-grant execute on function public.fn_member_link_hardware(uuid, uuid, text, integer, boolean)
-to anon, authenticated;
-as $$
-declare
-  v_next integer;
-begin
-  if p_tenant_id is null then
-    raise exception 'tenant_id is required' using errcode = '22023';
-  end if;
-
-  -- Arbitrary but constant key: every caller serialises on the same lock.
-  perform pg_advisory_xact_lock(hashtextextended(p_tenant_id::text, 0));
-
-  select coalesce(max(m.biometric_id), 0) + 1
-    into v_next
-    from public.members m
-   where m.tenant_id = p_tenant_id
-     and m.biometric_id is not null;
-
-  -- Clamp to the column's own bounds so a pre-filled form cannot overflow an int.
-  return least(greatest(v_next, 1), 2147483647);
-end;
-$$;
-
-comment on function public.fn_next_biometric_slot(uuid) is
-  'Lowest unused biometric slot for a gym, allocated under an advisory lock so two concurrent desks cannot pick the same number.';
-
-grant execute on function public.fn_next_biometric_slot(uuid) to anon, authenticated;
-    'enrollment_mode', v_row.enrollment_mode,
-    'expires_at',      v_row.enrollment_expires_at,
-    'wait_seconds',    v_window
-  );
-end;
-$$;
-
-comment on function public.fn_hardware_begin_enrollment(uuid, uuid, integer) is
-  'Arms one terminal to capture the next card tap for enrollment. Clears any previous capture and self-disarms after p_seconds.';
-
-grant execute on function public.fn_hardware_begin_enrollment(uuid, uuid, integer)
-to anon, authenticated;
-alter table if exists public.attendances
-  add column if not exists direction text not null default 'in';
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint
-     where conrelid = 'public.attendances'::regclass
-       and conname = 'attendances_direction_check'
-  ) then
-    alter table public.attendances
-      add constraint attendances_direction_check
-      check (direction in ('in', 'out'));
-  end if;
-end $$;
-
-comment on column public.attendances.direction is
-  'in | out. Defaults to ''in'' so pre-existing punch inserts are unaffected.';
-
--- The crowd tracker reads "latest row per member", so the sort key must cover
--- both the member filter and the recency window.
-create index if not exists idx_attendances_member_direction
-  on public.attendances (member_id, direction, punch_time desc)
-  where member_id is not null;

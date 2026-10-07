@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  CreditCard,
   Fingerprint,
   Keyboard,
   Loader2,
@@ -152,7 +153,24 @@ export default function RfidLinkModal({
   // save payload itself is assembled by the parent.
   void memberId;
 
-  const effectiveUid = mode === 'tap' ? (enroll.capturedUid ?? '') : normalizeCardUid(manualUid);
+  /**
+   * The card this modal will save.
+   *
+   * RFID and fingerprint are INDEPENDENT credentials, so re-opening this
+   * dialog to update a fingerprint must never touch the card the member
+   * already has. The old expression was `mode === 'tap' ? capturedUid ?? '' :
+   * …` — in the default tap mode with no fresh tap that evaluated to `''`,
+   * which save() turned into `rfidUid: null`, and fn_member_link_hardware
+   * writes null straight over members.rfid_card. The member's RFID vanished
+   * the moment the owner saved an unrelated biometric change.
+   *
+   * Now the order is: a tap captured THIS session wins, otherwise the typed
+   * value — and `manualUid` is seeded from `initialUid`, so the member's
+   * existing card is carried through untouched unless the owner deliberately
+   * taps a new one.
+   */
+  const effectiveUid =
+    mode === 'tap' && enroll.capturedUid ? enroll.capturedUid : normalizeCardUid(manualUid);
 
   async function save() {
     setSaving(true);
@@ -266,6 +284,20 @@ export default function RfidLinkModal({
                     </>
                   )}
                 </button>
+              )}
+
+              {/* ---- Retained card: prove the existing RFID survives ----- */}
+              {!captured && effectiveUid !== '' && (
+                <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <CreditCard className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <p className="text-[11px] leading-relaxed text-slate-500">
+                    Already linked:{' '}
+                    <span className="font-mono font-semibold tracking-wide text-slate-700">
+                      {effectiveUid}
+                    </span>{' '}
+                    — kept unless you tap a different card on the terminal.
+                  </p>
+                </div>
               )}
 
               {/* ---- Captured ------------------------------------------------ */}

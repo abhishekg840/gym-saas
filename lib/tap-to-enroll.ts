@@ -129,29 +129,52 @@ export function useTapToEnroll(
         return false;
       }
 
-      const [first] = result.devices ?? [];
-      setDevice(first ?? null);
+      const devices = result.devices ?? [];
 
-      const uid = normalizeCardUid(first?.last_scanned_uid);
+      // The terminal we armed — scoped strictly when the arm response carried
+      // its id (spelled `device_id` by fn_hardware_begin_enrollment, `id` by
+      // other builds). When the id was missing, the old code took
+      // `devices[0]`, which is sorted by NAME and is usually a DIFFERENT
+      // reader — so the armed device's tap was never looked at and the 60s
+      // window always timed out. Now: fall back to scanning every device for
+      // a fresh capture instead of trusting a single arbitrary row.
+      const scoped = deviceIdRef.current
+        ? devices.find((d) => d.id === deviceIdRef.current) ?? null
+        : null;
+      const watched = scoped ? [scoped] : devices;
+
+      // Count down against the terminal that is actually armed when we can
+      // identify it; only then fall back to the first row.
+      const display = scoped ?? devices.find((d) => d.enrollment_mode) ?? devices[0] ?? null;
+      setDevice(display);
 
       // A capture counts only if it is FRESH. Without this check the stale
       // last_scanned_uid left by a previous enrollment would satisfy the very
       // first poll and silently fill in the WRONG card — the single most
-      // dangerous bug this flow could have.
-      const scannedAt = first?.last_scanned_at ? Date.parse(first.last_scanned_at) : NaN;
-      const fresh = uid !== '' && !Number.isNaN(scannedAt) && Date.now() - scannedAt < 60_000;
+      // dangerous bug this flow could have. Only fn_hardware_capture_enrollment
+      // ever writes last_scanned_uid, so any fresh value IS an enrollment tap.
+      for (const candidate of watched) {
+        const uid = normalizeCardUid(candidate.last_scanned_uid);
+        const scannedAt = candidate.last_scanned_at
+          ? Date.parse(candidate.last_scanned_at)
+          : NaN;
+        const fresh =
+          uid !== '' && !Number.isNaN(scannedAt) && Date.now() - scannedAt < 60_000;
 
-      if (uid && fresh) {
-        stopPolling();
-        setCapturedUid(uid);
-        setStatus('captured');
-        setSecondsLeft(0);
-        onCapturedRef.current?.(uid);
-        return false;
+        if (fresh) {
+          stopPolling();
+          setCapturedUid(uid);
+          setStatus('captured');
+          setSecondsLeft(0);
+          onCapturedRef.current?.(uid);
+          return false;
+        }
       }
 
-      if (first?.enrollment_mode) {
-        const expires = first.enrollment_expires_at ? Date.parse(first.enrollment_expires_at) : NaN;
+      if (display?.enrollment_mode) {
+        const expires = display.enrollment_expires_at
+          ? Date.parse(display.enrollment_expires_at)
+          : NaN;
 
         if (!Number.isNaN(expires) && Date.now() > expires) {
           stopPolling();
@@ -176,9 +199,14 @@ export function useTapToEnroll(
 
       return true;
     } catch {
-      setError('Lost connection to the terminal. Check your network.');
-      setStatus('error');
-      return false;
+      // One dropped request must not end an armed window early — keep
+      // polling until the deadline, then surface the timeout honestly.
+      if (deadlineRef.current && Date.now() > deadlineRef.current) {
+        setError('Lost connection to the terminal. Check your network.');
+        setStatus('error');
+        return false;
+      }
+      return true;
     }
   }, [tenantId, stopPolling]);
 
@@ -230,7 +258,11 @@ export function useTapToEnroll(
 
         const result = (await response.json()) as {
           ok?: boolean;
-          device?: { id: string; enrollment_expires_at?: string };
+          // fn_hardware_begin_enrollment spells the primary key `device_id`
+          // (some builds also return `id`). Reading only `.id` used to store
+          // `undefined` here, which silently dropped the device scope from
+          // every poll below — see the note in poll() for why that hid taps.
+          device?: { id?: string; device_id?: string; enrollment_expires_at?: string };
           error?: string;
         };
 
@@ -240,7 +272,7 @@ export function useTapToEnroll(
           return;
         }
 
-        deviceIdRef.current = result.device.id;
+        deviceIdRef.current = result.device.id ?? result.device.device_id ?? null;
         deadlineRef.current = result.device.enrollment_expires_at
           ? Date.parse(result.device.enrollment_expires_at)
           : Date.now() + 60_000;
