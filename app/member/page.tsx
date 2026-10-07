@@ -12,7 +12,8 @@ import {
   type GeofenceVerdict,
   type GymGeofence,
 } from '@/lib/geofence';
-import { encodePassToken, PASS_WINDOW_MS, type PassGeoProof } from '@/lib/passtoken';
+import { PASS_WINDOW_MS, type PassGeoProof } from '@/lib/passtoken';
+import { mintGatePass } from '@/lib/passmint';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import {
@@ -72,26 +73,23 @@ interface PassLock {
 const QR_WINDOW_MS = PASS_WINDOW_MS;
 
 /**
- * The token the kiosk at the gate already knows how to read: base64 JSON with the
- * member id, the 30-second window it was minted in, and the phone. The window is
- * what makes yesterday's screenshot useless at the turnstile.
+ * Asks the server for the signed token the kiosk at the gate reads: the claims
+ * (member id, phone, optional geofence proof) travel to /api/member/pass/mint,
+ * which stamps the 30-second window itself and appends the HMAC signature —
+ * nothing is signed in the browser, so a QR string can no longer be forged
+ * from the app bundle. Returns null when the verdict is not `unlocked`, which
+ * means a locked screen cannot produce a scannable string even if the JSX gate
+ * above it were wrong — the lock and the credential are then the same decision.
  */
-/**
- * The kiosk only ever sees base64 JSON, so the geofence proof has to be minted
- * here. Returns null when the verdict is not `unlocked`, which means a locked
- * screen cannot produce a scannable string even if the JSX gate above it were
- * wrong — the lock and the credential are then the same decision.
- */
-function mintPass(
+async function mintPass(
   member: PassMember,
-  windowIndex: number,
   verdict: GeofenceVerdict,
   fix: Fix | null
-): string | null {
+): Promise<string | null> {
   if (!verdict.unlocked) return null;
 
-  // Only present when we actually measured a distance; the server re-runs the
-  // fence maths from these coordinates rather than trusting our arithmetic.
+  // Only present when we actually measured a distance; the proof rides along so
+  // the token still records where the pass was unlocked.
   const geo: PassGeoProof | undefined =
     fix && verdict.distance_meters !== null
       ? {
@@ -103,12 +101,7 @@ function mintPass(
         }
       : undefined;
 
-  return encodePassToken({
-    id: member.id,
-    ph: member.phone,
-    t: windowIndex,
-    ...(geo ? { geo } : {}),
-  });
+  return mintGatePass({ id: member.id, ph: member.phone, ...(geo ? { geo } : {}) });
 }
 
 export default function MemberSelfServicePortal() {
@@ -315,7 +308,16 @@ export default function MemberSelfServicePortal() {
           !member.is_frozen &&
           !member.is_expired &&
           !(armed && locStatus === 'error');
-        setQrPayload(mintable ? (mintPass(member, windowIndex, verdict, fix) ?? '') : '');
+        if (!mintable) {
+          setQrPayload('');
+        } else {
+          void mintPass(member, verdict, fix).then((token) => {
+            // The window may have rolled while the mint was in flight; a pass
+            // for a previous window is already stale, so drop it.
+            if (lastWindow !== windowIndex) return;
+            setQrPayload(token ?? '');
+          });
+        }
       }
       const remaining = 30 - (Math.floor(Date.now() / 1000) % 30);
       setCountdown(remaining);

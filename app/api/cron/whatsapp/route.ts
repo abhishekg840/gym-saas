@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { sendWhatsAppNotification, waMessages } from '@/lib/whatsapp';
+import { cronUnauthorized, isCronAuthorized } from '@/lib/cron-auth';
 
 /**
  * GET /api/cron/whatsapp — the retention engine (Module 9.2), scheduled at
@@ -12,8 +13,13 @@ import { sendWhatsAppNotification, waMessages } from '@/lib/whatsapp';
  *
  * Each message goes through the optional gateway webhook; without
  * WHATSAPP_GATEWAY_URL the dispatcher returns a wa.me deep link instead.
+ *
+ * Auth: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` automatically
+ * when the project defines CRON_SECRET; everything else is 401.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  if (!isCronAuthorized(request)) return cronUnauthorized();
+
   const reports = {
     expiryRemindersSent: 0,
     todayRemindersSent: 0,
@@ -31,10 +37,22 @@ export async function GET() {
       return target.toISOString().split('T')[0];
     };
 
-    // Gym names for the message copy — one read, then a Map lookup per member.
-    const { data: tenants } = await supabase.from('tenants').select('id, name');
-    const gymName = new Map(
-      (tenants ?? []).map((tenant) => [tenant.id as string, (tenant.name as string) || 'your gym'])
+    // Gym identity + payment details for the message copy — one read, then a
+    // Map lookup per member. The UPI VPA is per-tenant now (P0-4): a gym that
+    // never configured one gets the neutral "renew at the front desk" copy
+    // rather than somebody else's payment QR.
+    const { data: tenants } = await supabase.from('tenants').select('id, name, upi_id');
+    const gyms = new Map<string, { name: string; upiId: string | null }>(
+      (tenants ?? []).map((tenant) => [
+        tenant.id as string,
+        {
+          name: (tenant.name as string) || 'your gym',
+          upiId:
+            typeof tenant.upi_id === 'string' && tenant.upi_id.trim()
+              ? tenant.upi_id.trim()
+              : null,
+        },
+      ])
     );
 
     const loadExpiring = async (dateStr: string) => {
@@ -48,12 +66,18 @@ export async function GET() {
 
     // ---- 1a. Three days out ------------------------------------------------
     for (const member of await loadExpiring(inDays(3))) {
-      const upiLink = `upi://pay?pa=paytmqr@paytm&pn=GlitchFiestaGym&am=${member.amount_paid || 1500}&cu=INR`;
+      const gym = gyms.get(member.tenant_id ?? '');
+      // The tenant's own VPA only. Without one, renewUrl stays undefined and
+      // the template simply omits the Quick renew line — the front-desk
+      // sentence carries the message instead.
+      const upiLink = gym?.upiId
+        ? `upi://pay?pa=${encodeURIComponent(gym.upiId)}&pn=${encodeURIComponent(gym.name)}&am=${member.amount_paid || 1500}&cu=INR`
+        : undefined;
       await sendWhatsAppNotification({
         phone: member.phone,
         message: waMessages.expiry({
           name: member.full_name,
-          gymName: gymName.get(member.tenant_id ?? '') ?? 'your gym',
+          gymName: gym?.name ?? 'your gym',
           endDate: String(member.membership_end),
           daysLeft: 3,
           renewUrl: upiLink,
@@ -68,7 +92,7 @@ export async function GET() {
         phone: member.phone,
         message: waMessages.expiry({
           name: member.full_name,
-          gymName: gymName.get(member.tenant_id ?? '') ?? 'your gym',
+          gymName: gyms.get(member.tenant_id ?? '')?.name ?? 'your gym',
           endDate: String(member.membership_end),
           daysLeft: 0,
         }),
@@ -100,7 +124,7 @@ export async function GET() {
           !recentAttendance || new Date(recentAttendance.scanned_at) < fiveDaysAgo;
 
         if (isAbsent5Days) {
-          const gym = gymName.get(member.tenant_id ?? '') ?? 'the gym';
+          const gym = gyms.get(member.tenant_id ?? '')?.name ?? 'the gym';
           const churnNudge = `Hey ${member.full_name}! 🏋️\n\nWe noticed you haven't checked into ${gym} in the last 5 days. Consistency is where the magic happens!\n\nYour spot is waiting—let's hit a solid session today. See you on the floor! 💥`;
           await sendWhatsAppNotification({ phone: member.phone, message: churnNudge });
           reports.inactivityAlertsSent++;

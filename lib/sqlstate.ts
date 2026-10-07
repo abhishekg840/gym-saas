@@ -75,6 +75,13 @@ const SCHEMA_MISSING_HINT =
  * round trip, so the mapping is data rather than prose.
  */
 const INTRODUCED_BY: Record<string, string> = {
+  // Phase 20: P0 security hardening. fn_superadmin_list_tenants changed arity
+  // (the no-credential overload was dropped in favour of a password-gated one),
+  // so a call from a console deployed before 0020 misses on (text, text) and
+  // fn_tenant_set_upi_id simply does not exist until the file is run.
+  'fn_superadmin_list_tenants 2': '0020_phase20_security_hardening.sql',
+  'fn_tenant_set_upi_id 2': '0020_phase20_security_hardening.sql',
+
   'fn_hardware_punch 4': '0010_phase10_vyroniq_identity_avatar.sql',
   'fn_hardware_punch 3': '0003_phase2_hardware_geofence.sql',
   'fn_member_hardware_identity 1': '0010_phase10_vyroniq_identity_avatar.sql',

@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { cronUnauthorized, isCronAuthorized } from '@/lib/cron-auth';
 
-export async function GET() {
+/**
+ * GET /api/cron — marks expired members. Scheduled by Vercel Cron, which sends
+ * `Authorization: Bearer <CRON_SECRET>` automatically when the project defines
+ * CRON_SECRET. Every other caller gets 401 (and in production, so does any
+ * caller when the secret is not configured — see lib/cron-auth.ts).
+ */
+export async function GET(request: Request) {
+  if (!isCronAuthorized(request)) return cronUnauthorized();
+
   try {
     const today = new Date().toISOString().split('T')[0];
 

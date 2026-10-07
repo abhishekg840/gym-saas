@@ -781,17 +781,43 @@ export default function GymDashboard() {
     }
   }
 
-  function sendWhatsAppReminder(member: Member) {
+  async function sendWhatsAppReminder(member: Member) {
     const cleanPhone = member.phone.replace(/[^0-9]/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const gymTitle = encodeURIComponent(session?.tenantName || 'Fitness Club');
-    const upiPayLink = `upi://pay?pa=paytmqr@paytm&pn=${gymTitle}&am=${member.amount_paid || 1500}&cu=INR`;
+    const gymName = session?.tenantName || 'Fitness Club';
+    const gymTitle = encodeURIComponent(gymName);
+
+    // The VPA comes from this gym's own tenant row (P0-4) — never a baked-in
+    // personal Paytm QR. A gym that has not configured one gets neutral copy
+    // and a nudge to save it under Settings → Payments (UPI).
+    let vpa: string | null = null;
+    if (session?.tenantId) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('upi_id')
+        .eq('id', session.tenantId)
+        .maybeSingle();
+      const stored = typeof tenant?.upi_id === 'string' ? tenant.upi_id.trim() : '';
+      vpa = stored || null;
+    }
+
+    const amount = member.amount_paid || 1500;
+    const payLine = vpa
+      ? `𝒳 Pay directly via UPI to instantly unblock your gate access:\nupi://pay?pa=${encodeURIComponent(vpa)}&pn=${gymTitle}&am=${amount}&cu=INR`
+      : '𝒳 Renew at the front desk — or ask us for our UPI QR code to pay instantly.';
 
     const message = encodeURIComponent(
-      `Hello ${member.full_name}! 𝑋\n\nYour membership at ${session?.tenantName || 'Fitness Club'} ended on ${member.membership_end}.\n\n𝒳 Pay directly via UPI to instantly unblock your gate access:\n${upiPayLink}\n\nThank you!`
+      `Hello ${member.full_name}! 𝑋\n\nYour membership at ${gymName} ended on ${member.membership_end}.\n\n${payLine}\n\nThank you!`
     );
 
     window.open(`https://wa.me/${phoneWithCountry}?text=${message}`, '_blank');
+
+    if (!vpa) {
+      alert(
+        'No UPI ID is saved for this gym yet, so the reminder went out without a payment link.\n\n' +
+          'Add your UPI ID in Settings → Payments (UPI) to include a one-tap pay link.'
+      );
+    }
   }
 
   /**

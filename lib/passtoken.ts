@@ -1,6 +1,16 @@
 /**
- * The rotating gate-pass token, shared by the member portal (which mints it) and
- * the kiosk route (which validates it).
+ * The rotating gate-pass token, shared by the member portal (which asks the
+ * server to mint it) and the kiosk route (which validates it).
+ *
+ * SIGNED FORMAT (P0-2)
+ * --------------------
+ * A live token is `<base64 claims> "." <base64url HMAC-SHA256>`. The claims
+ * half is exactly what encodePassToken() produces; the signature half is
+ * appended server-side by /api/member/pass/mint and checked by
+ * /api/scan/verify through lib/passtoken-server.ts BEFORE any claim is
+ * believed. That file owns node:crypto, so this module stays isomorphic and
+ * safe to import from client components — but nothing in the browser can
+ * produce a token the gate will accept anymore.
  *
  * Why the geofence proof rides inside the token: hiding the QR code is only a UI
  * affordance — a screenshot, a dev-tools console or a stale tab can still produce
@@ -12,6 +22,9 @@
 
 /** One QR frame. Mirrors the countdown the member app draws under the code. */
 export const PASS_WINDOW_MS = 30_000;
+
+/** Separates the claims payload from the HMAC signature in a signed token. */
+export const PASS_TOKEN_SEPARATOR = '.';
 
 /**
  * How many windows either side of now are tolerated. The member's phone and the
@@ -49,18 +62,23 @@ export interface PassTokenClaims {
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
-/** base64 JSON. Every field is ASCII, so btoa is safe here. */
+/**
+ * The claims half of a token: base64 JSON. Every field is ASCII, so btoa is
+ * safe here. The signature is appended by lib/passtoken-server.ts — callers
+ * must never hand this output straight to a QR code.
+ */
 export function encodePassToken(claims: PassTokenClaims): string {
   return btoa(JSON.stringify(claims));
 }
 
 /**
- * Returns null for anything that is not one of our tokens. The caller decides
- * whether a null is fatal — legacy `GF:phone:t` and bare-digit codes still reach
- * the kiosk, and only an enforcing gym should refuse them.
+ * Parses ONE already-verified claims payload. It answers only "is this base64
+ * JSON shaped like our claims?" — it proves nothing about authenticity, which
+ * is why the only caller that matters (verifyPassToken) runs the HMAC check
+ * before reaching it. Nothing else may treat its output as trusted.
  */
-export function decodePassToken(raw: string): PassTokenClaims | null {
-  const text = (raw ?? '').trim();
+export function decodePassClaims(payload: string): PassTokenClaims | null {
+  const text = (payload ?? '').trim();
   if (!text) return null;
 
   let parsed: unknown;

@@ -14,6 +14,7 @@ import {
   Plus,
   Settings,
   Trash2,
+  Wallet,
   X,
 } from 'lucide-react';
 import { isUuid, readSession } from '@/lib/session';
@@ -24,7 +25,9 @@ import {
   DEFAULT_OPERATING_HOURS,
   formatClock,
   loadOperatingHours,
+  loadUpiId,
   saveOperatingHours,
+  saveUpiId,
   type DayKey,
   type OperatingHours,
 } from '@/lib/settings';
@@ -267,6 +270,11 @@ export default function AdminSettingsPage() {
   const [hoursSaved, setHoursSaved] = useState<OperatingHours>(DEFAULT_OPERATING_HOURS);
   const [hoursBusy, setHoursBusy] = useState(false);
 
+  // ---- payments (UPI) -------------------------------------------------------
+  const [upiId, setUpiId] = useState('');
+  const [upiSaved, setUpiSaved] = useState('');
+  const [upiBusy, setUpiBusy] = useState(false);
+
   useEffect(() => {
     const session = readSession();
     if (!session) {
@@ -284,14 +292,17 @@ export default function AdminSettingsPage() {
   }, [router]);
 
   const load = useCallback(async (tenant: string) => {
-    const [noticeResult, hoursResult] = await Promise.all([
+    const [noticeResult, hoursResult, upiResult] = await Promise.all([
       listAnnouncements(tenant),
       loadOperatingHours(tenant),
+      loadUpiId(tenant),
     ]);
 
     setNotices(noticeResult.announcements);
     setHours(hoursResult.hours);
     setHoursSaved(hoursResult.hours);
+    setUpiId(upiResult.upiId ?? '');
+    setUpiSaved(upiResult.upiId ?? '');
     // The expiry badges are judged against this instant, captured once per load
     // so every row on the page agrees.
     setNow(Date.now());
@@ -426,6 +437,28 @@ export default function AdminSettingsPage() {
     setNotice({ message: 'Opening hours saved. Members see the change immediately.', kind: 'ok' });
   }
 
+  async function submitUpi(event: React.FormEvent) {
+    event.preventDefault();
+    if (!tenantId) return;
+
+    setUpiBusy(true);
+    const result = await saveUpiId(tenantId, upiId.trim());
+    setUpiBusy(false);
+
+    if (!result.ok) {
+      setNotice({ message: result.error ?? 'Could not save your UPI ID.', kind: 'bad' });
+      return;
+    }
+    setUpiId(result.upiId ?? '');
+    setUpiSaved(result.upiId ?? '');
+    setNotice({
+      message: result.upiId
+        ? 'UPI ID saved. Renewal reminders now include your one-tap payment link.'
+        : 'UPI ID cleared. Reminders will ask members to pay at the front desk.',
+      kind: 'ok',
+    });
+  }
+
   return (
     <div className="vy-page vy-noscroll font-sans">
       <div className="vy-shell">
@@ -546,6 +579,48 @@ export default function AdminSettingsPage() {
                 Save Hours
               </button>
             </div>
+          </form>
+        </section>
+
+        {/* ---- Payments (UPI) ----------------------------------------------- */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Wallet className="w-5 h-5 text-teal-400" />
+            <h2 className="text-lg font-black tracking-tight">Payments (UPI)</h2>
+          </div>
+          <p className="text-[11px] text-faint mb-4 max-w-3xl">
+            Expiry reminders and renewal messages can include a one-tap UPI link made out
+            to this VPA. Leave it empty and those messages simply ask the member to pay
+            at the front desk — no payment link is ever invented on your behalf.
+          </p>
+
+          <form onSubmit={submitUpi} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1 sm:max-w-sm">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
+                UPI ID (VPA)
+              </label>
+              <input
+                value={upiId}
+                onChange={(event) => setUpiId(event.target.value)}
+                placeholder="yourgym@upi"
+                maxLength={256}
+                autoComplete="off"
+                spellCheck={false}
+                className={INPUT}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={upiBusy || upiId.trim() === upiSaved}
+              className="inline-flex items-center justify-center gap-1.5 px-5 py-2 bg-teal-500 hover:bg-teal-400 disabled:opacity-40 text-black font-bold rounded-xl text-xs transition"
+            >
+              {upiBusy ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+              Save UPI ID
+            </button>
           </form>
         </section>
       </div>

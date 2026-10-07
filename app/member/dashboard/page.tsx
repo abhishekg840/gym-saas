@@ -36,7 +36,8 @@ import { readSession, clearSession, type GymSession } from '@/lib/session';
 import { hardSignOut } from '@/lib/logout';
 import LiveCrowdCard from '@/components/live-crowd-card';
 import { supabase } from '@/lib/supabase';
-import { encodePassToken, PASS_WINDOW_MS } from '@/lib/passtoken';
+import { PASS_WINDOW_MS } from '@/lib/passtoken';
+import { mintGatePass } from '@/lib/passmint';
 import AvatarUploader from '@/components/avatar-uploader';
 import AccountSettings from '@/components/account-settings';
 import BadgeShowcase from '@/components/badge-showcase';
@@ -498,9 +499,10 @@ export default function MemberDashboard() {
   }, [pass, data?.member]);
 
   /**
-   * The rotating credential, re-minted on every 30-second window. Built from the
-   * member id and phone only: there is no location proof to attach any more, and
-   * the kiosk re-checks the membership itself when the code is scanned.
+   * The rotating credential, re-minted on every 30-second window. The claims
+   * (member id + phone) travel to /api/member/pass/mint, which signs them
+   * server-side — there is no location proof to attach any more, and the kiosk
+   * re-checks the membership itself when the code is scanned.
    */
   useEffect(() => {
     if (!memberId) return;
@@ -512,9 +514,18 @@ export default function MemberDashboard() {
       if (windowIndex === lastWindow.current) return;
       lastWindow.current = windowIndex;
 
-      setQrToken(
-        passLock ? null : encodePassToken({ id: memberId, ph: memberPhone, t: windowIndex })
-      );
+      if (passLock) {
+        setQrToken(null);
+        return;
+      }
+
+      // The signature is applied where the key lives; the browser only asks for
+      // THIS window's signed token, so a leaked bundle cannot forge one.
+      void mintGatePass({ id: memberId, ph: memberPhone }).then((token) => {
+        // A newer window may have started while the mint was in flight.
+        if (lastWindow.current !== windowIndex) return;
+        setQrToken(token);
+      });
     };
 
     const prime = window.setTimeout(tick, 0);

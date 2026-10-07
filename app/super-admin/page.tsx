@@ -86,17 +86,29 @@ export default function SuperAdminPortal() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
 
-  async function fetchTenants() {
-    // fn_superadmin_list_tenants (0015 §7a) rather than select('*'): the
-    // directory read is deliberately unauthenticated, but going through the
-    // function pins the exact columns this console renders, so a schema change
-    // elsewhere cannot silently widen what a browser receives.
-    const { data, error } = await supabase.rpc('fn_superadmin_list_tenants');
-
-    if (error) {
-      console.error('Error fetching tenants:', error.message);
+  /**
+   * Reads the directory through fn_superadmin_list_tenants (0020 §3), which now
+   * verifies the super admin's password INSIDE Postgres exactly like every
+   * mutation — the old no-credential overload is dropped, so "readable with the
+   * anon key anyway" no longer describes owner names and phone numbers.
+   *
+   * With nothing cached it opens the same prompt a mutation uses and resumes
+   * from submitAuthorization() the moment the password arrives. A rejected
+   * password (SQLSTATE 45005) surfaces as the prompt's own error, and the
+   * caller clears the cache so the next attempt re-prompts.
+   */
+  async function fetchTenants(creds?: { identifier: string; password: string }) {
+    const effective = creds ?? adminCreds;
+    if (!effective) {
+      setPendingAction(() => (c: { identifier: string; password: string }) => fetchTenants(c));
       return;
     }
+
+    const { data, error } = await supabase.rpc('fn_superadmin_list_tenants', {
+      p_identifier: effective.identifier,
+      p_password: effective.password,
+    });
+    if (error) throw error;
     setTenants((data ?? []) as Tenant[]);
   }
 
@@ -104,9 +116,9 @@ export default function SuperAdminPortal() {
 
   useEffect(() => {
     // A platform console has no business rendering for a gym session. The
-    // directory read below is unauthenticated by design, but every mutation
-    // needs the super admin password, and neither should be offered to a
-    // member or owner who wandered here from a stale tab.
+    // directory read below needs the super admin password too (0020), and
+    // neither it nor any mutation should be offered to a member or owner who
+    // wandered here from a stale tab.
     const session = readSession();
     if (!session || session.role !== 'super_admin') {
       router.replace('/login');
@@ -185,7 +197,7 @@ export default function SuperAdminPortal() {
         p_status: newStatus,
       });
       if (error) throw error;
-      await fetchTenants();
+      await fetchTenants(creds);
     });
   }
 
@@ -198,7 +210,7 @@ export default function SuperAdminPortal() {
         p_tier: newTier,
       });
       if (error) throw error;
-      await fetchTenants();
+      await fetchTenants(creds);
     });
   }
 
@@ -231,7 +243,7 @@ export default function SuperAdminPortal() {
         setOwnerName('');
         setOwnerPhone('');
         setTier('pro');
-        await fetchTenants();
+        await fetchTenants(creds);
 
         // The owner row only exists when BOTH owner fields were supplied — the
         // provisioner refuses to invent half an identity — so say which
@@ -487,11 +499,11 @@ export default function SuperAdminPortal() {
               <h2 className="text-lg font-black text-white">Platform password required</h2>
             </div>
             <p className="text-xs text-neutral-400 leading-relaxed mb-5">
-              Creating, suspending and re-tiering a gym each verify the super
-              admin password inside Postgres before touching anything — the
-              same reason sign-in stopped comparing passwords in JavaScript.
-              It is kept in memory for this tab only and never written to
-              storage.
+              Reading the gym directory and creating, suspending or re-tiering a gym
+              each verify the super admin password inside Postgres before anything
+              happens — the same reason sign-in stopped comparing passwords in
+              JavaScript. It is kept in memory for this tab only and never written
+              to storage.
             </p>
 
             <form onSubmit={submitAuthorization}>

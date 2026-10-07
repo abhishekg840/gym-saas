@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { isUuid } from '@/lib/session';
+import { databaseError, readJsonBody } from '@/lib/sqlstate';
 
 // Health probe for the browser / device onboarding checklist.
 export async function GET() {
@@ -11,134 +12,153 @@ export async function GET() {
   });
 }
 
-const MEMBER_COLUMNS =
-  'id, full_name, phone, membership_end, status, is_frozen, freeze_end_date, tenant_id';
-
 /**
  * Fingerprint verification endpoint called by the Raspberry Pi gateway.
  *
- * NOTE: biometric_id uniqueness is now (tenant_id, biometric_id), so the same
- * slot number can legitimately exist in two gyms. A device sends its own tenant
- * via the X-Tenant-Id header; without it, an ambiguous slot is refused instead
- * of the server guessing which gym owns the finger.
+ * DEVICE KEY REQUIRED (hardening pass, fix 2)
+ * -------------------------------------------
+ * Every POST must carry the machine key issued at registration — the
+ * X-Device-Key header (X-Api-Key and body device_key/api_key accepted too) —
+ * or it is refused with 401 before anything is read. The key resolves through
+ * fn_hardware_authorize and the GYM comes from the device row, so a caller can
+ * only ever punch into its own gym; a contradicting X-Tenant-Id is rejected
+ * (403) rather than obeyed.
+ *
+ * The decision itself — lookup, freeze, expiry and the attendances row with
+ * device_id — runs inside fn_hardware_punch, the same function
+ * /api/hardware/punch uses. This route is therefore a thin translator, not a
+ * second gate authority: it can no longer write device-less attendance or
+ * re-implement membership rules.
+ *
+ * NOTE: biometric_id uniqueness is (tenant_id, biometric_id), so the same slot
+ * number can legitimately exist in two gyms; the device row settles which gym
+ * owns the finger, and an ambiguous in-tenant slot is refused, never guessed.
  */
+
+/** Mirrors /api/hardware/punch: a template slot is a positive integer. */
+function normalizeBiometricId(raw: unknown): number | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'string' && raw.trim() === '') return null;
+  const value = typeof raw === 'string' ? Number(raw) : raw;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return null;
+  if (value > 2_147_483_647) return null;
+  return value;
+}
+
+/** Header first (preferred), then the body aliases firmware in the field uses. */
+function readDeviceKey(request: Request, body: Record<string, unknown>): string {
+  const header = request.headers.get('x-device-key') ?? request.headers.get('x-api-key') ?? '';
+  if (header.trim()) return header.trim();
+  const fromBody = body.device_key ?? body.deviceKey ?? body.api_key ?? body.apiKey ?? '';
+  return String(fromBody).trim();
+}
+
 export async function POST(req: Request) {
   try {
-    const { biometric_id } = await req.json();
+    const parsed = await readJsonBody(req);
+    if ('response' in parsed) return parsed.response;
+    const body = parsed.body;
 
-    if (biometric_id === undefined || biometric_id === null) {
+    const deviceKey = readDeviceKey(req, body);
+    // 401, not 400: without a credential this request is unauthenticated.
+    if (!deviceKey || deviceKey.length > 80) {
       return NextResponse.json(
-        { success: false, error: 'Biometric ID missing' },
-        { status: 400 }
+        { success: false, allowed: false, error: 'Unauthorized: device_key is required.' },
+        { status: 401 }
+      );
+    }
+
+    // 1. Turn the key into "which device, which gym" inside Postgres.
+    const { data: authorize, error: authError } = await supabase.rpc('fn_hardware_authorize', {
+      p_api_key: deviceKey,
+    });
+    if (authError) return databaseError(authError, 'The gate refused this request.');
+
+    const device = authorize as { device_id?: string; tenant_id?: string | null } | null;
+    if (!device || !device.tenant_id) {
+      return NextResponse.json(
+        { success: false, allowed: false, error: 'Unauthorized: unknown device key.' },
+        { status: 401 }
       );
     }
 
     const headerTenant = req.headers.get('x-tenant-id');
-    const tenantId = isUuid(headerTenant) ? (headerTenant as string) : null;
-
-    // 1. Fetch member(s) linked to this fingerprint template ID
-    let query = supabase.from('members').select(MEMBER_COLUMNS).eq('biometric_id', biometric_id);
-    if (tenantId) query = query.eq('tenant_id', tenantId);
-
-    const { data: matches, error } = await query.limit(2);
-
-    if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (headerTenant && isUuid(headerTenant) && headerTenant !== device.tenant_id) {
+      return NextResponse.json(
+        { success: false, allowed: false, error: 'X-Tenant-Id does not match this device.' },
+        { status: 403 }
+      );
     }
 
-    if (!matches || matches.length === 0) {
+    const biometricId = normalizeBiometricId(
+      body.biometric_id ?? body.biometricId ?? body.slot ?? body.fingerprint_id ?? body.fingerprintId
+    );
+    if (biometricId === null) {
+      return NextResponse.json({ success: false, error: 'Biometric ID missing' }, { status: 400 });
+    }
+
+    // 2. One transaction: member lookup scoped to the device's gym, freeze and
+    //    expiry rules, and the attendances row — all carrying device context.
+    const { data, error } = await supabase.rpc('fn_hardware_punch', {
+      p_api_key: deviceKey,
+      p_biometric_id: biometricId,
+      p_rfid_card: null,
+    });
+    if (error) return databaseError(error, 'The gate refused this request.');
+
+    const verdict = (data ?? {}) as Record<string, unknown>;
+    const code = String(verdict.code ?? '');
+    const name = (verdict.member_name as string) ?? 'Member';
+
+    // Response contract kept byte-compatible with the pre-hardening endpoint so
+    // the Pi gateway needs no firmware change.
+    if (code === 'unknown_credential') {
       return NextResponse.json(
-        {
-          success: false,
-          allowed: false,
-          message: 'Member not registered',
-        },
+        { success: false, allowed: false, message: 'Member not registered' },
         { status: 404 }
       );
     }
 
-    if (matches.length > 1) {
+    if (code === 'ambiguous_credential') {
       return NextResponse.json(
         {
           success: false,
           allowed: false,
-          message: 'Biometric slot exists in multiple gyms. Send X-Tenant-Id with this device request.',
+          message: 'This fingerprint matches more than one member in this gym. See the front desk.',
         },
         { status: 409 }
       );
     }
 
-    const member = matches[0] as {
-      id: string;
-      full_name: string;
-      phone: string;
-      membership_end: string | null;
-      is_frozen: boolean;
-      tenant_id: string | null;
-    };
+    // Frozen beats expiry — a frozen pass is a temporary hold, not a dues problem.
+    if (code === 'blocked_frozen') {
+      return NextResponse.json({ success: true, allowed: false, name, message: 'Membership Frozen' });
+    }
 
-    // 2. Frozen beats expiry — a frozen pass is a temporary hold, not a dues problem.
-    if (member.is_frozen) {
-      await supabase.from('attendances').insert([
-        {
-          tenant_id: member.tenant_id,
-          member_id: member.id,
-          method: 'biometric',
-          status: 'blocked_frozen',
-        },
-      ]);
+    if (code === 'blocked_expired') {
+      return NextResponse.json({ success: true, allowed: false, name, message: 'Membership Expired' });
+    }
 
+    if (verdict.unlock !== true) {
+      // Any future deny code stays a deny, with the database's own reason.
       return NextResponse.json({
-        success: true,
+        success: false,
         allowed: false,
-        name: member.full_name,
-        message: 'Membership Frozen',
+        name,
+        message: String(verdict.reason ?? 'Access Denied'),
       });
     }
 
-    // 3. Check Expiry
-    const isExpired = !member.membership_end || new Date(member.membership_end) < new Date();
-
-    if (isExpired) {
-      await supabase.from('attendances').insert([
-        {
-          tenant_id: member.tenant_id,
-          member_id: member.id,
-          method: 'biometric',
-          status: 'blocked_expired',
-        },
-      ]);
-
-      return NextResponse.json({
-        success: true,
-        allowed: false,
-        name: member.full_name,
-        message: 'Membership Expired',
-      });
+    // Granted: WhatsApp greeting, exactly as before (fire and forget).
+    const phone = typeof verdict.member_phone === 'string' ? verdict.member_phone : '';
+    if (phone) {
+      sendWhatsAppNotification({
+        phone,
+        message: `Welcome to the gym, ${name}! 💪 Your biometric attendance has been recorded.`,
+      }).catch((err) => console.error('WhatsApp notify error:', err));
     }
 
-    // 4. Mark Granted Attendance
-    await supabase.from('attendances').insert([
-      {
-        tenant_id: member.tenant_id,
-        member_id: member.id,
-        method: 'biometric',
-        status: 'granted',
-      },
-    ]);
-
-    // 5. Trigger WhatsApp Greeting
-    sendWhatsAppNotification({
-      phone: member.phone,
-      message: `Welcome to the gym, ${member.full_name}! 💪 Your biometric attendance has been recorded.`,
-    }).catch((err) => console.error('WhatsApp notify error:', err));
-
-    return NextResponse.json({
-      success: true,
-      allowed: true,
-      name: member.full_name,
-      message: 'Attendance Successful',
-    });
+    return NextResponse.json({ success: true, allowed: true, name, message: 'Attendance Successful' });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Server error';
     return NextResponse.json({ success: false, error: msg }, { status: 500 });

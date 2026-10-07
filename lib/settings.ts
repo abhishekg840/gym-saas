@@ -324,3 +324,44 @@ export async function saveOperatingHours(
     hours: result.ok ? normalizeOperatingHours(result.body.operating_hours) : hours,
   };
 }
+
+// -----------------------------------------------------------------------------
+// Payment identity (UPI VPA)
+// -----------------------------------------------------------------------------
+
+/** The gym's saved UPI ID, or null when never configured. */
+export async function loadUpiId(
+  tenantId: string | null
+): Promise<{ ok: boolean; error?: string; upiId: string | null }> {
+  if (!isUuid(tenantId)) return { ok: false, error: NO_GYM, upiId: null };
+  const result = await callSettings(`/api/settings?tenant_id=${tenantId}`, { method: 'GET' });
+  const raw = result.body.upi_id;
+  return {
+    ok: result.ok,
+    error: result.error,
+    upiId: typeof raw === 'string' && raw.trim() ? raw.trim() : null,
+  };
+}
+
+/**
+ * Saves (or clears, with an empty string) the gym's UPI ID. Renewal reminders
+ * build their payment link from it; clearing switches those messages to the
+ * neutral front-desk copy instead of ever falling back to someone's personal
+ * payment QR.
+ */
+export async function saveUpiId(
+  tenantId: string | null,
+  upiId: string
+): Promise<{ ok: boolean; error?: string; upiId: string | null }> {
+  if (!isUuid(tenantId)) return { ok: false, error: NO_GYM, upiId: null };
+  const result = await callSettings('/api/settings', {
+    method: 'POST',
+    body: JSON.stringify({ tenant_id: tenantId, upi_id: upiId }),
+  });
+  const raw = result.body.upi_id;
+  return {
+    ok: result.ok,
+    error: result.error,
+    upiId: result.ok ? (typeof raw === 'string' && raw.trim() ? raw.trim() : null) : null,
+  };
+}

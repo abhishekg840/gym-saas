@@ -31,14 +31,19 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from('tenants')
-    .select('operating_hours')
+    .select('operating_hours, upi_id')
     .eq('id', tenantId)
     .maybeSingle();
 
   if (error) return databaseError(error, 'Could not load your opening hours.');
   if (!data) return badRequest('Gym not found.', 404);
 
-  return NextResponse.json({ ok: true, operating_hours: data.operating_hours ?? null });
+  const rawUpi = typeof data.upi_id === 'string' ? data.upi_id.trim() : '';
+  return NextResponse.json({
+    ok: true,
+    operating_hours: data.operating_hours ?? null,
+    upi_id: rawUpi || null,
+  });
 }
 
 export async function POST(request: Request) {
@@ -50,6 +55,21 @@ export async function POST(request: Request) {
     ? String(body.tenant_id ?? body.tenantId)
     : readTenantCookie(request);
   if (!tenantId) return badRequest(MISSING_TENANT, 403);
+
+  // Payment identity (P0-4): the gym's UPI ID rides on the same route as the
+  // rest of the owner's settings. Empty string clears it, which switches
+  // renewal messages back to the neutral front-desk copy.
+  if ('upi_id' in body || 'upiId' in body) {
+    const vpa = String(body.upi_id ?? body.upiId ?? '').trim();
+    if (vpa.length > 256) return badRequest('That UPI ID is too long.');
+    const { data, error } = await supabase.rpc('fn_tenant_set_upi_id', {
+      p_tenant_id: tenantId,
+      p_upi_id: vpa || null,
+    });
+    if (error) return databaseError(error, 'Could not save your UPI ID.');
+    const saved = (data ?? {}) as { upi_id?: string | null };
+    return NextResponse.json({ ok: true, upi_id: saved.upi_id ?? null });
+  }
 
   // Accept the schedule whole or wrapped in `hours`, so the same route serves a
   // plain form post and the JSON settings client.
