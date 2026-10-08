@@ -23,9 +23,10 @@ const MISSING_TENANT =
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 export async function GET(request: Request) {
-  const tenantId =
-    isUuid(new URL(request.url).searchParams.get('tenant_id')) ||
-    readTenantCookie(request);
+  const u = new URL(request.url);
+  const rawTenantId = u.searchParams.get('tenant_id');
+
+  const tenantId = isUuid(rawTenantId) ? rawTenantId : readTenantCookie(request);
 
   if (!tenantId) return badRequest(MISSING_TENANT, 403);
 
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
   if (error) return databaseError(error, 'Could not load your opening hours.');
   if (!data) return badRequest('Gym not found.', 404);
 
-  const rawUpi = typeof data.upi_id === 'string' ? data.upi_id.trim() : '';
+  const rawUpi = typeof data?.upi_id === 'string' ? data.upi_id.trim() : '';
   return NextResponse.json({
     ok: true,
     operating_hours: data.operating_hours ?? null,
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
     : body.operating_hours ?? body) as Record<string, unknown>;
 
   if (Array.isArray(source) || typeof source !== 'object' || source === null) {
-    return badRequest('Operating hours must be an object keyed by day (mon…sun).');
+    return badRequest('Operating hours must be an object keyed by day (mon...sun).');
   }
 
   // Pre-validate the days the owner actually sent, so the error names the day
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
     for (const field of ['open', 'close'] as const) {
       const time = String(entry?.[field] ?? '').trim();
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
-        return badRequest(`Use 24-hour times like 06:30 for ${day.toUpperCase()} ${field}.`);
+        return badRequest('Use 24-hour times like 06:30 for ' + day.toUpperCase() + ' ' + field + '.');
       }
     }
   }
@@ -102,3 +103,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, operating_hours: data });
 }
+
