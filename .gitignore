@@ -45,3 +45,10 @@ android/app/build/
 android/.gradle/
 android/build/
 android/local.properties
+
+# Release signing secrets - NEVER commit
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+*.jks
+*.keystore

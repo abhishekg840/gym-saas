@@ -15,6 +15,7 @@ import { CapacitorConfig } from '@capacitor/cli';
  * android/app/src/main/assets/capacitor.config.json (which is what
  * `npx cap sync` actually reads) in the same commit when the host moves.
  */
+
 const config: CapacitorConfig = {
   appId: 'in.vyroniq.gym',
   appName: 'Vyroniq',
@@ -25,8 +26,21 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: true,
-    captureInput: true
-  }
+    captureInput: true,
+    // Android-specific asset config for production builds
+    assetPath: 'assets',
+  },
+  // Icon configuration (1024x1024 base)
+  icon: {
+    source: 'assets/icon.png',
+    background: '#26A69A',
+    foreground: 'assets/icon-foreground.png',
+  },
+  // Splash screen configuration (2732x2732 base)
+  splash: {
+    source: 'assets/splash.png',
+    backgroundColor: '#26A69A',
+  },
 };
 
 export default config;
