@@ -14,9 +14,21 @@ import { CapacitorConfig } from '@capacitor/cli';
  * leave the app loading nothing on a fresh install. Change both this file and
  * android/app/src/main/assets/capacitor.config.json (which is what
  * `npx cap sync` actually reads) in the same commit when the host moves.
+ *
+ * `icon` and `splash` are read by @capacitor/assets (`npx capacitor-assets
+ * generate`), which consumes this file loosely; they are intentionally NOT part
+ * of the core CapacitorConfig type, so they are declared on the interface below
+ * rather than dropped — removing them would silently break asset generation.
  */
 
-const config: CapacitorConfig = {
+interface VyroniqCapacitorConfig extends CapacitorConfig {
+  /** Consumed by @capacitor/assets, not by the core Capacitor CLI type. */
+  icon: { source: string; background: string; foreground: string };
+  /** Consumed by @capacitor/assets, not by the core Capacitor CLI type. */
+  splash: { source: string; backgroundColor: string };
+}
+
+const config: VyroniqCapacitorConfig = {
   appId: 'in.vyroniq.gym',
   appName: 'Vyroniq',
   webDir: 'public',
@@ -27,8 +39,6 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: true,
     captureInput: true,
-    // Android-specific asset config for production builds
-    assetPath: 'assets',
   },
   // Icon configuration (1024x1024 base)
   icon: {
@@ -44,3 +54,4 @@ const config: CapacitorConfig = {
 };
 
 export default config;
+
