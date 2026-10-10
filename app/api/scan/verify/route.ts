@@ -190,7 +190,17 @@ export async function POST(request: Request) {
     }
 
     await supabase.from('attendances').insert([
-      { tenant_id: tenantId, member_id: member.id as string, method: 'qr_kiosk', status: 'granted' },
+      {
+        tenant_id: tenantId,
+        member_id: member.id as string,
+        method: 'qr_kiosk',
+        status: 'granted',
+        direction: 'in',
+        // Mint a session id at entry so an exit (/api/scan/checkout ->
+        // fn_gate_checkout) can pair to THIS punch and stamp a duration, even
+        // when several sessions happen across one day.
+        session_id: crypto.randomUUID(),
+      },
     ]);
 
     return NextResponse.json(present(member, true, 'Access approved. Welcome back!'));

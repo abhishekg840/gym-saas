@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft, Volume2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft, Volume2, LogIn, LogOut, Flame } from 'lucide-react';
 import Link from 'next/link';
 import { readSession } from '@/lib/session';
+
+/** Which way the next scan is read: an entry (Check-In) or an exit (Check-Out). */
+type ScanMode = 'in' | 'out';
 
 interface VerificationResult {
   allowed: boolean;
@@ -13,19 +16,42 @@ interface VerificationResult {
   expiry: string;
   reason: string;
   member_id?: string | null;
+  /** 'in' or 'out' — the direction this scan was recorded as. */
+  direction?: ScanMode;
+  /** Workout duration in whole minutes, present only on a paired OUT scan. */
+  duration_minutes?: number | null;
 }
 
 export default function GymScanner() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  
+  // Dual-gate mode. Defaults to Entry, which is by far the common case at a
+  // kiosk. Held in a ref too, because the camera callback below is created once
+  // inside a mount-only effect and must read the CURRENT mode without that
+  // effect re-running (which would tear down and restart the camera).
+  const [mode, setMode] = useState<ScanMode>('in');
+  const modeRef = useRef<ScanMode>('in');
+
   const isProcessingRef = useRef(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const lastScannedTokenRef = useRef<string>('');
   const lastScannedTimeRef = useRef<number>(0);
   const autoResetTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  /** Switch gate direction. Clears the repeat-scan guard so the very next pass
+   *  reads as the new direction instead of being swallowed by the cooldown. */
+  function chooseMode(next: ScanMode) {
+    modeRef.current = next;
+    setMode(next);
+    lastScannedTokenRef.current = '';
+    if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current);
+    setResult(null);
+    setVerifying(false);
+    isProcessingRef.current = false;
+  }
+
 
   function getAudioContext() {
     if (!audioCtxRef.current) {
@@ -117,7 +143,11 @@ export default function GymScanner() {
           try {
             // The gate decision lives on the server: it scopes the member lookup to
             // this gym's tenant and refuses frozen memberships. The kiosk only renders.
-            const response = await fetch('/api/scan/verify', {
+            // Check-Out hits a different endpoint that pairs the entry and stamps the
+            // workout duration; Check-In is the classic verify path.
+            const direction = modeRef.current;
+            const endpoint = direction === 'out' ? '/api/scan/checkout' : '/api/scan/verify';
+            const response = await fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'same-origin',
@@ -134,6 +164,7 @@ export default function GymScanner() {
               phone?: string;
               expiry?: string | null;
               member_id?: string | null;
+              duration_minutes?: number | null;
             };
 
             if (typeof verdict.allowed !== 'boolean') {
@@ -143,6 +174,7 @@ export default function GymScanner() {
                 name: verdict.name || 'Rejected',
                 phone: verdict.phone || '',
                 expiry: 'N/A',
+                direction,
                 reason: verdict.reason || `Gate rejected the scan (HTTP ${response.status}).`,
               });
             } else {
@@ -152,14 +184,22 @@ export default function GymScanner() {
                 name: verdict.name || 'Unknown',
                 phone: verdict.phone || 'N/A',
                 expiry: verdict.expiry || 'N/A',
+                direction,
+                duration_minutes:
+                  typeof verdict.duration_minutes === 'number' ? verdict.duration_minutes : null,
                 reason:
                   verdict.reason ||
-                  (verdict.allowed ? 'Access Approved. Welcome!' : 'Access Denied.'),
+                  (direction === 'out'
+                    ? 'Session complete. See you tomorrow!'
+                    : verdict.allowed
+                      ? 'Access Approved. Welcome!'
+                      : 'Access Denied.'),
                 member_id: verdict.member_id ?? null,
               });
 
               // Attendance is already recorded server-side; this only pings the feed.
-              if (verdict.allowed && verdict.member_id) {
+              // The welcome chime is an ENTRY thing — an exit is not a "welcome".
+              if (verdict.allowed && verdict.member_id && direction === 'in') {
                 fetch('/api/notifications/checkin', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -211,7 +251,7 @@ export default function GymScanner() {
       className="min-h-screen bg-surface text-ink flex flex-col items-center justify-center p-4 cursor-pointer"
     >
       {/* Header */}
-      <div className="flex items-center justify-between w-full max-w-md mb-6">
+      <div className="flex items-center justify-between w-full max-w-md mb-4">
         <Link
           href="/admin"
           className="flex items-center gap-1.5 text-[12px] text-muted hover:text-ink transition rounded-xl border border-line bg-surface px-3 py-1.5 rounded-xl"
@@ -226,6 +266,48 @@ export default function GymScanner() {
         </div>
       </div>
 
+      {/* Dual-gate toggle: Check-In (Entry) vs Check-Out (Exit). Entry is the
+          default because it is the common case; the operator flips to Exit when
+          a member is leaving. Tapping switches the endpoint the next scan posts
+          to (see the camera callback above). */}
+      <div
+        role="group"
+        aria-label="Scan direction"
+        className="mb-6 grid w-full max-w-md grid-cols-2 gap-2"
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            chooseMode('in');
+          }}
+          aria-pressed={mode === 'in'}
+          className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+            mode === 'in'
+              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]'
+              : 'border-line bg-surface text-muted hover:text-ink'
+          }`}
+        >
+          <LogIn className="w-4 h-4" /> 🟢 Check-In
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            chooseMode('out');
+          }}
+          aria-pressed={mode === 'out'}
+          className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+            mode === 'out'
+              ? 'border-rose-500/40 bg-rose-500/15 text-rose-300 shadow-[0_0_0_1px_rgba(244,63,94,0.25)]'
+              : 'border-line bg-surface text-muted hover:text-ink'
+          }`}
+        >
+          <LogOut className="w-4 h-4" /> 🔴 Check-Out
+        </button>
+      </div>
+
+
       <div className="w-full max-w-md rounded-xl border border-line bg-surface rounded-3xl p-6 shadow-2xl relative">
         {result && (
           <div
@@ -234,15 +316,37 @@ export default function GymScanner() {
             }`}
           >
             {result.allowed ? (
-              <ShieldCheck className="w-20 h-20 text-emerald-400 mb-3" />
+              result.direction === 'out' ? (
+                <LogOut className="w-20 h-20 text-emerald-400 mb-3" />
+              ) : (
+                <ShieldCheck className="w-20 h-20 text-emerald-400 mb-3" />
+              )
             ) : (
               <ShieldAlert className="w-20 h-20 text-rose-400 mb-3" />
             )}
 
             <h2 className="text-2xl font-black mb-1">
-              {result.allowed ? 'ACCESS GRANTED' : 'ACCESS DENIED'}
+              {!result.allowed
+                ? 'ACCESS DENIED'
+                : result.direction === 'out'
+                  ? 'SESSION COMPLETE'
+                  : 'ACCESS GRANTED'}
             </h2>
-            <p className="text-sm font-semibold opacity-90 mb-4">{result.reason}</p>
+            <p className="text-sm font-semibold opacity-90 mb-4">
+              {result.allowed && result.direction === 'out'
+                ? `See you tomorrow, ${result.name.split(' ')[0]}!`
+                : result.reason}
+            </p>
+
+            {/* Workout duration badge — only on a paired exit. */}
+            {result.allowed && result.direction === 'out' && typeof result.duration_minutes === 'number' && (
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/15 px-5 py-2.5">
+                <Flame className="w-5 h-5 text-amber-300" />
+                <span className="text-base font-black text-amber-200 tabular-nums">
+                  🔥 Workout Duration: {result.duration_minutes} mins
+                </span>
+              </div>
+            )}
 
             <div
               className={`bg-black/40 border rounded-2xl p-4 w-full text-left space-y-2 mb-6 text-sm ${
