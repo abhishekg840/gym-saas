@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
+  ArrowDownRight,
   ArrowRight,
   BarChart3,
+  Check,
+  ChevronDown,
   Download,
-  Dumbbell,
   Fingerprint,
   MapPin,
   Megaphone,
-  MessageCircle,
   QrCode,
   Receipt,
   ScanLine,
@@ -18,31 +19,33 @@ import {
   UserPlus,
   Users,
   Wallet,
+  Zap,
 } from 'lucide-react';
 
 import RevenueCalculator from '@/components/revenue-calculator';
 
 /**
- * The commercial front door (Phase 15).
+ * The commercial front door.
  *
- * WHY THIS PAGE EXISTS AT ALL
- * ---------------------------
- * `/` used to BE the owner console. That meant the first thing a stranger, a
- * prospect or a search engine saw was a login screen for a gym they had not
- * signed up to: nowhere to send a lead, nothing to link to from a WhatsApp
- * message, and no page a sales conversation could end on. The console moved to
- * /admin -- still one click away via the header -- and this page took its place.
+ * WHY THIS PAGE EXISTS: `/` used to be the owner console, so a stranger or a
+ * prospect first hit a login screen for a gym they had not signed up to. The
+ * console moved to /admin and this page took its place as the calm, considered
+ * surface a sales conversation can end on.
  *
- * EVERY CLAIM HERE IS BACKED BY SHIPPED CODE, NOT A ROADMAP. The features below
- * map onto real routes and RPCs in this repo: /hardware and fn_*_hardware_*,
- * /leads and convertLead, /store and the pickup queue, fn_monthly_leaderboard,
- * /api/cron/whatsapp, fn_superadmin_list_tenants. A landing page that advertises
- * a feature the product cannot demonstrate is the fastest way to lose a gym
- * during a trial.
+ * The visual language is deliberately quiet and editorial — a warm off-white
+ * canvas, deep forest-green ink, hairline rules and generous whitespace — so it
+ * reads as a considered operations product rather than a loud gym poster.
  *
- * Deliberately a SERVER component: no state, no effects, no extra client JS. The
- * FAQ is <details>, which is keyboard accessible for free and needs no hydration
- * to open.
+ * Copy is intentionally measured: every capability is phrased as what it does
+ * "where enabled / after compatibility is confirmed", because a landing page
+ * that over-promises is the fastest way to lose a gym during onboarding. The
+ * claims map onto shipped code in this repo (geofencing, Smart Pass, RFID /
+ * fingerprint terminals, the front-desk scanner, CRM, POS, billing, payouts,
+ * challenges, announcements and analytics).
+ *
+ * A SERVER component throughout, with one exception: the interactive Revenue
+ * Calculator is a Client island (components/revenue-calculator.tsx). The FAQ is
+ * <details>, which is keyboard accessible for free and needs no hydration.
  */
 
 const WHATSAPP = '9569272339';
@@ -53,554 +56,768 @@ const wa = (message: string) =>
 const APK_URL = '/downloads/vyroniq-gym.apk';
 
 export const metadata: Metadata = {
-  title: 'Vyroniq — Gym OS for Modern Gyms',
+  title: 'Vyroniq — The operating system for modern gyms',
   description:
-    'Gate access, member passes, biometric attendance, POS, CRM and WhatsApp automation for Indian gyms. Live in a day, from ₹799/month.',
+    'Memberships, access control, attendance, billing, retail and member communication in one considered platform for Indian gyms.',
 };
 
-const STATS = [
-  { value: '120ms', label: 'Gate decision' },
-  { value: '12', label: 'Modules live' },
-  { value: '1 day', label: 'Typical go-live' },
-  { value: '99.9%', label: 'Uptime target' },
-];
-
-const FEATURES = [
+const features = [
   {
+    n: '01',
     icon: MapPin,
-    title: 'Gate access & geofencing',
-    body: 'Radius-locked entry with live enforcement, so a pass only opens the turnstile when the member is standing at your door.',
+    title: 'Access rules & geofencing',
+    text: 'Apply location-aware access rules where enabled, and keep entry checks tied to the right gym and membership.',
   },
   {
+    n: '02',
     icon: QrCode,
     title: 'Member Smart Pass',
-    body: 'A signed QR pass on the member’s phone with expiry, freeze state and days remaining — no printed cards to reissue.',
+    text: 'Give members a digital pass with membership status and expiry details, reducing reliance on printed cards.',
   },
   {
+    n: '03',
     icon: Fingerprint,
-    title: 'RFID & fingerprint terminals',
-    body: 'Tap-to-enroll writes a card or fingerprint slot straight from the desk, with duplicate-slot protection built in.',
+    title: 'RFID & fingerprint attendance',
+    text: 'Bring supported RFID cards and fingerprint readers into your attendance workflow after device compatibility is confirmed.',
   },
   {
+    n: '04',
     icon: ScanLine,
-    title: 'Front-desk scanner',
-    body: 'One camera screen for check-ins, walk-in sales and pass verification. No dedicated hardware required.',
+    title: 'Front-desk check-in',
+    text: 'Use a camera-based scanning workflow for QR passes and keep member verification close to the front desk.',
   },
   {
+    n: '05',
     icon: Users,
-    title: 'Live attendance & crowd',
-    body: 'See who is inside right now, your peak-hour pattern, and the members who quietly stopped showing up.',
+    title: 'Attendance & member activity',
+    text: 'Review check-ins and membership activity to understand how members use your gym over time.',
   },
   {
+    n: '06',
     icon: UserPlus,
     title: 'Lead pipeline & CRM',
-    body: 'Capture enquiries from Instagram, walk-ins or WhatsApp, work them through lanes, and convert a card into a member in one tap.',
+    text: 'Keep enquiries, follow-ups and member conversions organised instead of spread across messages and notebooks.',
   },
   {
+    n: '07',
     icon: ShoppingBag,
     title: 'Retail store & POS',
-    body: 'Sell supplements and merchandise with stock control, a pickup queue, and receipts printed or sent on WhatsApp.',
+    text: 'Manage gym merchandise and supplement sales alongside your daily operations, where enabled in your plan.',
   },
   {
+    n: '08',
     icon: Receipt,
     title: 'Plans, billing & invoices',
-    body: 'Per-gym plans, renewals, freeze and transfer handling, plus a shareable invoice for every payment taken.',
+    text: 'Track membership plans, renewals, freezes and payment records in one operational workflow.',
   },
   {
+    n: '09',
     icon: Wallet,
-    title: 'Trainer payouts',
-    body: 'Assign personal-training clients and settle trainer earnings from the same ledger that records the sale.',
+    title: 'Trainer management',
+    text: 'Organise trainer assignments and related payout records where these workflows are enabled for your gym.',
   },
   {
+    n: '10',
     icon: Trophy,
     title: 'Challenges & leaderboards',
-    body: 'Monthly rankings, streaks and badges that give members a reason to come back on a low-motivation day.',
+    text: 'Encourage participation with member challenges, activity streaks and leaderboard-style engagement.',
   },
   {
+    n: '11',
     icon: Megaphone,
-    title: 'Announcements',
-    body: 'Push notices to the member app instantly: holiday hours, new equipment, a class that just opened.',
+    title: 'Member announcements',
+    text: 'Share relevant gym updates such as holiday timings, notices and service announcements through supported channels.',
   },
   {
+    n: '12',
     icon: BarChart3,
-    title: 'Revenue analytics',
-    body: 'Collections, active-versus-lapsed counts and retention trends, scoped to your gym and nobody else’s.',
+    title: 'Operational reporting',
+    text: 'Bring attendance, collections and membership activity into a clearer view for day-to-day decisions.',
   },
 ];
 
-const STEPS = [
-  {
-    step: '01',
-    title: 'We set your gym up',
-    body: 'Your gym, plan and owner sign-in are created in minutes. The owner receives a first password and is asked to replace it immediately.',
-  },
-  {
-    step: '02',
-    title: 'Enrol members, send WhatsApp',
-    body: 'Add a member at the desk or convert a lead, then send their onboarding link on WhatsApp: pass, login and first password included.',
-  },
-  {
-    step: '03',
-    title: 'Turn on the gate',
-    body: 'Link your reader or use the phone scanner. Every entry is checked against a live membership, so expired passes stop at the door.',
-  },
-];
-
-const PLANS = [
+const plans = [
   {
     name: 'Starter Club',
     price: '₹799',
-    tagline: 'One gym, everything needed to run the floor.',
-    features: [
+    suffix: '/ month',
+    desc: 'The essentials for a single location.',
+    items: [
       'Up to 300 active members',
-      'Gate access & Smart Pass',
-      'Attendance, renewals & invoices',
+      'Member passes and attendance',
+      'Memberships and invoices',
       'WhatsApp expiry reminders',
     ],
-    cta: 'Start with Starter',
-    message: 'Hi Abhishek, I would like to set up the Starter Gym OS plan (₹799/mo).',
+    message:
+      'Hi, I would like to discuss the Vyroniq Starter Club plan (₹799/month).',
     featured: false,
   },
   {
     name: 'Pro Fitness OS',
     price: '₹1,499',
-    tagline: 'The full suite: retail, CRM, trainers and challenges.',
-    features: [
+    suffix: '/ month',
+    desc: 'More control for a growing gym.',
+    items: [
       'Unlimited active members',
-      'Store, POS & pickup queue',
+      'Retail store and POS',
       'Lead pipeline and CRM',
       'Trainer payouts',
-      'Challenges, leaderboards & badges',
-      'Announcements and analytics',
+      'Challenges and announcements',
+      'Analytics dashboard',
     ],
-    cta: 'Start with Pro',
-    message: 'Hi Abhishek, I want to activate the Pro Fitness OS plan (₹1,499/mo).',
+    message:
+      'Hi, I would like a demo of the Vyroniq Pro Fitness OS plan (₹1,499/month).',
     featured: true,
   },
   {
-    name: 'Franchise & Chain',
+    name: 'Multi-location',
     price: 'Custom',
-    tagline: 'Multi-branch operations with central reporting.',
-    features: [
-      'Unlimited branches',
-      'Master console across every location',
-      'Consolidated revenue reporting',
-      'Priority onboarding and support',
+    suffix: '',
+    desc: 'Central visibility across your locations.',
+    items: [
+      'Multi-branch operations',
+      'Central administration',
+      'Consolidated reporting',
+      'Guided onboarding and support',
     ],
-    cta: 'Talk to us',
-    message: 'Hi Abhishek, I want to discuss the Franchise Multi-Gym setup.',
+    message: 'Hi, I would like to discuss Vyroniq for multiple gym locations.',
     featured: false,
   },
 ];
 
-const FAQS = [
+const faqs = [
   {
-    q: 'Do we need to buy new hardware?',
-    a: 'No. The front desk can check members in with a phone camera, and members open their own pass on their phone. If you already own RFID cards or a fingerprint reader, Vyroniq can drive those too.',
+    q: 'Do I need to replace my existing hardware?',
+    a: 'Not necessarily. The front desk can use a phone camera for QR check-ins. Compatibility with existing RFID or fingerprint equipment depends on the specific reader and setup, so we confirm that before onboarding.',
   },
   {
-    q: 'How long does onboarding take?',
-    a: 'Most single-gym setups are running the same day. We create your gym, import your members and hand over owner credentials, and you can enrol anyone else at your own pace.',
+    q: 'Can you move our current member records?',
+    a: 'We can help assess and import your existing member list. The available fields and the cleanup required depend on the format of your current records.',
   },
   {
-    q: 'What happens to our existing member data?',
-    a: 'We import it. Existing members keep their names, numbers, plans and expiry dates. Every one of them gets a WhatsApp onboarding link so they can set their own password.',
+    q: 'How long does setup take?',
+    a: 'A straightforward single-gym setup may be ready quickly once the member data, plan details and access requirements are confirmed. Hardware integrations can require additional setup.',
   },
   {
-    q: 'How are passwords handled?',
-    a: 'Every password is stored as a bcrypt hash in a private database schema that the public API cannot read. Nobody at Vyroniq can look up a member’s or an owner’s password, and sign-ins are verified by the database rather than by the browser.',
-  },
-  {
-    q: 'Could a member share their pass with a friend?',
-    a: 'A pass is bound to the member and to the gym’s location. With geofence enforcement on, the gate only opens when the phone is physically inside your radius.',
-  },
-  {
-    q: 'Is there a long contract?',
-    a: 'No. Vyroniq is month to month. If it is not saving your desk time, stop paying and keep your data.',
+    q: 'Is there a long-term contract?',
+    a: 'The listed plans are presented on a monthly basis. Confirm the current billing, cancellation and data-export terms with the Vyroniq team before subscribing.',
   },
 ];
 
+function Wordmark({ light = false }: { light?: boolean }) {
+  return (
+    <Link
+      href="/"
+      aria-label="Vyroniq home"
+      className={`inline-flex items-center gap-3 ${
+        light ? 'text-white' : 'text-[#17221f]'
+      }`}
+    >
+      <span
+        className={`grid h-9 w-9 place-items-center border ${
+          light ? 'border-white/25' : 'border-[#17221f]/20'
+        }`}
+      >
+        <span className="block h-3 w-3 rotate-45 border-2 border-current" />
+      </span>
+      <span className="text-[15px] font-semibold tracking-[0.19em]">
+        VYRONIQ
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * A calm, illustrative rendering of the owner console for the hero.
+ *
+ * It is intentionally static and clearly labelled "Illustrative interface" —
+ * it is a picture of the product, not a live embed, so nobody mistakes a mock
+ * number for their own data. Purely presentational: no props, no state.
+ */
+function DashboardPreview() {
+  return (
+    <div className="relative mx-auto w-full max-w-[590px]">
+      <div
+        className="absolute -right-5 -top-5 h-24 w-24 border-r border-t border-[#a8b5ae]"
+        aria-hidden="true"
+      />
+      <div className="relative border border-[#d7ddd8] bg-white shadow-[0_28px_80px_rgba(22,35,29,0.10)]">
+        <div className="flex items-center justify-between border-b border-[#e7ebe7] px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-8 w-8 place-items-center bg-[#e9eee9] text-[#243a30]">
+              <Zap size={15} />
+            </span>
+            <div>
+              <p className="text-xs font-semibold text-[#17221f]">Studio North</p>
+              <p className="mt-0.5 text-[10px] text-[#7b8580]">Gym operations</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-[#67736c]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#54856a]" /> All systems
+            operational
+          </div>
+        </div>
+        <div className="grid grid-cols-3 border-b border-[#e7ebe7]">
+          {[
+            ['Active members', '842', '+8.4%'],
+            ['Today’s visits', '126', 'Live count'],
+            ['Collected this month', '₹2.84L', '+12.6%'],
+          ].map(([label, value, note]) => (
+            <div
+              key={label}
+              className="border-r border-[#e7ebe7] px-4 py-5 last:border-r-0"
+            >
+              <p className="text-[10px] text-[#77817b]">{label}</p>
+              <p className="mt-2 text-xl font-semibold tracking-tight text-[#17221f]">
+                {value}
+              </p>
+              <p className="mt-1 text-[10px] text-[#54856a]">{note}</p>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-5 p-5 sm:grid-cols-[1.35fr_0.9fr]">
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-[#17221f]">
+                  Weekly attendance
+                </p>
+                <p className="mt-1 text-[10px] text-[#87918b]">Member check-ins</p>
+              </div>
+              <span className="border border-[#e1e6e1] px-2 py-1 text-[9px] text-[#69746d]">
+                This week⌄
+              </span>
+            </div>
+            <div className="flex h-32 items-end gap-2 border-b border-l border-[#e8ece8] px-3">
+              {[42, 64, 52, 78, 61, 91, 72, 84, 57, 76, 94, 68, 83, 60].map(
+                (h, i) => (
+                  <span
+                    key={i}
+                    className={`w-full ${
+                      i === 10 ? 'bg-[#243f32]' : 'bg-[#c7d5ca]'
+                    }`}
+                    style={{ height: `${h}%` }}
+                  />
+                )
+              )}
+            </div>
+            <div className="mt-2 flex justify-between text-[9px] text-[#8a948e]">
+              <span>MON</span>
+              <span>TUE</span>
+              <span>WED</span>
+              <span>THU</span>
+              <span>FRI</span>
+              <span>SAT</span>
+              <span>SUN</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[#17221f]">Recent check-ins</p>
+            <p className="mt-1 text-[10px] text-[#87918b]">Updated activity</p>
+            <div className="mt-3 space-y-3">
+              {[
+                ['AS', 'Aarav Sharma', '08:42 AM'],
+                ['PK', 'Priya Kapoor', '08:39 AM'],
+                ['RM', 'Rohan Mehta', '08:34 AM'],
+              ].map(([initials, name, time]) => (
+                <div
+                  key={name}
+                  className="flex items-center gap-2 border-b border-[#edf0ed] pb-3 last:border-0"
+                >
+                  <span className="grid h-7 w-7 shrink-0 place-items-center bg-[#eef2ee] text-[9px] font-semibold text-[#435a4a]">
+                    {initials}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[10px] font-medium text-[#29352e]">
+                      {name}
+                    </p>
+                    <p className="mt-0.5 text-[9px] text-[#87918b]">Verified entry</p>
+                  </div>
+                  <span className="text-[9px] text-[#77817b]">{time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-t border-[#e7ebe7] bg-[#fafbf9] px-5 py-3">
+          <span className="text-[9px] tracking-wide text-[#7b8580]">
+            VYRONIQ / OPERATIONS OVERVIEW
+          </span>
+          <span className="text-[9px] text-[#7b8580]">Illustrative interface</span>
+        </div>
+      </div>
+      <div className="absolute -bottom-5 -left-5 hidden items-center gap-3 border border-[#d7ddd8] bg-white px-4 py-3 shadow-sm sm:flex">
+        <span className="grid h-9 w-9 place-items-center bg-[#edf2ed] text-[#35513f]">
+          <ShieldCheck size={17} />
+        </span>
+        <div>
+          <p className="text-[11px] font-semibold text-[#17221f]">
+            One connected workflow
+          </p>
+          <p className="mt-1 text-[10px] text-[#77817b]">Members · Access · Billing</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VyroniqLanding() {
   return (
-    <main className="min-h-screen bg-neutral-950 text-white antialiased">
-{/* ============================ NAV ============================ */}
-      <header className="sticky top-0 z-50 border-b border-white/5 bg-neutral-950/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-black">
-              <Dumbbell className="h-4 w-4" />
-            </span>
-            <span className="font-mono text-sm font-black uppercase tracking-[0.2em]">
-              Vyroniq
-            </span>
-          </Link>
-
-          <nav className="hidden items-center gap-7 text-xs font-medium text-neutral-400 md:flex">
-            <a href="#features" className="transition hover:text-white">Platform</a>
-            <a href="#how" className="transition hover:text-white">How it works</a>
-            <a href="#pricing" className="transition hover:text-white">Pricing</a>
-            <a href="#faq" className="transition hover:text-white">FAQ</a>
+    <main className="min-h-screen bg-[#f7f8f5] text-[#17221f] antialiased selection:bg-[#dce6dc] selection:text-[#17221f]">
+      {/* ============================== NAV ============================== */}
+      <header className="sticky top-0 z-40 border-b border-[#e1e5df] bg-[#f7f8f5]/95 backdrop-blur-sm">
+        <div className="mx-auto flex h-[76px] max-w-[1240px] items-center justify-between px-5 sm:px-8 lg:px-12">
+          <Wordmark />
+          <nav
+            aria-label="Main navigation"
+            className="hidden items-center gap-8 md:flex"
+          >
+            <a
+              className="text-xs text-[#53615a] transition hover:text-[#17221f]"
+              href="#platform"
+            >
+              Platform
+            </a>
+            <a
+              className="text-xs text-[#53615a] transition hover:text-[#17221f]"
+              href="#approach"
+            >
+              How it works
+            </a>
+            <a
+              className="text-xs text-[#53615a] transition hover:text-[#17221f]"
+              href="#pricing"
+            >
+              Pricing
+            </a>
+            <a
+              className="text-xs text-[#53615a] transition hover:text-[#17221f]"
+              href="#faq"
+            >
+              FAQs
+            </a>
           </nav>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="rounded-xl px-3.5 py-2 text-xs font-semibold text-neutral-300 transition hover:text-white"
+              className="hidden px-2 py-2 text-xs font-medium text-[#53615a] hover:text-[#17221f] sm:inline-flex"
             >
               Sign in
             </Link>
             <a
-              href={wa('Hi Abhishek, I want a demo of Vyroniq Gym OS.')}
+              href={wa('Hi, I would like to book a Vyroniq demo.')}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-black transition hover:bg-emerald-400 active:scale-95"
+              className="inline-flex items-center gap-2 bg-[#243b30] px-4 py-3 text-xs font-medium text-white transition hover:bg-[#182a21]"
             >
-              <MessageCircle className="h-3.5 w-3.5" />
-              Book a demo
+              Book a demo <ArrowRight size={14} />
             </a>
           </div>
         </div>
       </header>
 
-      {/* ============================ HERO ============================ */}
-      <section className="relative overflow-hidden">
-        {/* Soft emerald bloom behind the headline. Decorative only, and
-            pointer-events-none so it can never swallow a click. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-[-12rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-emerald-500/12 blur-[120px]"
-        />
-
-        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pb-24 sm:pt-28">
-          <div className="mx-auto max-w-3xl text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Gym OS · Built for Indian gyms
-            </span>
-
-            <h1 className="mt-7 text-4xl font-black leading-[1.08] tracking-tight sm:text-6xl">
-              Run the whole gym
+      {/* ============================= HERO ============================= */}
+      <section className="overflow-hidden border-b border-[#e1e5df]">
+        <div className="mx-auto grid max-w-[1240px] items-center gap-16 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-[0.9fr_1.1fr] lg:px-12 lg:py-28">
+          <div className="max-w-[550px]">
+            <div className="mb-7 flex items-center gap-3">
+              <span className="h-px w-8 bg-[#738a79]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#63776a]">
+                Gym operations, brought together
+              </span>
+            </div>
+            <h1 className="max-w-[600px] text-[42px] font-medium leading-[1.07] tracking-[-0.055em] sm:text-6xl lg:text-[68px]">
+              Run your gym.
               <br />
-              <span className="text-emerald-400">from one screen.</span>
+              <span className="text-[#718579]">Not five different systems.</span>
             </h1>
-
-            <p className="mx-auto mt-6 max-w-2xl text-sm leading-relaxed text-neutral-400 sm:text-base">
-              Turnstile access, member passes, biometric attendance, retail, lead
-              pipeline and WhatsApp follow-ups — in one system your front desk can
-              learn before lunch. No cards to reissue. No register to lose.
+            <p className="mt-7 max-w-[470px] text-[15px] leading-7 text-[#647069]">
+              Memberships, attendance, access control, billing and member
+              communication — connected in one thoughtful operating platform built
+              for modern gyms.
             </p>
-
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <a
-                href={wa('Hi Abhishek, I want to start with Vyroniq Gym OS.')}
+                href={wa('Hi, I would like to see a live demo of Vyroniq for my gym.')}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-black transition hover:bg-emerald-400 active:scale-[0.98] sm:w-auto"
+                className="inline-flex min-h-12 items-center justify-center gap-3 bg-[#243b30] px-5 text-sm font-medium text-white transition hover:bg-[#182a21]"
               >
-                Get started on WhatsApp
-                <ArrowRight className="h-4 w-4" />
+                Arrange a walkthrough <ArrowRight size={16} />
+              </a>
+              <a
+                href="#platform"
+                className="inline-flex min-h-12 items-center justify-center gap-2 border border-[#d5dcd5] px-5 text-sm font-medium text-[#27362d] transition hover:border-[#8b9b8f]"
+              >
+                Explore the platform <ArrowDownRight size={16} />
               </a>
               <a
                 href={APK_URL}
                 download
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.06] sm:w-auto"
+                className="inline-flex min-h-12 items-center justify-center gap-2 border border-[#d5dcd5] px-5 text-sm font-medium text-[#27362d] transition hover:border-[#8b9b8f]"
               >
-                <Download className="h-4 w-4" />
-                Download Android App (.apk)
+                <Download size={15} /> Android app
               </a>
             </div>
-
-            <p className="mt-5 font-mono text-[11px] text-neutral-500">
-              From ₹799/month · No setup fee · Cancel any month
-            </p>
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-[#78837c]">
+              <span className="inline-flex items-center gap-2">
+                <Check size={13} className="text-[#54725d]" /> Plans from
+                ₹799/month
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Check size={13} className="text-[#54725d]" /> Designed for Indian
+                gyms
+              </span>
+            </div>
           </div>
-
-          <dl className="mx-auto mt-16 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/5 bg-white/5 sm:grid-cols-4">
-            {STATS.map((stat) => (
-              <div key={stat.label} className="bg-neutral-950 px-5 py-6 text-center">
-                <dt className="sr-only">{stat.label}</dt>
-                <dd>
-                  <span className="block font-mono text-2xl font-black text-white">
-                    {stat.value}
-                  </span>
-                  <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-                    {stat.label}
-                  </span>
-                </dd>
+          <div className="px-2 py-4 sm:px-6 lg:pl-2 lg:pr-0">
+            <DashboardPreview />
+          </div>
+        </div>
+        <div className="border-t border-[#e1e5df] bg-[#f1f3ef]">
+          <div className="mx-auto grid max-w-[1240px] grid-cols-2 divide-x divide-y divide-[#dfe4dd] px-5 sm:px-8 md:grid-cols-4 md:divide-y-0 lg:px-12">
+            {[
+              ['01', 'Member management'],
+              ['02', 'Access & attendance'],
+              ['03', 'Payments & billing'],
+              ['04', 'Reporting & insight'],
+            ].map(([n, label]) => (
+              <div key={n} className="flex items-center gap-4 py-5 sm:py-6">
+                <span className="text-[10px] tracking-widest text-[#8a968d]">
+                  {n}
+                </span>
+                <span className="text-xs font-medium text-[#3c4b41]">
+                  {label}
+                </span>
               </div>
             ))}
-          </dl>
+          </div>
         </div>
       </section>
 
-      {/* ========================== FEATURES ========================== */}
-      <section id="features" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-        <div className="max-w-2xl">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-            The platform
-          </span>
-          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-            Twelve modules. One login.
-          </h2>
-          <p className="mt-4 text-sm leading-relaxed text-neutral-400">
-            Most gyms run on four disconnected tools and a notebook. Vyroniq replaces
-            them with one system where a lead, a membership, a payment and a turnstile
-            entry are the same record.
+      {/* =========================== PLATFORM =========================== */}
+      <section
+        id="platform"
+        className="mx-auto max-w-[1240px] px-5 py-20 sm:px-8 sm:py-28 lg:px-12"
+      >
+        <div className="grid gap-8 md:grid-cols-[0.75fr_1.25fr] md:items-end">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#63776a]">
+              The platform
+            </p>
+            <h2 className="mt-5 max-w-[430px] text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-[42px]">
+              Every moving part.
+              <br />A clearer picture.
+            </h2>
+          </div>
+          <p className="max-w-[540px] text-sm leading-7 text-[#68746c] md:justify-self-end">
+            From a new enquiry to a renewed membership, Vyroniq helps your team
+            work from connected information instead of scattered tools and manual
+            registers.
           </p>
         </div>
-
-        <ul className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-white/5 bg-white/5 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature) => (
-            <li
-              key={feature.title}
-              className="group bg-neutral-950 p-6 transition hover:bg-neutral-900/60"
+        <div className="mt-14 grid border-l border-t border-[#dfe4dd] sm:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ n, icon: Icon, title, text }) => (
+            <article
+              key={n}
+              className="group min-h-[230px] border-b border-r border-[#dfe4dd] bg-transparent p-6 transition-colors hover:bg-white sm:p-8"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-                <feature.icon className="h-5 w-5" />
-              </span>
-              <h3 className="mt-4 text-sm font-bold text-white">{feature.title}</h3>
-              <p className="mt-2 text-xs leading-relaxed text-neutral-400">
-                {feature.body}
+              <div className="flex items-start justify-between">
+                <span className="text-[10px] tracking-[0.16em] text-[#8c978f]">
+                  {n}
+                </span>
+                <Icon
+                  size={20}
+                  strokeWidth={1.5}
+                  className="text-[#587060] transition-transform group-hover:-translate-y-0.5"
+                />
+              </div>
+              <h3 className="mt-10 text-[17px] font-medium tracking-tight">
+                {title}
+              </h3>
+              <p className="mt-3 max-w-[310px] text-[13px] leading-6 text-[#6d7870]">
+                {text}
               </p>
-            </li>
+            </article>
           ))}
-        </ul>
+        </div>
+      </section>
+
+      {/* =========================== APPROACH =========================== */}
+      <section
+        id="approach"
+        className="border-y border-[#dfe4dd] bg-[#eef1ec]"
+      >
+        <div className="mx-auto grid max-w-[1240px] gap-14 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:px-12">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#63776a]">
+              A practical setup
+            </p>
+            <h2 className="mt-5 max-w-md text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-[42px]">
+              Technology that fits the way your gym works.
+            </h2>
+            <p className="mt-5 max-w-md text-sm leading-7 text-[#68746c]">
+              Start with the workflows you need. Add compatible access hardware
+              and operational tools as your setup grows.
+            </p>
+            <a
+              href={wa('Hi, I would like help planning a Vyroniq setup for my gym.')}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-8 inline-flex items-center gap-2 border-b border-[#7f9184] pb-2 text-sm font-medium text-[#243b30]"
+            >
+              Plan your setup <ArrowRight size={15} />
+            </a>
+          </div>
+          <div className="divide-y divide-[#d4dcd3] border-y border-[#d4dcd3]">
+            {[
+              {
+                n: '01',
+                title: 'Map your current workflow',
+                text: 'We review how you handle memberships, check-ins, payments and member records today.',
+              },
+              {
+                n: '02',
+                title: 'Configure your workspace',
+                text: 'Set up your gym profile, plans, staff access and member data for your operation.',
+              },
+              {
+                n: '03',
+                title: 'Connect and get moving',
+                text: 'Introduce member passes and supported scanners, then help your team settle into the workflow.',
+              },
+            ].map((s) => (
+              <div key={s.n} className="grid gap-3 py-6 sm:grid-cols-[56px_1fr]">
+                <span className="text-xs tracking-widest text-[#809087]">
+                  {s.n}
+                </span>
+                <div>
+                  <h3 className="text-[15px] font-medium">{s.title}</h3>
+                  <p className="mt-2 max-w-[500px] text-[13px] leading-6 text-[#68746c]">
+                    {s.text}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ===================== REVENUE CALCULATOR ===================== */}
       <RevenueCalculator />
 
-      {/* ========================= HOW IT WORKS ========================= */}
-      <section id="how" className="border-y border-white/5 bg-white/[0.015]">
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-          <div className="max-w-2xl">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-              How it works
-            </span>
-            <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-              Live before your next shift.
+      {/* =========================== PRICING =========================== */}
+      <section
+        id="pricing"
+        className="mx-auto max-w-[1240px] px-5 py-20 sm:px-8 sm:py-28 lg:px-12"
+      >
+        <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#63776a]">
+              Straightforward pricing
+            </p>
+            <h2 className="mt-5 text-3xl font-medium tracking-[-0.04em] sm:text-[42px]">
+              Choose the right starting point.
             </h2>
           </div>
-
-          <ol className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-3">
-            {STEPS.map((item) => (
-              <li
-                key={item.step}
-                className="relative rounded-2xl border border-white/8 bg-neutral-950 p-6"
-              >
-                <span className="font-mono text-3xl font-black text-emerald-500/30">
-                  {item.step}
-                </span>
-                <h3 className="mt-3 text-base font-bold text-white">{item.title}</h3>
-                <p className="mt-2 text-xs leading-relaxed text-neutral-400">
-                  {item.body}
-                </p>
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-12 flex flex-wrap items-center gap-3">
-            <a
-              href={wa('Hi Abhishek, I want to set up my gym on Vyroniq.')}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-emerald-400 active:scale-[0.98]"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Set up my gym
-            </a>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/25"
-            >
-              I already have an account
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* =========================== PRICING =========================== */}
-      <section id="pricing" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-        <div className="max-w-2xl">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-            Pricing
-          </span>
-          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-            Priced per gym, not per headache.
-          </h2>
-          <p className="mt-4 text-sm leading-relaxed text-neutral-400">
-            Flat monthly pricing on the plan you pick. No per-member surprises, no
-            setup fee, and no charge for the members your staff add at the desk.
+          <p className="max-w-md text-sm leading-7 text-[#68746c]">
+            Clear monthly plans for independent gyms, with a custom path for
+            multi-location operations. Confirm plan limits and hardware
+            compatibility with our team.
           </p>
         </div>
-
-        <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {PLANS.map((plan) => (
-            <div
+        <div className="mt-12 grid gap-4 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <article
               key={plan.name}
-              className={`relative flex flex-col rounded-2xl border p-7 ${
+              className={`flex flex-col border p-6 sm:p-8 ${
                 plan.featured
-                  ? 'border-emerald-500/40 bg-emerald-500/[0.06]'
-                  : 'border-white/8 bg-neutral-950'
+                  ? 'border-[#294537] bg-[#243b30] text-white'
+                  : 'border-[#dfe4dd] bg-white/50 text-[#17221f]'
               }`}
             >
-              {plan.featured && (
-                <span className="absolute -top-3 left-7 rounded-full bg-emerald-500 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black">
-                  Most popular
-                </span>
-              )}
-
-              <h3 className="text-lg font-black tracking-tight text-white">
-                {plan.name}
-              </h3>
-              <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">
-                {plan.tagline}
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-lg font-medium tracking-tight">
+                  {plan.name}
+                </h3>
+                {plan.featured && (
+                  <span className="border border-white/25 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#d5e0d6]">
+                    Popular
+                  </span>
+                )}
+              </div>
+              <p
+                className={`mt-3 min-h-10 text-[13px] leading-6 ${
+                  plan.featured ? 'text-white/65' : 'text-[#6d7870]'
+                }`}
+              >
+                {plan.desc}
               </p>
-
-              <p className="mt-6 flex items-baseline gap-1.5">
-                <span className="font-mono text-3xl font-black text-white">
+              <div className="mt-7 flex items-baseline gap-2">
+                <span className="text-3xl font-medium tracking-[-0.04em]">
                   {plan.price}
                 </span>
-                {plan.price !== 'Custom' && (
-                  <span className="font-mono text-xs text-neutral-500">/month</span>
+                {plan.suffix && (
+                  <span
+                    className={`text-xs ${
+                      plan.featured ? 'text-white/60' : 'text-[#77827a]'
+                    }`}
+                  >
+                    {plan.suffix}
+                  </span>
                 )}
-              </p>
-
-              <ul className="mt-6 flex-1 space-y-2.5">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5">
-                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                    <span className="text-xs leading-relaxed text-neutral-300">
-                      {feature}
+              </div>
+              <div
+                className={`my-7 h-px ${
+                  plan.featured ? 'bg-white/20' : 'bg-[#dfe4dd]'
+                }`}
+              />
+              <ul className="flex-1 space-y-3">
+                {plan.items.map((item) => (
+                  <li key={item} className="flex gap-3 text-[13px]">
+                    <Check
+                      size={15}
+                      className={`mt-0.5 shrink-0 ${
+                        plan.featured ? 'text-[#b6cdbb]' : 'text-[#5d7a64]'
+                      }`}
+                    />
+                    <span
+                      className={
+                        plan.featured ? 'text-white/85' : 'text-[#536057]'
+                      }
+                    >
+                      {item}
                     </span>
                   </li>
                 ))}
               </ul>
-
               <a
                 href={wa(plan.message)}
                 target="_blank"
                 rel="noreferrer"
-                className={`mt-7 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition active:scale-[0.98] ${
+                className={`mt-9 inline-flex min-h-12 items-center justify-between gap-3 px-4 text-sm font-medium transition ${
                   plan.featured
-                    ? 'bg-emerald-500 text-black hover:bg-emerald-400'
-                    : 'border border-white/12 text-white hover:border-white/25'
+                    ? 'bg-[#f3f5f1] text-[#243b30] hover:bg-white'
+                    : 'border border-[#cfd8cf] text-[#243b30] hover:border-[#829586]'
                 }`}
               >
-                {plan.cta}
-                <ArrowRight className="h-4 w-4" />
+                Discuss this plan <ArrowRight size={15} />
               </a>
-            </div>
+            </article>
           ))}
         </div>
-
-        <p className="mt-8 text-center text-xs text-neutral-500">
-          Need a side-by-side breakdown?{' '}
-          <Link href="/pricing" className="text-emerald-400 underline-offset-4 hover:underline">
-            See the full comparison
-          </Link>
-          .
+        <p className="mt-5 text-[11px] leading-5 text-[#7a857d]">
+          Pricing and inclusions are subject to confirmation. Hardware, messaging
+          and payment-provider charges may vary by setup.
         </p>
       </section>
 
-      {/* ============================= FAQ ============================= */}
-      <section id="faq" className="border-t border-white/5 bg-white/[0.015]">
-        <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6 sm:py-28">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-            FAQ
-          </span>
-          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-            Questions we get on the call.
-          </h2>
-
-          <div className="mt-10 divide-y divide-white/8 border-y border-white/8">
-            {FAQS.map((item) => (
-              <details key={item.q} className="group py-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-white [&::-webkit-details-marker]:hidden">
-                  {item.q}
-                  <span className="font-mono text-lg text-emerald-400 transition group-open:rotate-45">
-                    +
-                  </span>
-                </summary>
-                <p className="mt-3 pr-8 text-xs leading-relaxed text-neutral-400">
-                  {item.a}
-                </p>
-              </details>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ========================= CTA + FOOTER ========================= */}
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 bottom-[-10rem] h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[120px]"
-        />
-        <div className="relative mx-auto max-w-6xl px-4 py-20 text-center sm:px-6 sm:py-24">
-          <h2 className="mx-auto max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">
-            Your front desk deserves better than a register.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-neutral-400">
-            Message us and we will set up your gym, import your members and hand over
-            the owner login — usually the same day.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href={wa('Hi Abhishek, I am ready to onboard my gym on Vyroniq.')}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-3.5 text-sm font-bold text-black transition hover:bg-emerald-400 active:scale-[0.98] sm:w-auto"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Chat on WhatsApp
-            </a>
-            <a
-              href={`tel:+91${WHATSAPP}`}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white/25 sm:w-auto"
-            >
-              Call +91 {WHATSAPP}
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-white/5">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 px-4 py-12 sm:px-6 md:flex-row md:items-center">
+      {/* ========================= CTA BAND ========================= */}
+      <section className="border-y border-[#dfe4dd] bg-[#eef1ec]">
+        <div className="mx-auto grid max-w-[1240px] gap-10 px-5 py-16 sm:px-8 sm:py-20 md:grid-cols-[1fr_auto] md:items-center lg:px-12">
           <div>
-            <Link href="/" className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-black">
-                <Dumbbell className="h-3.5 w-3.5" />
-              </span>
-              <span className="font-mono text-xs font-black uppercase tracking-[0.2em]">
-                Vyroniq
-              </span>
-            </Link>
-            <p className="mt-3 max-w-xs text-xs leading-relaxed text-neutral-500">
-              Gym OS for Indian gyms — access control, memberships, retail and
-              analytics in one console.
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#63776a]">
+              See it in context
+            </p>
+            <h2 className="mt-4 max-w-2xl text-3xl font-medium leading-tight tracking-[-0.04em] sm:text-[40px]">
+              A better run gym starts with a better system.
+            </h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-[#68746c]">
+              Walk through your current setup with us and see where Vyroniq can
+              simplify the day-to-day.
             </p>
           </div>
+          <a
+            href={wa('Hi, I would like to schedule a Vyroniq walkthrough for my gym.')}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-12 items-center justify-center gap-3 bg-[#243b30] px-6 text-sm font-medium text-white transition hover:bg-[#182a21]"
+          >
+            Book a walkthrough <ArrowRight size={16} />
+          </a>
+        </div>
+      </section>
 
-          <nav className="flex flex-wrap gap-x-6 gap-y-3 text-xs text-neutral-400">
-            <a href="#features" className="transition hover:text-white">Platform</a>
-            <Link href="/pricing" className="transition hover:text-white">Pricing</Link>
-            <Link href="/login" className="transition hover:text-white">Sign in</Link>
-            <a
-              href={`tel:+91${WHATSAPP}`}
-              className="transition hover:text-white"
-            >
-              Support
-            </a>
-          </nav>
-
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-neutral-600">
-            © {new Date().getFullYear()} Vyroniq
+      {/* ============================ FAQ ============================ */}
+      <section
+        id="faq"
+        className="mx-auto max-w-[920px] px-5 py-20 sm:px-8 sm:py-28"
+      >
+        <div className="text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#63776a]">
+            FAQs
           </p>
+          <h2 className="mt-4 text-3xl font-medium tracking-[-0.04em] sm:text-[40px]">
+            Good questions. Clear answers.
+          </h2>
+        </div>
+        <div className="mt-10 border-t border-[#dfe4dd]">
+          {faqs.map((item) => (
+            <details
+              key={item.q}
+              className="group border-b border-[#dfe4dd] py-5"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-5 text-sm font-medium marker:content-none [&::-webkit-details-marker]:hidden">
+                {item.q}
+                <ChevronDown
+                  size={16}
+                  className="shrink-0 text-[#718579] transition-transform group-open:rotate-180"
+                />
+              </summary>
+              <p className="max-w-[740px] pt-4 text-[13px] leading-6 text-[#68746c]">
+                {item.a}
+              </p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* =========================== FOOTER =========================== */}
+      <footer className="bg-[#17241e] text-white">
+        <div className="mx-auto max-w-[1240px] px-5 sm:px-8 lg:px-12">
+          <div className="grid gap-10 py-12 md:grid-cols-[1fr_auto] md:items-start">
+            <div>
+              <Wordmark light />
+              <p className="mt-5 max-w-sm text-[13px] leading-6 text-white/55">
+                A connected operating platform for gym memberships, access,
+                attendance and day-to-day business.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-xs text-white/65">
+              <a href="#platform" className="hover:text-white">
+                Platform
+              </a>
+              <a href="#pricing" className="hover:text-white">
+                Pricing
+              </a>
+              <Link href="/pricing" className="hover:text-white">
+                Plan comparison
+              </Link>
+              <Link href="/login" className="hover:text-white">
+                Sign in
+              </Link>
+              <a href={`tel:+91${WHATSAPP}`} className="hover:text-white">
+                Contact support
+              </a>
+              <a href={APK_URL} download className="hover:text-white">
+                Android app
+              </a>
+              <a
+                href={wa('Hi, I have a question about Vyroniq.')}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-white"
+              >
+                WhatsApp
+              </a>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-white/15 py-5 text-[10px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
+            <span>© {new Date().getFullYear()} Vyroniq. All rights reserved.</span>
+            <span>Built for the people who run the floor.</span>
+          </div>
         </div>
       </footer>
-
     </main>
   );
 }
