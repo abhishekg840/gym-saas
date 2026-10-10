@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { isUuid, readTenantCookie } from '@/lib/session';
 import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
 import { DEVICE_TYPES, type HardwareDevice, type HardwareDeviceType } from '@/lib/hardware';
+import { resolveGrants } from '@/lib/entitlements';
+import { deny } from '@/lib/entitlements-server';
 
 /**
  * /api/hardware/devices — the owner's terminal registry (Module 2.3.2).
@@ -27,6 +29,19 @@ function resolveTenant(candidates: Array<unknown>, request: Request): string | n
   return readTenantCookie(request);
 }
 
+
+/** The terminal registry lives inside the console, so a non-super-admin never
+ *  enumerates hardware. The super-admin's own read is scoped through the RPC. */
+async function superAdminOnly(tenantId: string): Promise<Response | null> {
+  const grants = await resolveGrants(tenantId);
+  return deny(grants, () => {
+    return NextResponse.json(
+      { ok: false, error: 'Only the super-admin may manage hardware terminals.' },
+      { status: 403 }
+    );
+  });
+}
+
 export async function GET(request: Request) {
   const tenantId = resolveTenant([new URL(request.url).searchParams.get('tenant_id')], request);
   if (!tenantId) {
@@ -35,6 +50,9 @@ export async function GET(request: Request) {
       403
     );
   }
+
+  const rejected = await superAdminOnly(tenantId);
+  if (rejected) return rejected;
 
   const { data, error } = await supabase.rpc('fn_hardware_list', { p_tenant_id: tenantId });
   if (error) return databaseError(error, 'Could not load the terminal list.');

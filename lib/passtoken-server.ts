@@ -6,6 +6,11 @@ import {
   type PassTokenClaims,
 } from '@/lib/passtoken';
 
+// Re-export the claims type so a route handler can import the token helper and
+// its payload type from the one server-only module (it never touches node:crypto
+// types it shouldn't, and keeps the client-safe passtoken import out of handlers).
+export type { PassTokenClaims };
+
 /**
  * Server-only half of the gate-pass token (P0-2): the HMAC-SHA256 signature.
  *

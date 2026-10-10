@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { isUuid, readTenantCookie } from '@/lib/session';
 import { isPassWindowCurrent } from '@/lib/passtoken';
 import { verifyPassToken } from '@/lib/passtoken-server';
+import { resolveGrants } from '@/lib/entitlements';
+import { deny } from '@/lib/entitlements-server';
 import { databaseError, readJsonBody } from '@/lib/sqlstate';
 
 /**
@@ -32,6 +34,18 @@ const LEGACY_PASS_MESSAGE =
 /** Refused bad signature: someone edited or invented this token. */
 const FORGED_PASS_MESSAGE =
   'This pass is not valid. Ask the member to reopen their pass in the app.';
+
+/** The check-out path is inside the console, so a non-super-admin cannot walk
+ *  an owner's exit. Reject before anything else. */
+async function superAdminOnly(tenantId: string): Promise<Response | null> {
+  const grants = await resolveGrants(tenantId);
+  return deny(grants, () => {
+    return NextResponse.json(
+      { ok: false, error: 'Only the super-admin may record check-outs.' },
+      { status: 403 }
+    );
+  });
+}
 
 export async function POST(request: Request) {
   const parsed = await readJsonBody(request);

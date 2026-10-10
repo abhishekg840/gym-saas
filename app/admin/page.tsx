@@ -59,6 +59,8 @@ import RfidLinkModal from '@/components/rfid-link-modal';
 import AttendanceChart from '@/components/attendance-chart';
 import { clearSession, readSession } from '@/lib/session';
 import { waLink, waMessages } from '@/lib/whatsapp';
+import { useTenantGrants } from '@/lib/use-tenant-grants';
+import SubscriptionLock from '@/components/subscription-lock';
 
 interface Plan {
   id: string;
@@ -307,6 +309,13 @@ export default function GymDashboard() {
   // Live occupancy behind the "Attendance Live" panel — the same useLiveCrowd
   // hook the old card used, so the data path is unchanged, only its shape.
   const crowd = useLiveCrowd(session?.tenantId ?? null);
+
+  // Phase 23 suspension gate. A super admin has no tenant scope, so this is a
+  // no-op for them; for an owner/receptionist whose gym is suspended or expired
+  // it swaps the whole console for the lock screen instead of rendering a UI
+  // whose every action the server would refuse with a 403. Fail-open by design:
+  // a transient read never locks a paying gym out (see use-tenant-grants.ts).
+  const tenantGrants = useTenantGrants();
 
   useEffect(() => {
     const parsed = readSession();
@@ -1102,6 +1111,13 @@ export default function GymDashboard() {
         )}
       </div>
     );
+  }
+
+  // Phase 23: a suspended / expired gym sees the lock screen, not a console
+  // whose every button would 403. Gated on `session` too so a still-hydrating
+  // first paint (no session yet) never flashes the wall for a signed-in owner.
+  if (session && tenantGrants.locked) {
+    return <SubscriptionLock reason={tenantGrants.reasonLabel} />;
   }
 
   return (

@@ -7,12 +7,17 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  *
  * The door endpoint for ESP32 / Raspberry Pi / fingerprint & RFID readers. There
  * is no session and no cookie here: the machine authenticates with the api key
- * printed once at registration, and the gym is derived from the device row, so a
- * reader can only ever punch into its own gym.
+ * printed once at registration, and the gym is derived from the device row, so
+ * a reader can only ever punch into its own gym.
+ *
+ * On success the route ALSO records the paired entry/exit session via
+ * fn_gate_auto_punch so the live floor count, the member's workout duration
+ * and the attendance log all move together. The auto-mode label is surfaced
+ * in `verdict.direction`.
  *
  * Request:  { apiKey: string, biometricId?: number, rfidCard?: string }
- *           (snake_case api_key / biometric_id / rfid_card are accepted too,
- *            because firmware in the field is rarely consistent)
+ *           (snake_case aliases are accepted too, because firmware in the
+ *            field is rarely consistent)
  *
  * Granted:  { unlock: true,  code: "granted", memberName, reason, ... }
  * Blocked:  { unlock: false, code: "blocked_frozen" | "blocked_expired", reason }
@@ -86,5 +91,7 @@ export async function POST(request: Request) {
     device_id: verdict.device_id ?? null,
     attendance_id: verdict.attendance_id ?? null,
     tenant_id: verdict.tenant_id ?? null,
+    direction: verdict.direction ?? null,
+    session_id: verdict.session_id ?? null,
   });
 }
