@@ -244,18 +244,28 @@ export default function GymScanner() {
             </h2>
             <p className="text-sm font-semibold opacity-90 mb-4">{result.reason}</p>
 
-            <div className="bg-black/40 border border-white/10 rounded-2xl p-4 w-full text-left space-y-2 mb-6 text-sm">
+            <div
+              className={`bg-black/40 border rounded-2xl p-4 w-full text-left space-y-2 mb-6 text-sm ${
+                result.allowed ? 'border-emerald-500/20' : 'border-rose-500/20'
+              }`}
+            >
               <div className="flex justify-between">
-                <span className="opacity-70">Member:</span>
-                <span className="font-bold text-ink">{result.name}</span>
+                <span className={result.allowed ? 'text-emerald-200/70' : 'text-rose-200/70'}>
+                  Member:
+                </span>
+                <span className="font-semibold text-white">{result.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="opacity-70">Phone:</span>
-                <span className="font-mono text-ink">{result.phone}</span>
+                <span className={result.allowed ? 'text-emerald-200/70' : 'text-rose-200/70'}>
+                  Phone:
+                </span>
+                <span className="font-mono font-semibold text-white">{result.phone}</span>
               </div>
               <div className="flex justify-between">
-                <span className="opacity-70">Expiry Date:</span>
-                <span className="font-semibold text-ink">{result.expiry}</span>
+                <span className={result.allowed ? 'text-emerald-200/70' : 'text-rose-200/70'}>
+                  Expiry Date:
+                </span>
+                <span className="font-semibold text-white">{result.expiry}</span>
               </div>
             </div>
 
