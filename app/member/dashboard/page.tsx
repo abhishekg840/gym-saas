@@ -20,6 +20,7 @@ import {
   Plus,
   Settings,
   ShieldCheck,
+  ShieldAlert,
   RefreshCw,
   ShoppingBag,
   Store,
@@ -241,6 +242,13 @@ export default function MemberDashboard() {
   const [insideNow, setInsideNow] = useState(0);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrSeconds, setQrSeconds] = useState<number | null>(null);
+  /**
+   * True when the last mint attempt returned no token. A valid-but-unminted
+   * pass (server has no AUTH_SECRET yet, or a dropped request) must not be
+   * mistaken for a dead membership — the card says "getting ready" and offers a
+   * retry instead of sending the member to the front desk.
+   */
+  const [qrError, setQrError] = useState(false);
 
   /** The 30-second window the last minted token belongs to. */
   const lastWindow = useRef(-1);
@@ -516,6 +524,7 @@ export default function MemberDashboard() {
 
       if (passLock) {
         setQrToken(null);
+        setQrError(false);
         return;
       }
 
@@ -525,6 +534,9 @@ export default function MemberDashboard() {
         // A newer window may have started while the mint was in flight.
         if (lastWindow.current !== windowIndex) return;
         setQrToken(token);
+        // Remember the failure so the card can offer a retry instead of
+        // implying the membership itself is the problem.
+        setQrError(token === null);
       });
     };
 
@@ -536,6 +548,16 @@ export default function MemberDashboard() {
     };
   }, [memberId, memberPhone, passLock]);
 
+  /**
+   * Manual retry: force the NEXT interval tick to mint immediately rather than
+   * waiting out the rest of the 30-second window. Resetting lastWindow to -1
+   * makes the very next tick take the mint branch again.
+   */
+  function retryPass() {
+    lastWindow.current = -1;
+    setQrError(false);
+  }
+
   function signOut() {
     // Was `clearSession(); router.replace('/login')` — which is exactly what
     // caused the logout loop: it removed the gym session but left Supabase's
@@ -546,8 +568,6 @@ export default function MemberDashboard() {
 
   const displayName = pass?.full_name ?? data?.member?.full_name ?? session?.name ?? 'Member';
   const handle = pass?.username ?? data?.member?.username ?? session?.username ?? null;
-
-  const locked = qrToken === null;
 
   /**
    * Heaviest bench the member has ever logged, for the locked-badges ring. The
@@ -684,15 +704,16 @@ export default function MemberDashboard() {
             pass={pass}
             data={data}
             lock={passLock}
-            locked={locked}
             qrToken={qrToken}
             qrSeconds={qrSeconds}
+            qrError={qrError}
             insideNow={insideNow}
             displayName={displayName}
             handle={handle}
             hardware={hardware}
             now={greetingAt}
             onRefresh={refresh}
+            onRetry={retryPass}
           />
         )}
         {tab === 'health' && data && (
@@ -846,14 +867,31 @@ export default function MemberDashboard() {
 // Tab 1 — Home & Gate Pass
 // =============================================================================
 
+/** One paired floor visit from fn_member_sessions (Phase 22). */
+interface FloorSession {
+  session_id: string | null;
+  date: string | null;
+  checkin_at: string;
+  checkout_at: string | null;
+  duration_minutes: number | null;
+  /** True while the member is still on the floor (no OUT punch yet). */
+  open: boolean;
+}
+
+/** "6:42 PM" — the clock half of a session row. */
+function fmtClock(value: string): string {
+  return new Date(value).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+}
+
 interface HomeTabProps {
   pass: PassMember | null;
   data: CompanionData | null;
   /** Decided once in the parent so the QR and the notice cannot disagree. */
   lock: PassLock | null;
-  locked: boolean;
   qrToken: string | null;
   qrSeconds: number | null;
+  /** True once a mint attempt came back empty (vs. the first load in flight). */
+  qrError: boolean;
   insideNow: number;
   displayName: string;
   handle: string | null;
@@ -861,21 +899,24 @@ interface HomeTabProps {
   hardware: HardwareIdentity | null;
   now: Date;
   onRefresh: () => Promise<void>;
+  /** Re-attempts an immediate mint when the rotating pass failed to load. */
+  onRetry: () => void;
 }
 
 function HomeTab({
   pass,
   data,
   lock,
-  locked,
   qrToken,
   qrSeconds,
+  qrError,
   insideNow,
   displayName,
   handle,
   hardware,
   now,
   onRefresh,
+  onRetry,
 }: HomeTabProps) {
   // Phase 11: the gym's real weekly schedule (IST) instead of a hardcoded
   // 05:00-23:00 that was wrong for most gyms.
@@ -885,6 +926,27 @@ function HomeTab({
   const streak = data?.streak ?? EMPTY_STREAK;
   const flame = streakHeadline(streak);
   const announcements = data?.announcements.slice(0, 3) ?? [];
+
+  // Phase 22: paired floor sessions (entry → exit + duration, stamped by the
+  // exit gate). Loaded here rather than inside the companion bundle so a slow
+  // ledger can never delay the rotating pass, and only the Home tab reads it.
+  const memberId = data?.member?.id ?? null;
+  const [sessions, setSessions] = useState<FloorSession[]>([]);
+  useEffect(() => {
+    if (!memberId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data: rows } = await supabase.rpc('fn_member_sessions', {
+        p_member_id: memberId,
+        p_limit: 8,
+      });
+      if (cancelled) return;
+      setSessions(Array.isArray(rows) ? (rows as FloorSession[]) : []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberId]);
 
   return (
     <div className="space-y-4">
@@ -937,36 +999,59 @@ function HomeTab({
           </div>
           <span
             className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
-              locked
+              lock
                 ? 'border-slate-200 bg-slate-100 text-slate-500'
                 : 'border-emerald-200 bg-emerald-50 text-emerald-700'
             }`}
           >
-            {locked ? 'Pass Unavailable' : 'Active Member'}
+            {lock ? 'Pass Unavailable' : 'Active Member'}
           </span>
         </div>
 
         <div className="flex flex-col items-center">
-          {locked ? (
-            <div className={`w-full rounded-2xl border p-5 text-center ${lock?.tone ?? ''}`}>
+          {lock ? (
+            // A genuine membership problem (expired / inactive / frozen). The
+            // ONLY reason the QR is hidden, decided by `lock` — never by whether
+            // the rotating token happened to load yet.
+            <div className={`w-full rounded-2xl border p-5 text-center ${lock.tone}`}>
               <Bell className="mx-auto mb-2 h-9 w-9 opacity-60" />
-              <h3 className="text-sm font-extrabold tracking-tight">
-                {lock?.title ?? 'Pass Unavailable'}
-              </h3>
-              <p className="mt-1.5 text-xs leading-relaxed opacity-90">
-                {lock?.message ?? 'Ask the front desk to check your membership.'}
-              </p>
+              <h3 className="text-sm font-extrabold tracking-tight">{lock.title}</h3>
+              <p className="mt-1.5 text-xs leading-relaxed opacity-90">{lock.message}</p>
             </div>
-          ) : (
+          ) : qrToken ? (
             <>
               <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                <QRCodeSVG value={qrToken ?? ''} size={188} level="M" />
+                <QRCodeSVG value={qrToken} size={188} level="M" />
               </div>
               <p className="mt-3 text-[11px] font-semibold text-slate-500">
                 Refreshes in{' '}
                 <span className="tabular-nums text-teal-600">{qrSeconds ?? 0}s</span>
               </p>
             </>
+          ) : (
+            // Membership is valid but the signed pass has not arrived yet — the
+            // mint is still in flight, or it failed (e.g. the server has no
+            // AUTH_SECRET yet). This is NOT a membership problem, so it must
+            // never read "ask the front desk". Offer a retry instead.
+            <div className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center text-amber-800">
+              <ShieldAlert className="mx-auto mb-2 h-9 w-9 opacity-70" />
+              <h3 className="text-sm font-extrabold tracking-tight">
+                {qrError ? "Couldn't load your pass yet" : 'Getting your pass ready'}
+              </h3>
+              <p className="mt-1.5 text-xs leading-relaxed opacity-90">
+                {qrError
+                  ? "Your membership is active — the pass just didn't load. Tap retry to try again."
+                  : "Your membership is active. We're securing this pass — hang on a moment."}
+              </p>
+              <button
+                type="button"
+                onClick={onRetry}
+                className={`mt-3 px-4 py-2 text-xs ${PRIMARY}`}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Try again
+              </button>
+            </div>
           )}
         </div>
 
@@ -1018,6 +1103,58 @@ function HomeTab({
               {HARDWARE_IDENTITY_HINT}
             </p>
           </div>
+        )}
+      </section>
+
+      {/* Floor sessions (Phase 22): paired entry → exit with the duration the
+          exit gate stamped. An open row means the member is still inside. */}
+      <section className={`${CARD} p-5`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold tracking-tight">Recent Sessions</h3>
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <Timer className="h-3 w-3" /> Entry → Exit
+          </span>
+        </div>
+
+        {sessions.length === 0 ? (
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            Sessions appear here after your first scan-out — the exit stamp records how long you
+            were on the floor.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {sessions.map((session) => (
+              <li
+                key={session.session_id ?? `open-${session.checkin_at}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800">
+                    {new Date(session.date ?? session.checkin_at).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                    <span className="ml-2 font-medium text-slate-500">
+                      {fmtClock(session.checkin_at)}
+                      {session.checkout_at ? ` → ${fmtClock(session.checkout_at)}` : ''}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                    {session.open ? 'Still on the floor' : 'Exited'}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-lg border px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+                    session.open
+                      ? 'border-teal-200 bg-teal-50 text-teal-700'
+                      : 'border-slate-200 bg-white text-slate-700'
+                  }`}
+                >
+                  {session.open ? 'On floor' : `${session.duration_minutes ?? 0} min`}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

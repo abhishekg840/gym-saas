@@ -139,6 +139,13 @@ const INTRODUCED_BY: Record<string, string> = {
   fn_challenge_board: '0009_phase9_gamification_retention.sql',
   fn_member_streak: '0009_phase9_gamification_retention.sql',
   fn_member_stats: '0009_phase9_gamification_retention.sql',
+
+  // Phase 22 — dual-gate checkout/pairing and the Cashfree platform billing RPCs.
+  fn_gate_checkout: '0022_phase22_dual_gate_billing.sql',
+  fn_member_sessions: '0022_phase22_dual_gate_billing.sql',
+  fn_platform_record_order: '0022_phase22_dual_gate_billing.sql',
+  fn_platform_activate_subscription: '0022_phase22_dual_gate_billing.sql',
+  fn_platform_billing_status: '0022_phase22_dual_gate_billing.sql',
 };
 
 /**

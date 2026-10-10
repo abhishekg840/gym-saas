@@ -1333,6 +1333,16 @@ export default function GymDashboard() {
                     <Tag className="h-3.5 w-3.5 text-muted" />
                     Packages
                   </Link>
+                  {currentRole === 'owner' && (
+                    <Link
+                      href="/admin/billing"
+                      title="Vyroniq platform subscription and invoices"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
+                    >
+                      <CreditCard className="h-3.5 w-3.5 text-muted" />
+                      Billing
+                    </Link>
+                  )}
                   {(currentRole === 'owner' ||
                     session?.role === 'super_admin') && (
                     <Link
@@ -2746,6 +2756,16 @@ export default function GymDashboard() {
                 <QrCode className="h-3.5 w-3.5 text-muted" />
                 Scanner
               </Link>
+              {currentRole === 'owner' && (
+                <Link
+                  href="/admin/billing"
+                  onClick={() => setOpenDropdown(null)}
+                  className={MENU_ITEM}
+                >
+                  <CreditCard className="h-3.5 w-3.5 text-muted" />
+                  Billing
+                </Link>
+              )}
               <Link
                 href="/admin/settings"
                 onClick={() => setOpenDropdown(null)}
