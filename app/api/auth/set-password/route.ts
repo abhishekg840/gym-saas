@@ -4,39 +4,21 @@ import { isUuid } from '@/lib/session';
 import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
 
 /**
- * POST /api/auth/set-password — the working replacement for the dead end.
+ * POST /api/auth/set-password — writes a credential through the Phase 13 SQL
+ * functions, where the bcrypt hash lives.
  *
  * Body: { member_id?, user_id?, role, current_password?, new_password, confirm }
  *
- * WHY THIS EXISTS
- * ---------------
- * The old path (app/api/member/account, action: 'password_setup') called
- * `supabase.auth.updateUser({ password })`. That function REQUIRES a Supabase
- * Auth session, and a desk-enrolled member has no auth.users row at all — so it
- * always failed, and the route answered with a hardcoded 409:
+ * The old path called supabase.auth.updateUser({ password }), which requires a
+ * Supabase Auth session a desk-enrolled member does not have — a dead end that
+ * trapped members on a blocking screen. This endpoint forwards current_password
+ * to Postgres instead, so no auth session or service_role key is needed.
  *
- *   "This account signs in with the number your gym gave you, so there is no
- *    password to set here."
- *
- * That was a dead end by design, and it is what trapped members on the blocking
- * screen. This endpoint writes the credential through the Phase 13 SQL functions
- * instead, which is where the hash actually lives.
- *
- * AUTHORISATION
- * -------------
- * There is no server-verifiable session in this architecture (the gym session is
- * localStorage), so this endpoint does NOT trust the ids in the body. It forwards
- * `current_password` to Postgres, and:
- *
- *   - a member who ALREADY has a password must present it (fn_member_set_password
- *     rejects an empty one), so a leaked member_id cannot take over an account;
- *   - a member with NO password may set their first one, because there is nothing
- *     to prove. That is safe only because such an account cannot sign in at all
- *     until a password exists (fn_member_verify_password returns NULL).
- *
- * So the worst case for a caller who knows only a member_id is: they set the
- * FIRST password of an account that was previously unusable. It cannot modify an
- * existing credential.
+ * It does not trust the ids in the body: a member who already has a password
+ * must present it (fn_member_set_password rejects an empty one), so a leaked
+ * member_id cannot take over an account. A member with no password may set their
+ * first one — safe because such an account cannot sign in until a password
+ * exists (fn_member_verify_password returns NULL).
  */
 
 const MIN_PASSWORD = 8;

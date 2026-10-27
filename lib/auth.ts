@@ -1,31 +1,11 @@
 /**
- * Google OAuth on the native app (Module 7).
+ * Google OAuth return-trip handler for the native app (Module 7).
  *
- * THE LOOP THIS FIXES
- * -------------------
- * "Continue with Google" called supabase.auth.signInWithOAuth, which sent the
- * user out to Chrome. When the provider redirected back, Android had no intent
- * filter matching the URL, so Chrome kept the result and the app never learned
- * about it. The user was left staring at a sign-in screen they had already
- * passed — the classic "opens Chrome but doesn't resume" loop.
- *
- * Three things have to be true for the return trip to work, and this module owns
- * all three:
- *
- *   1. Android must hand the URL back. That is the manifest's intent-filter
- *      (autoVerify App Link + the vyroniq://auth custom scheme) — outside this
- *      file, but the reason the event arrives at all.
- *   2. The tokens in the URL must become a Supabase session. Supabase's
- *      `detectSessionInUrl` only scans the INITIAL page load; a URL that arrives
- *      later, through appUrlOpen, is invisible to it. So we parse and call
- *      setSession ourselves.
- *   3. The app must then route as if signed in. The gym session is separate
- *      from the Supabase one, so it is rebuilt by POSTing the (now verified)
- *      access token to /api/auth/google, exactly as the web flow does.
- *
- * The browser cannot be "closed" from here — Android owns the activity stack.
- * What we CAN do is stop showing the login screen, which is what the user
- * actually perceives as the fix.
+ * Parses an OAuth URL (implicit-grant hash or PKCE code) returned by the
+ * provider, upgrades it to a Supabase session, then converts it into a gym
+ * session via POST /api/auth/google. Used by the Android deep-link handler so
+ * "Continue with Google" resumes inside the app instead of stranding the user
+ * in Chrome.
  */
 
 import { supabase } from '@/lib/supabase';

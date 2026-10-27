@@ -12,28 +12,19 @@ import {
 export type { PassTokenClaims };
 
 /**
- * Server-only half of the gate-pass token (P0-2): the HMAC-SHA256 signature.
+ * Server-only half of the gate-pass token: the HMAC-SHA256 signature.
  *
- * The claims are minted here, never in the browser. A signing key shipped in a
- * JS bundle is not a key — anyone can read it from dev-tools and forge a pass
- * for any member id. So the member app POSTs its claims to
- * /api/member/pass/mint, which signs them with a secret the client never sees,
- * and /api/scan/verify checks that signature BEFORE a single claim inside the
- * token is believed.
+ * Claims are minted here, never in the browser, so a signing key never ships
+ * to the client. The member app POSTs its claims to /api/member/pass/mint,
+ * which signs them with a secret the client never sees, and /api/scan/verify
+ * checks that signature before any claim inside the token is believed.
  *
- * Key resolution (first hit wins):
- *   1. AUTH_SECRET           — the production secret; set it on the project.
- *   2. SUPABASE_JWT_SECRET   — a server-held fallback so a deployment that
- *                              already keeps Supabase's secret env var signed
- *                              without extra wiring.
- *   3. a fixed constant      — DEVELOPMENT ONLY, so `next dev` works with zero
- *                              configuration.
- *   4. null                  — production with no secret: minting returns 503
- *                              and verification refuses everything. Failing
- *                              closed beats minting forgeable passes.
+ * Key resolution (first hit wins): AUTH_SECRET, then SUPABASE_JWT_SECRET, then
+ * a fixed constant in development only. Production with no key returns null,
+ * so minting and verification fail closed instead of issuing forgeable passes.
  *
- * This module imports node:crypto, so it must never be pulled into a client
- * component — keep signing/verification inside route handlers.
+ * This module imports node:crypto and must only be imported by route handlers,
+ * never by client components.
  */
 
 const DEV_ONLY_KEY = 'vyroniq-dev-pass-key-do-not-use-in-production';

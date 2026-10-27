@@ -2,22 +2,12 @@
  * The rotating gate-pass token, shared by the member portal (which asks the
  * server to mint it) and the kiosk route (which validates it).
  *
- * SIGNED FORMAT (P0-2)
- * --------------------
- * A live token is `<base64 claims> "." <base64url HMAC-SHA256>`. The claims
- * half is exactly what encodePassToken() produces; the signature half is
- * appended server-side by /api/member/pass/mint and checked by
- * /api/scan/verify through lib/passtoken-server.ts BEFORE any claim is
- * believed. That file owns node:crypto, so this module stays isomorphic and
- * safe to import from client components — but nothing in the browser can
- * produce a token the gate will accept anymore.
- *
- * Why the geofence proof rides inside the token: hiding the QR code is only a UI
- * affordance — a screenshot, a dev-tools console or a stale tab can still produce
- * the string. Binding the phone's fix to the credential means the gate re-runs the
- * fence decision on the server, so "this pass was unlocked while the phone stood
- * inside the gym" is a property of the token rather than of the screen that drew
- * it. The 30-second window index is what stops yesterday's screenshot working.
+ * Format: `<base64 claims>.<base64url HMAC-SHA256>`. The claims half is
+ * produced here; the signature is appended and verified server-side in
+ * lib/passtoken-server.ts, so this module stays isomorphic and safe to import
+ * from client components. Nothing in the browser can produce a token the gate
+ * will accept. An optional geofence proof binds the pass to the phone's fix at
+ * mint time, and the 30-second window index stops stale screenshots from reuse.
  */
 
 /** One QR frame. Mirrors the countdown the member app draws under the code. */

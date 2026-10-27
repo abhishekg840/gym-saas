@@ -53,3 +53,10 @@ android/app/*.jks
 android/app/*.keystore
 *.jks
 *.keystore
+# Build, logs & temporary scripts
+*.py
+out*.txt
+*.log
+__pycache__/
+phase2-regression/
+

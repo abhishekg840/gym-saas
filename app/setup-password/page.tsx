@@ -15,32 +15,20 @@ import {
 import { readSession, writeSession } from '@/lib/session';
 
 /**
- * /setup-password — Phase 13. The forced credential replacement.
+ * /setup-password — forced credential replacement for accounts still holding a
+ * desk-issued or legacy PIN.
  *
- * WHO LANDS HERE
- * --------------
- * Any account still holding a desk-issued or legacy PIN. /api/auth/login sets
- * requires_password_change, writes a VALID session, and routes here. The person is
- * never locked out — they are signed in, they just have one more step.
- *
- * WHY THIS EXISTS AT ALL
- * ---------------------
- * The previous flow (components/password-gate.tsx) called supabase.auth
- * .updateUser({ password }), which requires a Supabase Auth session. A
- * desk-enrolled member has no auth.users row, so it could never work, and the API
- * answered "there is no password to set here". The member was then stuck on a
- * blocking screen offering an action the system structurally could not perform.
+ * /api/auth/login sets requires_password_change, writes a valid session, and
+ * routes here. The person is never locked out — they are signed in, they just
+ * have one more step.
  *
  * The credential now lives in Postgres as a bcrypt hash. This page calls
  * /api/auth/set-password, which forwards to fn_member_set_password /
- * fn_staff_set_password — no auth session required, no service_role key needed.
+ * fn_staff_set_password — no auth session or service_role key required.
  *
- * SECURITY NOTE ON THE CURRENT-PASSWORD FIELD
- * -------------------------------------------
- * "Prove you know the current password" is enforced in SQL, not here. A caller
- * who knows only this person's identifier cannot silently change a credential
- * that already exists. That is why the field is genuinely required rather than an
- * optional convenience.
+ * "Prove you know the current password" is enforced in SQL, not here: a caller
+ * who knows only an identifier cannot silently change an existing credential,
+ * so the field is genuinely required rather than an optional convenience.
  */
 
 const INPUT =

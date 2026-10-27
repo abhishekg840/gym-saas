@@ -27,23 +27,14 @@ import {
 } from '@/lib/fingerprint-enroll';
 
 /**
- * Register Fingerprint — the live R307/R307S ceremony (Phase 17).
+ * Register Fingerprint — the live R307/R307S ceremony.
  *
- * WHY THIS IS NOT THE RFID MODAL
- * ------------------------------
- * A card tap is one event: arm the reader, the card arrives, done. A fingerprint
- * is a handshake with a machine that has to be told what to do and has to answer
- * — seven distinct states, several seconds each, and two ways to fail (no finger,
- * or two different fingers). None of that fits in "type a number, save it", so
- * this is a separate surface that mirrors the sensor rather than pretending the
- * work is instant.
- *
- * WHAT THE MODAL DOES NOT DO
- * --------------------------
- * It never writes a slot itself. The server reserved the slot when the job was
- * created and binds it when the device reports success; this component only
- * starts the job, watches it, and reports the outcome. That is why closing the
- * modal mid-capture cannot leave a half-enrolled member on the roster.
+ * A fingerprint is a multi-stage handshake with the terminal (several states,
+ * several seconds each), so this is a separate surface from the RFID modal: it
+ * starts the job, watches it, and reports the outcome rather than pretending the
+ * work is instant. The server reserves and binds the slot; this component never
+ * writes a slot itself, so closing mid-capture cannot leave a half-enrolled
+ * member on the roster.
  */
 
 /** How often the desk re-reads the job while a capture is running. */
@@ -145,20 +136,15 @@ export default function FingerprintEnrollModal({
   /**
    * Read the terminals this gym can enrol on and apply the result.
    *
-   * WHY THIS IS NOT `terminals.length === 0`
-   * ----------------------------------------
-   * An empty list and an unreadable list are different facts about the gym, and
-   * the desk acts on them differently: one means "go register a terminal", the
-   * other means "this console could not reach the server, try again". Collapsing
-   * the two is what let a failed read render as a confident claim that no
-   * terminal exists. So `terminals` is only ever written by a SUCCESSFUL read,
-   * and a failed one always lands in `loadError` instead.
+   * `terminals` is only ever written by a successful read: an empty list means
+   * the gym genuinely has no reader yet, while a failed read lands in
+   * `loadError` instead. Collapsing the two lets a failed read render as a
+   * confident claim that no terminal exists.
    *
-   * NOTHING BETWEEN HERE AND THE FETCH MAY SET STATE
-   * ----------------------------------------------
-   * The mount path runs this from inside an effect, and a synchronous update
-   * there is a cascading render. The run id is claimed first (a ref, not state)
-   * so a retry started while this read is in flight still wins on arrival.
+   * Nothing between here and the fetch may set state: the mount path runs this
+   * from inside an effect, and a synchronous update there cascades. The run id
+   * is claimed first (a ref, not state) so a retry started while this read is
+   * in flight still wins on arrival.
    */
   const loadTerminals = useCallback(async () => {
     loadRunRef.current += 1;

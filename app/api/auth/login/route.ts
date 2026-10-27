@@ -3,41 +3,23 @@ import { supabase } from '@/lib/supabase';
 import { isUuid, normalizePhone10, type GymSession } from '@/lib/session';
 
 /**
- * POST /api/auth/login â€” MANDATORY credentials for owners AND members (Phase 13).
+ * POST /api/auth/login — mandatory credentials for owners and members.
  *
  * Body: { identifier: string, password: string }
- *   identifier = a 10-digit mobile number, "@handle", an email address, or a user
- *   id. `password` is REQUIRED: there is no longer a blank-password path for
- *   anyone, which is what closes the phone-number-only bypass.
+ *   identifier = a 10-digit mobile number, "@handle", an email address, or a
+ *   user id. `password` is required: there is no blank-password path, which
+ *   closes the phone-number-only bypass.
  *
- * HOW VERIFICATION WORKS NOW
- * --------------------------
- * Previously this route SELECTED gym_users.pin_code with the anon key and
- * compared the PIN in JavaScript. That was catastrophic twice over: the plaintext
- * PIN travelled to the server (and into any request log), and â€” because
- * gym_users had no RLS and no column restriction â€” anybody could read every
- * owner's PIN directly from PostgREST with the public key. That leak was
- * confirmed live before it was fixed.
+ * Every credential check happens inside Postgres via
+ * fn_staff_verify_password / fn_member_verify_password (pgcrypto bcrypt). The
+ * hash never leaves the database, and this route never sees a plaintext
+ * credential. Credentials live in a `private` schema PostgREST does not serve;
+ * only the SECURITY DEFINER verifiers can reach them.
  *
- * Now every credential check happens INSIDE Postgres via
- * fn_staff_verify_password / fn_member_verify_password, which compare with
- * pgcrypto's bcrypt. The hash never leaves the database, and this route never
- * sees a plaintext credential for anyone.
- *
- * WHERE THE HASH LIVES (Phase 14)
- * ------------------------------
- * Not on the public tables. `public.members` and `public.gym_users` must be
- * readable in full so the browser's `select('*')` queries keep working, and a
- * table that answers `select('*')` cannot hide a column. The credentials
- * therefore live in a `private` schema that PostgREST does not serve, and only
- * the SECURITY DEFINER verifiers can reach them.
- *
- * DUAL ROLE
- * ---------
- * An owner who also holds a membership matches BOTH verifiers. When that happens
- * both are verified BEFORE any choice is offered, and the response carries
- * `portals`. Nothing is revealed until a correct password has been supplied, so
- * the selector is not an account-existence oracle.
+ * An owner who also holds a membership matches both verifiers; both are
+ * verified before any choice is offered, and nothing is revealed until a
+ * correct password is supplied, so the selector is not an account-existence
+ * oracle.
  */
 
 interface StaffRow {
@@ -85,23 +67,11 @@ function looksLikePhone(value: string): boolean {
 }
 
 /**
- * WHY THIS USES THE POSTGREST ERROR CODE, NOT THE MESSAGE TEXT
- * -----------------------------------------------------------
- * The previous version classified a failure as "migration 0013 has not been
- * applied" whenever the error message contained "does not exist". That regex
- * matched a completely different, and far more common, failure:
- *
- *     42883  function crypt(text, text) does not exist
- *
- * which is what every verifier returned on Supabase, because pgcrypto is
- * installed in the `extensions` schema while the functions pinned
- * `search_path = public, pg_temp`. Migration 0013 was applied and working as
- * written; the deployment was fine and the *error message* was misleading. The
- * route then told every user that a migration they had already run was missing,
- * sending the operator to re-apply a file that could not possibly help.
- *
- * Only PostgREST's own PGRST202 / PGRST205 actually mean "this RPC is not in the
- * schema cache". Everything else is a real fault and is surfaced as one.
+ * Classifies a verifier failure by PostgREST error code, not the message text.
+ * Only PGRST202 / PGRST205 mean "this RPC is not in the schema cache";
+ * anything else is a real fault surfaced as one. Basing the check on the
+ * message text used to match pgcrypto's "function crypt does not exist" and
+ * falsely report a missing migration.
  */
 async function verify(
   fn: 'fn_staff_verify_password' | 'fn_member_verify_password',

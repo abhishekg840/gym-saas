@@ -236,30 +236,13 @@ export async function readJsonBody(
 }
 
 /**
- * Device-tolerant body reader, for hardware endpoints.
+ * Device-tolerant body reader for hardware endpoints (ESP32 / Raspberry Pi).
  *
- * WHY THIS EXISTS
- * ---------------
- * `readJsonBody` is right for the browser: it speaks JSON and nothing else. It is
- * wrong for an ESP32 or a Raspberry Pi, because embedded HTTP clients get this
- * wrong in three very common ways:
- *
- *   1. They POST a `Content-Type` of `text/plain` or nothing at all. The body is
- *      perfectly good JSON, but `request.json()` does not look at the content —
- *      it tries to parse and only fails if the bytes are not JSON, so this case
- *      is actually already fine.
- *   2. They post form-encoded (`device_key=x&rfid_card=y`) because that is the
- *      default their HTTP library uses. `request.json()` throws.
- *   3. They post JSON with a trailing newline, a BOM, or a stray leading/trailing
- *      byte. Strict JSON.parse throws on all three.
- *
- * (2) and (3) are what this function fixes. The strategy is to read the body as
- * TEXT once and try the parsers in order of strictness, rather than letting
- * `request.json()` throw and losing the payload — a body is a one-shot stream, so
- * once the parser has consumed it there is nothing left to retry with.
- *
- * Order matters: JSON is tried before form-encoding because a JSON body can
- * legitimately contain an `=` or `&` inside a string value.
+ * Embedded clients POST `text/plain` or no content type, form-encoded bodies,
+ * or JSON with a BOM / trailing bytes that strict JSON.parse rejects. The body
+ * is read as text once and parsers are tried in order of strictness (JSON
+ * before form-encoding, since a JSON body can legitimately contain `=` or `&`),
+ * because a body is a one-shot stream: once consumed there is nothing to retry.
  */
 export async function readDeviceBody(
   request: Request

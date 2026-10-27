@@ -1,20 +1,11 @@
 /**
- * Authentication + enrollment guard used by every surfaced control center and
- * every step that mutates a gym (membership, device, staff, billing).
+ * Edge guard for routes that mutate a gym (membership, device, staff, billing).
  *
- *   - A well-formed session is required (guest presses nothing).
- *   - The session's tenant id MUST be a UUID. Anything else is a boundary leak
- *     and is refused rather than turned into a wildcard query.
- *   - If the tenant row does not exist, the tenant scope is dead. Refuse with a
- *     login redirect so a dangling session cannot keep spinning on cached state.
- *
- * This guard owns the small set of decisions that belong at the edge:
- *   - is anyone actually signed in?
- *   - is the tenant id trustworthy?
- *   - if the gym typed away, is it still searchable?
- *
- * Routes with a different contract (Cashfree webhooks, API-key hardware, pen-
- * tation tokens) never call this: they authenticate with their own scheme.
+ * Requires a well-formed session whose tenant id is a valid UUID, and verifies
+ * the tenant row still exists. A dangling or malformed tenant scope is refused
+ * with a login redirect rather than widened into a wildcard query. Routes with
+ * a different contract (Cashfree webhooks, API-key hardware, pass tokens) never
+ * call this; they authenticate with their own scheme.
  */
 
 import { supabase } from '@/lib/supabase';

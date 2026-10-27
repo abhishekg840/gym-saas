@@ -11,20 +11,12 @@ import type { HardwareDevice } from '@/lib/hardware';
  *   POST   { tenant_id, member_id, device_id?, delete_old? } -> { ok, job }
  *   DELETE { tenant_id, job_token }                         -> { ok, cancelled }
  *
- * WHY THE JOB IS SERVER-OWNED
- * ---------------------------
- * The sensor cannot be told "enrol member X" directly: it only knows slots. So
- * the server reserves a slot up front (under an advisory lock), the device fills
- * exactly that slot, and only a SUCCESSFUL report binds it to the member. A
- * half-finished capture therefore never produces a "registered" member whose
- * finger would not actually open the gate.
- *
- * SCOPE
- * -----
- * The tenant comes from the session cookie server-side (with an explicit
- * tenant_id accepted for the browser, exactly like every other Phase 12 route).
- * The SQL re-resolves the gym from the MEMBER row, so even a tampered body
- * cannot aim an enrollment at another gym.
+ * The server owns the enrollment job: it reserves a slot under an advisory
+ * lock, the device fills that slot, and only a successful report binds it to
+ * the member. A half-finished capture never produces a "registered" member
+ * whose finger would not open the gate. The tenant resolves server-side from
+ * the session cookie (or an explicit tenant_id), and the SQL re-resolves the
+ * gym from the member row so a tampered body cannot target another gym.
  */
 
 /** Body/query tenant first, cookie second, hard 403 when neither is a UUID. */
@@ -53,23 +45,12 @@ type TerminalList =
 /**
  * This gym's fingerprint terminals, most recently seen first.
  *
- * WHY THIS IS NOT A TABLE SELECT
- * ------------------------------
- * hardware_devices is revoked from anon and authenticated (migration 0003, 5a),
- * and lib/supabase.ts is built on the ANON key — so a direct
- * `.from('hardware_devices').select(...)` answers "permission denied for table
- * hardware_devices". This route did exactly that, in two places, and the desk saw
- * the raw Postgres text in the enrollment dialog.
- *
- * fn_hardware_list is the supported door: SECURITY DEFINER, re-checks that the
- * tenant owns each row, and returns api_key already masked. It is granted to anon
- * and authenticated (0003, "Only these six doors are open").
- *
- * It does NOT filter by device type, and returns [] rather than null when the gym
- * has nothing registered, so both are narrowed here. `is_online` and
- * `seconds_since_seen` arrive PRECOMPUTED, which is the whole point: the
- * heartbeat rule is applied once, in the database, and the modal reads the same
- * number the Hardware tab is already showing the owner.
+ * Read through fn_hardware_list (SECURITY DEFINER): hardware_devices is revoked
+ * from anon and authenticated, so a direct select answers "permission denied".
+ * fn_hardware_list re-checks the tenant owns each row, returns the api key
+ * already masked, and precomputes is_online / seconds_since_seen. It does not
+ * filter by device type and returns [] when the gym has nothing registered, so
+ * both are narrowed here.
  */
 async function listFingerprintTerminals(tenantId: string): Promise<TerminalList> {
   const { data, error } = await supabase.rpc('fn_hardware_list', { p_tenant_id: tenantId });

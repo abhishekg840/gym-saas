@@ -1,18 +1,15 @@
 /**
- * Entitlement truth for the super-admin control center, the gated API routes,
- * AND the owner-console suspension lock screen.
+ * Entitlement truth for the super-admin control center, gated API routes, and
+ * the owner-console suspension lock screen.
  *
- * Reads the truth the Postgres RPC exposes per gym (subscription lock + six
- * feature flags + member/device quotas) and turns it into typed decisions.
- * Every guarded call should end here so a wrong tier, a locked gym, or a
- * disabled flag is refused consistently instead of leaking through route-by-
- * route ad hoc checks.
+ * Reads the Postgres RPC truth per gym (subscription lock, six feature flags,
+ * member/device quotas) into typed decisions, so a wrong tier, locked gym, or
+ * disabled flag is refused consistently instead of leaking through ad hoc
+ * route-level checks.
  *
- * This module is intentionally free of any `next/server` import so it can be
- * pulled into a `'use client'` bundle: `resolveGrants`, `isLocked` and
- * `lockReasonLabel` all run in the browser. The authoritative refusal for the
- * API routes — the `deny()` rejector that needs NextResponse — lives in the
- * sibling lib/entitlements-server.ts, imported only by route handlers.
+ * Intentionally free of `next/server` so it runs in `'use client'` bundles.
+ * `resolveGrants`, `isLocked` and `lockReasonLabel` run in the browser; the
+ * server-only `deny()` rejector lives in lib/entitlements-server.ts.
  */
 
 import { supabase } from '@/lib/supabase';

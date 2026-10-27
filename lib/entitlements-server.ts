@@ -1,15 +1,11 @@
 /**
  * Server-only entitlement rejection for the gated API routes.
  *
- * `deny()` needs NextResponse, so it lives here rather than in lib/entitlements
- * (which must stay import-safe for `'use client'` components that render the
- * suspension lock screen). Only route handlers import this module; the client
- * uses the sibling `isLocked`/`lockReasonLabel` helpers for its UX-only gate.
- *
- * The decision it encodes is IDENTICAL to the client mirror: a locked gym (or a
- * suspended/expired status) is refused with a 403 and a machine-readable code,
- * before any work is done. Everything downstream of the `next()` call can trust
- * that the gym is entitled to use the feature.
+ * `deny()` maps a ResolvedGrants object onto a 403 harness when the gym is
+ * locked or suspended/expired, before any work is done. It needs NextResponse,
+ * so it lives here (imported only by route handlers) rather than in
+ * lib/entitlements, which stays import-safe for `'use client'` components. The
+ * client mirrors this decision with `isLocked`/`lockReasonLabel` for UX only.
  */
 
 import { NextResponse } from 'next/server';

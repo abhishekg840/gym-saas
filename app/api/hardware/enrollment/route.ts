@@ -13,24 +13,13 @@ import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
  * device_id it arms a NON-biometric terminal (the card reader), never the
  * fingerprint unit — see the pick inside POST.
  *
- * WHY THIS IS AN API ROUTE AND NOT A DIRECT SUPABASE CALL
- * ------------------------------------------------------
- * hardware_devices is revoked from anon/authenticated on purpose (Phase 2): it
- * holds `api_key`, and the anon key ships inside every build. The browser
- * therefore CANNOT read this table. Everything goes through the SECURITY DEFINER
- * RPCs added in migration 0012, which return only non-secret enrollment fields.
- *
- * That is also why the UI polls this endpoint instead of subscribing to
- * `hardware_devices` over Realtime: the owner console authenticates against
- * gym_users, not Supabase Auth, so it holds the ANON role and RLS gives it
- * nothing. Realtime on that table is enabled for `authenticated` in the same
- * migration, so switching the console to Supabase Auth makes a socket viable
- * later without changing the contract.
- *
- * `device_id` is optional on POST: when omitted, the terminal most plausibly at
- * the front desk is armed so the owner does not have to know which reader is
- * at which door. For `purpose: "card"` the pick is restricted to readers whose
- * device_type is not biometric_fingerprint.
+ * hardware_devices is revoked from anon/authenticated (Phase 2): it holds
+ * `api_key`, and the anon key ships inside every build, so the browser cannot
+ * read this table. Everything goes through SECURITY DEFINER RPCs which return
+ * only non-secret enrollment fields. `device_id` is optional on POST: when
+ * omitted, the terminal most plausibly at the front desk is armed. For
+ * `purpose: "card"` the pick is restricted to readers whose device_type is not
+ * biometric_fingerprint.
  */
 
 /** Body/query tenant first, cookie second, hard 403 when neither is a UUID. */

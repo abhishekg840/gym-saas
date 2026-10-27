@@ -1,20 +1,13 @@
 /**
  * Client for the R307 / R307S enrollment flow (Phase 17).
  *
- * Mirrors lib/tap-to-enroll.ts, but for the ceremony that actually has a device
- * on the other end. tap-to-enroll arms a reader for a CARD tap, which completes
- * in one event. A fingerprint has a multi-stage handshake, so this is a job:
- * create it, watch it, and let the terminal report the outcome.
+ * Unlike tap-to-enroll (which arms a reader for a card tap that completes in one
+ * event), a fingerprint is a multi-stage handshake: create a job, watch it, and
+ * let the terminal report the outcome.
  *
- * WHY THIS POLLS
- * --------------
  * fingerprint_enrollments is revoked from anon/authenticated (migration 0017),
- * for the same reason hardware_devices is: it is written only through SECURITY
- * DEFINER functions, and the anon key ships inside every browser bundle. So the
- * desk cannot subscribe to it, and polls a route handler instead.
- *
- * Realtime would work if the console moved to Supabase Auth; the contract below
- * would not change.
+ * so the desk cannot subscribe to it and polls a route handler instead. The
+ * browser never touches the table directly.
  */
 
 /**

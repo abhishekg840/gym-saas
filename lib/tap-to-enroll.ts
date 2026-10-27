@@ -5,32 +5,15 @@ import { supabase } from '@/lib/supabase';
 import { isUuid } from '@/lib/session';
 
 /**
- * TAP-TO-ENROLL (Phase 12).
+ * Tap-to-enroll (Phase 12): zero-typing card enrollment. The owner clicks
+ * "Tap on Terminal", the reader is armed for 60 seconds, and the member's card
+ * field fills itself when the card touches the reader.
  *
- * The goal is zero typing: the owner clicks "Tap on Terminal", the reader is armed
- * for 60 seconds, and the member's card field fills itself in the moment the card
- * touches the reader.
- *
- * WHY THIS POLLS INSTEAD OF USING REALTIME
- * ----------------------------------------
- * The brief asked for a Supabase Realtime subscription on `hardware_devices`. That
- * cannot work as written, and it is worth being explicit about why:
- *
- *   - `hardware_devices` is REVOKED from anon/authenticated (Phase 2) because it
- *     holds `api_key`. The anon key is compiled into every build, so granting read
- *     access would hand every gym's machine credential to anyone opening devtools.
- *   - The owner console authenticates against `gym_users`, NOT Supabase Auth, so
- *     it holds the ANON role. Migration 0012 enables RLS + Realtime on that table
- *     for `authenticated` only — which means a socket would subscribe cleanly and
- *     then never fire. That is the exact failure lib/live-attendance.ts documents.
- *
- * So this polls a tenant-scoped SECURITY DEFINER RPC that returns only enrollment
- * fields. Migration 0012 leaves Realtime enabled for `authenticated`, so if the
- * console ever moves to Supabase Auth this becomes a socket with no change to the
- * caller's contract.
- *
- * The poll is fast (900ms) while armed and stops completely once captured, so a
- * backgrounded tab never spins at that rate.
+ * Polls a tenant-scoped SECURITY DEFINER RPC rather than subscribing to
+ * `hardware_devices` over Realtime: that table is revoked from anon/authenticated
+ * (it holds `api_key`), and the console authenticates against gym_users (ANON
+ * role) so a Realtime socket would subscribe and never fire. The poll is fast
+ * (900ms) while armed and stops once captured.
  */
 
 export interface EnrollmentDevice {

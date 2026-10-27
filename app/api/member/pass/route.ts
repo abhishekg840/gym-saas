@@ -8,16 +8,12 @@ import { badRequest, databaseError } from '@/lib/sqlstate';
  *
  * Body: { member_id: string }  or  { phone: string }
  *
- * Why this exists: the portal used to query `members` straight from the browser
- * with an `ilike '%1234%'` fragment, which let a visitor holding the public anon
- * key walk through every gym in the database scraping names and payment amounts
- * off any phone fragment. Here the lookup runs on the server and returns only the
- * fields a member may see about themselves.
- *
- * Phase 5: this route no longer reports geofence configuration. A gym pass is a
- * credential, not a location check — membership validity, expiry and freeze state
+ * The lookup runs on the server and returns only the fields a member may see
+ * about themselves — the portal previously queried members straight from the
+ * browser, which exposed every gym to a phone-fragment scrape. A gym pass is a
+ * credential, not a location check: membership validity, expiry and freeze state
  * are the only things that decide whether a QR code is shown, and the kiosk
- * re-checks those same three things when the code is scanned.
+ * re-checks those same three things at scan time.
  */
 
 interface PassMember {

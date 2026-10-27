@@ -25,27 +25,14 @@ import {
 import RevenueCalculator from '@/components/revenue-calculator';
 
 /**
- * The commercial front door.
+ * The commercial front door — Vyroniq's public landing page for gyms.
  *
- * WHY THIS PAGE EXISTS: `/` used to be the owner console, so a stranger or a
- * prospect first hit a login screen for a gym they had not signed up to. The
- * console moved to /admin and this page took its place as the calm, considered
- * surface a sales conversation can end on.
- *
- * The visual language is deliberately quiet and editorial — a warm off-white
- * canvas, deep forest-green ink, hairline rules and generous whitespace — so it
- * reads as a considered operations product rather than a loud gym poster.
- *
- * Copy is intentionally measured: every capability is phrased as what it does
- * "where enabled / after compatibility is confirmed", because a landing page
- * that over-promises is the fastest way to lose a gym during onboarding. The
- * claims map onto shipped code in this repo (geofencing, Smart Pass, RFID /
- * fingerprint terminals, the front-desk scanner, CRM, POS, billing, payouts,
- * challenges, announcements and analytics).
- *
- * A SERVER component throughout, with one exception: the interactive Revenue
- * Calculator is a Client island (components/revenue-calculator.tsx). The FAQ is
- * <details>, which is keyboard accessible for free and needs no hydration.
+ * A server component throughout, with one exception: the interactive Revenue
+ * Calculator is a client island (components/revenue-calculator.tsx). The FAQ
+ * uses <details>, which is keyboard accessible and needs no hydration. Copy is
+ * phrased as what each capability does ("where enabled / after compatibility is
+ * confirmed") so the page never over-promises; every claim maps to shipped code
+ * in this repo.
  */
 
 const WHATSAPP = '9569272339';

@@ -6,22 +6,16 @@ import { PASS_WINDOW_MS, type PassGeoProof } from '@/lib/passtoken';
 import { signPassToken } from '@/lib/passtoken-server';
 
 /**
- * POST /api/member/pass/mint — the ONLY way a gate pass comes into existence.
+ * POST /api/member/pass/mint — the only way a gate pass comes into existence.
  *
  * Body: { id: string, ph: string, geo?: PassGeoProof }
  * Reply: { ok: true, token, ttl_ms } | { ok: false, error }
  *
- * Why this exists (P0-2): the member app used to build the QR string in the
- * browser with plain btoa, which anyone could reproduce for any member id.
- * Signing has to happen where the key lives, so the claims now travel here,
- * are re-checked against the members table, get a SERVER-stamped window index
- * (a client cannot mint a pass valid for next week), and leave signed with
- * HMAC-SHA256.
- *
- * Residual trust note: without a server session (P0-4) the proof of identity
- * is "knows this member's id and phone" — strictly stronger than the old
- * "knows a phone number", and the kiosk still re-checks freeze, expiry and
- * window at scan time.
+ * The claims travel here, are re-checked against the members table, are
+ * stamped with a server window index (a client cannot mint a pass valid for
+ * next week), and leave signed with HMAC-SHA256. Signing happens where the key
+ * lives; a client-built QR string could be reproduced for any member id. The
+ * kiosk still re-checks freeze, expiry and window at scan time.
  */
 const MEMBER_FIELDS = 'id, phone';
 

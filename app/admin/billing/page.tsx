@@ -20,23 +20,12 @@ import { openCashfreeCheckout, type CashfreeMode } from '@/lib/cashfree';
 /**
  * /admin/billing — the owner's Vyroniq subscription screen (B2B SaaS billing).
  *
- * WHAT IT SHOWS
- * -------------
- *   * The gym's current plan, status and days remaining until it lapses.
- *   * Upgrade / Renew CTAs for Starter and Pro that open Cashfree checkout.
- *   * A recent platform-invoice ledger so an owner can see what they paid.
- *
- * THE MONEY FLOW (and why this screen never "activates" anything itself)
- * ---------------------------------------------------------------------
- *   1. Tapping a plan calls /api/super-admin/billing/create-order, which talks
- *      to Cashfree with the SERVER's secret key and returns a payment_session_id.
- *   2. That session id opens the Cashfree drop checkout (lib/cashfree.ts).
- *   3. Cashfree posts PAYMENT_SUCCESS_WEBHOOK to /api/webhooks/cashfree, which
- *      verifies the signature and — only then — activates the subscription.
- *
- * So a paid plan appears here after a short delay (the webhook round-trip), and
- * the status auto-refreshes while a payment is in flight. If Cashfree is not
- * configured the create-order route answers 503 and we say so plainly.
+ * Shows the gym's current plan, status and days remaining, upgrade/renew CTAs
+ * that open Cashfree checkout, and a platform-invoice ledger. Tapping a plan
+ * calls /api/super-admin/billing/create-order (server secret key), opens the
+ * Cashfree drop checkout, and the webhook at /api/webhooks/cashfree activates
+ * the subscription only after signature verification. If Cashfree is not
+ * configured, create-order answers 503 and the screen says so plainly.
  */
 
 interface BillingTenant {
