@@ -20,6 +20,7 @@ import {
   FileText, 
   BarChart3, 
   Lock, 
+  Loader2,
   Unlock, 
   Target, 
   Fingerprint, 
@@ -68,6 +69,17 @@ interface Plan {
   duration_days: number;
   price: number;
 }
+interface PlatformBilling {
+  tenant: {
+    name: string;
+    subscription_tier: string;
+    subscription_status: string;
+    subscription_expires_at: string | null;
+    trial_ends_at: string | null;
+  };
+  invoices: unknown[];
+}
+
 
 interface Member {
   id: string;
@@ -253,6 +265,10 @@ export default function GymDashboard() {
   const [transferBusy, setTransferBusy] = useState(false);
   
   const [currentRole, setCurrentRole] = useState<'owner' | 'reception'>('owner');
+  // Platform subscription (Vyroniq SaaS plan) — owner-only RPC read.
+  const [platformBilling, setPlatformBilling] = useState<PlatformBilling | null>(null);
+  const [platformBillingLoading, setPlatformBillingLoading] = useState(false);
+
   const [pinPrompt, setPinPrompt] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
 
@@ -339,6 +355,40 @@ export default function GymDashboard() {
     // browser history, and takeEnrollPrefill clears it on read.
     applyEnrollPrefill();
   }, [router]);
+  // Owner-only: read the tenant's platform subscription status via the
+  // fn_platform_billing_status RPC so the dashboard shows plan / expiry at a
+  // glance instead of forcing the owner to navigate away to check billing.
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setPlatformBillingLoading(true);
+      if (currentRole !== 'owner') {
+        setPlatformBillingLoading(false);
+        return;
+      }
+      const tenantId = session?.tenantId ?? null;
+      if (!tenantId) {
+        setPlatformBillingLoading(false);
+        setPlatformBilling(null);
+        return;
+      }
+      const { data, error } = await supabase.rpc('fn_platform_billing_status', {
+        p_tenant_id: tenantId,
+      });
+      if (!mounted) return;
+      if (error) {
+        setPlatformBilling(null);
+      } else {
+        setPlatformBilling((data ?? {}) as PlatformBilling);
+      }
+      setPlatformBillingLoading(false);
+    };
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, [session, currentRole]);
+
 
   // Header dropdowns and row "More" menus dismiss on an outside click or any
   // scroll, so a menu can never be left floating over a table the desk has
@@ -1116,6 +1166,19 @@ export default function GymDashboard() {
   // Phase 23: a suspended / expired gym sees the lock screen, not a console
   // whose every button would 403. Gated on `session` too so a still-hydrating
   // first paint (no session yet) never flashes the wall for a signed-in owner.
+  // ---- Platform subscription summary for the owner status widget ---
+  const subTenant = platformBilling?.tenant ?? null;
+  const subStatus = subTenant?.subscription_status ?? 'active';
+  const planName = subTenant?.subscription_tier === 'pro' ? 'Pro Plan' : 'Starter Plan';
+  const subExpiresAt = subTenant?.subscription_expires_at ?? subTenant?.trial_ends_at ?? null;
+  const subDaysLeft = subExpiresAt ? daysUntil(subExpiresAt) : null;
+  const subFormattedExpiry = subExpiresAt
+    ? new Date(subExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+  const subLapsed =
+    subStatus === 'suspended' || subStatus === 'expired' || (subDaysLeft ?? 0) < 0;
+  const subExpiringSoon = !subLapsed && subDaysLeft !== null && subDaysLeft < 5;
+
   if (session && tenantGrants.locked) {
     return <SubscriptionLock reason={tenantGrants.reasonLabel} />;
   }
@@ -1356,7 +1419,7 @@ export default function GymDashboard() {
                       className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
                     >
                       <CreditCard className="h-3.5 w-3.5 text-muted" />
-                      Billing
+                      Billing & Plan
                     </Link>
                   )}
                   {(currentRole === 'owner' ||
@@ -1569,6 +1632,72 @@ export default function GymDashboard() {
           </p>
         </div>
 
+        {/* ---- Platform subscription status (owner) ------------------ */}
+        {currentRole === 'owner' && (
+          <section className="rounded-xl border border-line bg-white px-4 py-3 flex items-center justify-between gap-4 sm:flex sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
+            <div className="flex items-center gap-3 sm:flex-shrink-0">
+              {platformBillingLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted" />
+              ) : (
+                <CreditCard className="h-4 w-4 text-muted" />
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-faint">
+                  Platform subscription
+                </p>
+                <p className="text-sm font-semibold text-ink truncate">
+                  {platformBillingLoading ? 'Loading…' : planName}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
+              {platformBillingLoading ? (
+                <span className="text-xs text-muted">Loading…</span>
+              ) : subExpiresAt ? (
+                <span
+                  className={`rounded-full border px-3 py-1 text-[12px] font-semibold ${subExpiringSoon ? 'border-amber-200 bg-amber-50 text-amber-800' : subLapsed ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+                >
+                  {subLapsed
+                    ? 'Subscription lapsed'
+                    : `Paid through ${subFormattedExpiry} · ${subDaysLeft} day${subDaysLeft === 1 ? '' : 's'} remaining`}
+                </span>
+              ) : (
+                <span className="rounded-full border border-line bg-wash px-3 py-1 text-[12px] font-semibold text-muted">
+                  Not yet subscribed
+                </span>
+              )}
+              <Link
+                href="/admin/billing"
+                className="rounded-lg border border-line bg-white px-3 py-1.5 text-[12px] font-semibold text-ink transition hover:bg-wash"
+              >
+                Manage Subscription
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* ---- Expiring-soon warning banner (owner) ------------------ */}
+        {currentRole === 'owner' &&
+          !platformBillingLoading &&
+          subExpiringSoon && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink">Subscription expires soon</p>
+                <p className="text-xs text-muted">
+                  {subDaysLeft} day{subDaysLeft === 1 ? '' : 's'} remaining — paid through {subFormattedExpiry}. Renew to keep your gym active on Vyroniq.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/admin/billing"
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold text-amber-800 transition hover:bg-amber-100"
+            >
+              Renew Now
+            </Link>
+          </div>
+        )}
         {/* Quick actions — one quiet row; every item is a real workflow. */}
         <section
           aria-label="Quick actions"
@@ -2779,7 +2908,7 @@ export default function GymDashboard() {
                   className={MENU_ITEM}
                 >
                   <CreditCard className="h-3.5 w-3.5 text-muted" />
-                  Billing
+                  Billing & Plan
                 </Link>
               )}
               <Link
