@@ -106,11 +106,31 @@ export default function AdminPaymentsPage() {
           .eq('tenant_id', tenantId),
       ]);
 
-      if (!invRes.error && invRes.data) {
-        setInvoices(invRes.data as GymInvoice[]);
-      }
+      let fetchedInvoices = (invRes.data ?? []) as GymInvoice[];
+      const memberMap = new Map<string, { full_name: string; phone: string }>();
+
       if (!memRes.error && memRes.data) {
-        setDueMembers(memRes.data as MemberFee[]);
+        const members = memRes.data as MemberFee[];
+        setDueMembers(members);
+        for (const m of members) {
+          memberMap.set(m.id, { full_name: m.full_name, phone: m.phone });
+        }
+      }
+
+      // Resolve missing member_name from the members table so the ledger always shows a name.
+      if (!invRes.error) {
+        for (const inv of fetchedInvoices) {
+          if ((!inv.member_name || inv.member_name.trim() === '') && inv.member_id) {
+            const known = memberMap.get(inv.member_id);
+            if (known) {
+              inv.member_name = known.full_name;
+              inv.member_phone = known.phone;
+            } else {
+              inv.member_name = 'Direct Walk-in / Store POS';
+            }
+          }
+        }
+        setInvoices(fetchedInvoices);
       }
     } catch {
       // safe fallback on read errors
@@ -142,20 +162,22 @@ export default function AdminPaymentsPage() {
       const memberPhone = collectMember?.phone || '';
       const amountVal = Number(collectAmount) || 0;
 
-      const { error } = await supabase.from('invoices').insert([
-        {
+      const res = await fetch('/api/admin/payments/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
           member_id: collectMember?.id || null,
           member_name: memberName,
           member_phone: memberPhone,
           amount: amountVal,
           payment_method: collectMode,
-          status: 'paid',
-          issued_at: new Date().toISOString(),
           tenant_id: session.tenantId,
-        },
-      ]);
+        }),
+      });
 
-      if (error) throw error;
+      const result = await res.json();
+      if (!res.ok || !result.ok) throw new Error(result.error || 'Could not collect fee.');
 
       await loadPayments(session.tenantId);
       setCollectNotice({ message: 'Fee collected and invoice recorded.', kind: 'ok' });
@@ -475,6 +497,36 @@ export default function AdminPaymentsPage() {
             )}
 
             <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-neutral-300 mb-1 font-medium">Select Member</label>
+                <select
+                  value={collectMember?.id || ''}
+                  onChange={(e) => {
+                    const sel = dueMembers.find((m) => m.id === e.target.value);
+                    if (sel) {
+                      setCollectMember(sel);
+                      setCollectAmount(String(sel.amount_paid || 1500));
+                      setCollectMode('cash');
+                      setCollectNotice(null);
+                    } else {
+                      setCollectMember(null);
+                      setCollectAmount('');
+                    }
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-neutral-600"
+                >
+                  <option value="">Walk-in / Store POS (no member)</option>
+                  {dueMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name} · {m.phone}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-neutral-500 mt-1">
+                  Pick a member with dues, or leave as walk-in for a direct collection.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-neutral-300 mb-1 font-medium">Amount to Collect (₹)</label>
                 <input

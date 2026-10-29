@@ -21,3 +21,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: typeof window === 'undefined' ? undefined : window.localStorage,
   },
 });
+
+/**
+ * Service-role (admin) Supabase client — bypasses RLS.
+ * Only use in server-side API routes; never expose to the browser.
+ * Requires SUPABASE_SERVICE_ROLE_KEY in .env.local.
+ */
+export const supabaseAdmin = createClient(
+  supabaseUrl,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);

@@ -704,6 +704,7 @@ export default function GymDashboard() {
         return;
       }
 
+      alert('Member permanently removed');
       fetchMembers(session?.tenantId);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed.');
