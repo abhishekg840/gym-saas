@@ -57,7 +57,11 @@ export function isUuid(value: unknown): value is string {
  * can be called during the initial render of a client component.
  */
 export function readSession(): GymSession | null {
-  if (typeof window === 'undefined') return null;
+  if (
+    typeof window === 'undefined' ||
+    typeof window.localStorage === 'undefined'
+  )
+    return null;
 
   try {
     const raw = window.localStorage.getItem(SESSION_KEY);
@@ -90,7 +94,7 @@ export function clearSession(): void {
 }
 
 export function setTenantCookie(tenantId: string | null): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const value = tenantId && isUuid(tenantId) ? tenantId : '';
   document.cookie = `${TENANT_COOKIE}=${value}; path=/; max-age=${
     value ? 60 * 60 * 24 * 30 : 0

@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     // rather than somebody else's payment QR.
     const { data: tenants } = await supabase.from('tenants').select('id, name, upi_id');
     const gyms = new Map<string, { name: string; upiId: string | null }>(
-      (tenants ?? []).map((tenant) => [
+      (tenants ?? []).map((tenant: { id: string; name: unknown; upi_id: unknown }) => [
         tenant.id as string,
         {
           name: (tenant.name as string) || 'your gym',

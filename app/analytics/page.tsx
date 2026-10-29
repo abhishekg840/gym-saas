@@ -51,7 +51,7 @@ export default function AnalyticsPage() {
       const now = new Date();
 
       if (members) {
-        members.forEach((m) => {
+        members.forEach((m: { amount_paid: unknown; membership_end: string }) => {
           rev += Number(m.amount_paid) || 0;
           if (new Date(m.membership_end) >= now) {
             active++;
@@ -76,7 +76,7 @@ export default function AnalyticsPage() {
       };
 
       if (attendances) {
-        attendances.forEach((a) => {
+        attendances.forEach((a: { scanned_at: string }) => {
           const hour = new Date(a.scanned_at).getHours();
           if (hour >= 6 && hour < 9) rush['6AM-9AM (Morning)']++;
           else if (hour >= 9 && hour < 12) rush['9AM-12PM (Noon)']++;

@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     // Auto mark status to expired
     if (expiringMembers && expiringMembers.length > 0) {
-      const ids = expiringMembers.map(m => m.id);
+      const ids = expiringMembers.map((m: { id: string }) => m.id);
       await supabase
         .from('members')
         .update({ status: 'expired' })

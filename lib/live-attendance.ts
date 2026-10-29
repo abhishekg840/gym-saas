@@ -141,7 +141,7 @@ export function useLiveAttendance(tenantId: string | null) {
           table: 'attendances',
           filter: `tenant_id=eq.${tenant}`,
         },
-        (payload) => {
+        (payload: { new: unknown }) => {
           const incoming = normalise(payload.new);
           setRows((current) => {
             // The socket can redeliver on reconnect, and the poll may have
@@ -152,7 +152,7 @@ export function useLiveAttendance(tenantId: string | null) {
           });
         }
       )
-      .subscribe((state) => {
+      .subscribe((state: string) => {
         if (state === 'SUBSCRIBED') setStatus('live');
         else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
           setStatus('polling');

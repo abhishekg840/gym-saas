@@ -492,7 +492,7 @@ export default function GymDashboard() {
 
     if (invoices.data) {
       setTodayRevenue(
-        invoices.data.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+        invoices.data.reduce((sum: number, row: { amount: unknown }) => sum + (Number(row.amount) || 0), 0)
       );
       setPaymentCount(invoices.data.length);
     }

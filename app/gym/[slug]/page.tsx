@@ -23,7 +23,7 @@ export default function WhiteLabelGymPortal({ params }: { params: Promise<{ slug
       .select('*')
       .eq('slug', resolvedParams.slug)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: { data: GymInfo | null }) => {
         if (data) setGym(data);
         setLoading(false);
       });
