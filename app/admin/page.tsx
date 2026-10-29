@@ -670,17 +670,46 @@ export default function GymDashboard() {
       alert('Only Owner role can delete member profiles.');
       return;
     }
-    if (!confirm(`Are you sure you want to remove ${member.full_name}?`)) return;
+    if (
+      !confirm(
+        `Permanently delete ${member.full_name} and all their attendance records, gate passes and RFID assignments? This cannot be undone.`
+      )
+    )
+      return;
 
     setActionId(member.id);
-    const { error } = await supabase.from('members').delete().eq('id', member.id);
-
-    if (!error) {
-      fetchMembers(session?.tenantId);
-    } else {
-      alert(error.message);
+    const tenantId = session?.tenantId ?? null;
+    if (!tenantId) {
+      alert('No gym linked to this session. Sign in again.');
+      setActionId(null);
+      return;
     }
-    setActionId(null);
+
+    try {
+      const response = await fetch('/api/member/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ member_id: member.id, tenant_id: tenantId }),
+      });
+
+      const result = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        deleted_attendances?: number;
+      };
+
+      if (!response.ok || !result.ok) {
+        alert(result.error ?? 'Could not delete member.');
+        return;
+      }
+
+      fetchMembers(session?.tenantId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setActionId(null);
+    }
   }
 
   /**
@@ -1345,11 +1374,20 @@ export default function GymDashboard() {
               Attendance
             </Link>
             <Link
-              href="/store"
-              title="Counter, POS and payments"
+              href="/admin/payments"
+              title="Member dues, invoices and fee collection"
               className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink"
             >
-              Payments
+              <CreditCard className="h-3.5 w-3.5 shrink-0" />
+              Fees &amp; Dues
+            </Link>
+            <Link
+              href="/store"
+              title="Supplement store and counter POS"
+              className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink"
+            >
+              <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
+              Store /amp; POS
             </Link>
             <Link
               href="/trainers"
@@ -1718,7 +1756,7 @@ export default function GymDashboard() {
             <Plus className="h-3.5 w-3.5" />
             Add Member
           </button>
-          <Link href="/store" className={QA_CLASS}>
+          <Link href="/admin/payments" className={QA_CLASS}>
             <CreditCard className="h-3.5 w-3.5" />
             Collect Payment
           </Link>
@@ -2662,6 +2700,19 @@ export default function GymDashboard() {
                 <FileText className="h-3.5 w-3.5" />
                 Invoice
               </button>
+              {currentRole === 'owner' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void deleteMember(viewTarget);
+                    setViewTarget(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-2.5 py-1.5 text-[11px] text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete Member
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2818,12 +2869,20 @@ export default function GymDashboard() {
                 Attendance
               </Link>
               <Link
+                href="/admin/payments"
+                onClick={() => setOpenDropdown(null)}
+                className={MENU_ITEM}
+              >
+                <CreditCard className="h-3.5 w-3.5 text-muted" />
+                Fees &amp; Dues
+              </Link>
+              <Link
                 href="/store"
                 onClick={() => setOpenDropdown(null)}
                 className={MENU_ITEM}
               >
                 <ShoppingBag className="h-3.5 w-3.5 text-muted" />
-                Payments
+                Store /amp; POS
               </Link>
               <Link
                 href="/trainers"

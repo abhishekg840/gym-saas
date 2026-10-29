@@ -447,6 +447,15 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <p className="mt-3 text-right">
+          <Link
+            href="/forgot-password"
+            className="text-xs text-slate-500 hover:text-emerald-600 font-mono transition"
+          >
+            Forgot password?
+          </Link>
+        </p>
+
         <div className="my-5 flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest text-slate-400">
           <span className="h-px flex-1 bg-slate-200" />
           or continue with
