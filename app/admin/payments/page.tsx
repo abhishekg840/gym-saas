@@ -1,21 +1,33 @@
 ﻿'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Banknote,
   CheckCircle,
   CreditCard,
   Download,
+  Dumbbell,
   FileText,
   HandCoins,
-  UserRound,
+  Lock,
   Loader2,
   Plus,
+  QrCode,
   Search,
   Send,
+  ShoppingBag,
+  Unlock,
+  UserRound,
   X,
+  ChevronDown,
+  Bell,
+  MoreHorizontal,
+  ServerCog,
+  Target,
+  Trophy,
+  Tag,
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -66,7 +78,9 @@ const STATUS_BADGES: Record<string, string> = {
 
 export default function AdminPaymentsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<GymSession | null>(null);
+  const [currentRole, setCurrentRole] = useState<'owner' | 'reception'>('owner');
   const [tab, setTab] = useState<'active' | 'pending'>('active');
   const [invoices, setInvoices] = useState<GymInvoice[]>([]);
   const [dueMembers, setDueMembers] = useState<MemberFee[]>([]);
@@ -78,6 +92,7 @@ export default function AdminPaymentsPage() {
   const [collectNotice, setCollectNotice] = useState<{ message: string; kind: 'ok' | 'bad' } | null>(null);
   const [collectBusy, setCollectBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   useEffect(() => {
     const s = readSession();
@@ -90,6 +105,7 @@ export default function AdminPaymentsPage() {
       return;
     }
     setSession(s);
+    setCurrentRole((s.role === 'super_admin' || s.role === 'owner') ? 'owner' : 'reception');
   }, [router]);
 
   const loadPayments = useCallback(async (tenantId: string) => {
@@ -97,21 +113,29 @@ export default function AdminPaymentsPage() {
     try {
       const now = new Date().toISOString().split('T')[0];
 
+      // Fetch membership fee invoices — STRICTLY exclude store/POS transactions.
+      // Store POS invoices (fn_store_checkout) do NOT set member_name/member_phone.
+      // Only include invoices where the member_id matches an existing member in the
+      // members table for this tenant — this guarantees "Unknown Member" never appears.
       const [invRes, memRes] = await Promise.all([
-        // Membership fee invoices ONLY — exclude store/POS sales (no member_id)
         supabase
           .from('invoices')
           .select('*')
           .eq('tenant_id', tenantId)
           .not('member_id', 'is', null)
+          .not('member_name', 'is', null)
           .order('issued_at', { ascending: false }),
-        // Members who are expired or due — membership fees, not store sales
         supabase
           .from('members')
           .select('id, full_name, phone, email, membership_end, status, amount_paid, invoice_count, last_invoice, is_frozen, freeze_start_date, freeze_end_date, total_freeze_days')
-          .eq('tenant_id', tenantId)
-          .or(`membership_end.lt.${now},status.in.(expired,due)`),
+          .eq('tenant_id', tenantId),
       ]);
+
+      // Build a set of valid member IDs for this tenant — any invoice whose
+      // member_id is not in this set is a stale/orphaned record (e.g. a deleted
+      // member's old POS sale) and must be excluded from the fees page.
+      const validMemberIds = new Set<string>();
+      (memRes.data ?? []).forEach((m: any) => validMemberIds.add(m.id));
 
       let fetchedInvoices = (invRes.data ?? []) as GymInvoice[];
       const memberMap = new Map<string, { full_name: string; phone: string }>();
@@ -119,15 +143,18 @@ export default function AdminPaymentsPage() {
         memberMap.set(m.id, { full_name: m.full_name, phone: m.phone });
       });
 
-      // Enrich invoices with member name/phone, deduplicating same-member invoices
-      const enriched = fetchedInvoices.map((inv) => {
-        const member = memberMap.get(inv.member_id);
-        return {
-          ...inv,
-          member_name: member?.full_name ?? 'Unknown Member',
-          member_phone: member?.phone ?? '',
-        };
-      });
+      // Enrich invoices with member name/phone — only for valid members.
+      // Invoices whose member is not in the members table are dropped entirely.
+      const enriched = fetchedInvoices
+        .filter((inv) => validMemberIds.has(inv.member_id))
+        .map((inv) => {
+          const member = memberMap.get(inv.member_id);
+          return {
+            ...inv,
+            member_name: member?.full_name ?? 'Unknown Member',
+            member_phone: member?.phone ?? '',
+          };
+        });
 
       setInvoices(enriched);
       setDueMembers((memRes.data ?? []) as MemberFee[]);
@@ -138,6 +165,10 @@ export default function AdminPaymentsPage() {
       setLoading(false);
     }
   }, []);
+
+  const handleSwitchRole = () => {
+    setCurrentRole((prev) => (prev === 'owner' ? 'reception' : 'owner'));
+  };
 
   const issueReceipt = async () => {
     if (!collectMember || !session) return;
@@ -236,31 +267,166 @@ export default function AdminPaymentsPage() {
   const totalCollected = activeInvoices.reduce((sum, inv) => sum + inv.amount, 0);
   const totalPending = pendingMembers.reduce((sum, m) => sum + (m.amount_paid || 0), 0);
 
+  const isActive = (route: string) => pathname === route;
+
   return (
     <main className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans antialiased">
-      {/* Top bar */}
-      <div className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-40">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600">
-              <CreditCard className="h-5 w-5 text-white" />
+      {/* ---- Admin Header (shared with /admin) ---------------------------------- */}
+      <header className="vy-topbar sticky top-0 z-40">
+        <div className="vy-topbar-inner">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="vy-brand-mark">
+              <Dumbbell className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight text-slate-900">Fees & Dues</h1>
-              <p className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Member membership fee collection</p>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-[14px] font-semibold tracking-tight text-ink">
+                {session?.tenantName || 'Gym'}
+              </p>
+              <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-faint">
+                Vyroniq
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  onClick={handleSwitchRole}
+                  title="Switch desk role (Owner / Reception)"
+                  className="inline-flex items-center gap-1 text-muted transition hover:text-ink"
+                >
+                  {currentRole === 'owner' ? <Unlock className="h-2.5 w-2.5" /> : <Lock className="h-2.5 w-2.5" />}
+                  {currentRole === 'owner' ? 'Owner' : 'Reception'}
+                </button>
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={downloadLedger}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium transition hover:bg-slate-50 hover:border-slate-300"
+
+          <nav aria-label="Dashboard sections" className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+            <Link
+              href="/admin"
+              title="Dashboard overview"
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${isActive('/admin') ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
             >
-              <Download className="h-3.5 w-3.5" /> Export CSV
-            </button>
+              Overview
+            </Link>
+            <Link
+              href="/admin#members"
+              title="Member roster"
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${pathname === '/admin#members' ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+            >
+              Members
+            </Link>
+            <Link
+              href="/attendance"
+              title="Live attendance board"
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${isActive('/attendance') ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+            >
+              Attendance
+            </Link>
+            <Link
+              href="/admin/payments"
+              title="Member dues, invoices and fee collection"
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${isActive('/admin/payments') ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+            >
+              <CreditCard className="h-3.5 w-3.5 shrink-0" />
+              Fees & Dues
+            </Link>
+            <Link
+              href="/store"
+              title="Supplement store and counter POS"
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${isActive('/store') ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+            >
+              <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
+              Store / POS
+            </Link>
+            <Link
+              href="/trainers"
+              title="Personal trainers and sessions"
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${isActive('/trainers') ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+            >
+              Trainers
+            </Link>
+            {currentRole === 'owner' && (
+              <Link
+                href="/analytics"
+                title="Business analytics"
+                className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition ${isActive('/analytics') ? 'bg-wash text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+              >
+                Analytics
+              </Link>
+            )}
+            <div className="relative" data-menu-root>
+              <button
+                type="button"
+                aria-haspopup="menu"
+                onClick={() => setOpenDropdown(openDropdown === 'more' ? null : 'more')}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-[13px] transition ${openDropdown === 'more' ? 'bg-white text-ink' : 'text-muted hover:bg-wash hover:text-ink'}`}
+              >
+                More
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openDropdown === 'more' ? 'rotate-180' : ''}`} />
+              </button>
+              {openDropdown === 'more' && (
+                <div role="menu" className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-line bg-white py-1 shadow-xl shadow-[#0F172A]/10">
+                  <Link href="/leads" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink">
+                    <Target className="h-3.5 w-3.5 text-muted" />
+                    Leads CRM
+                  </Link>
+                  <Link href="/admin/challenges" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink">
+                    <Trophy className="h-3.5 w-3.5 text-muted" />
+                    Challenges
+                  </Link>
+                  <Link href="/plans" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink">
+                    <Tag className="h-3.5 w-3.5 text-muted" />
+                    Packages
+                  </Link>
+                  {currentRole === 'owner' && (
+                    <Link href="/admin/billing" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink">
+                      <CreditCard className="h-3.5 w-3.5 text-muted" />
+                      Billing & Plan
+                    </Link>
+                  )}
+                  {(currentRole === 'owner' || session?.role === 'super_admin') && (
+                    <Link href="/hardware" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink">
+                      <ServerCog className="h-3.5 w-3.5 text-muted" />
+                      Hardware
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          </nav>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Link
+              href="/scan"
+              target="_blank"
+              title="Open the QR scanner"
+              className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink-2 transition hover:border-line-strong hover:bg-wash sm:inline-flex"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+              Scan
+            </Link>
+            <div className="relative hidden sm:block" data-menu-root>
+              <button
+                type="button"
+                aria-label="Notifications"
+                aria-haspopup="menu"
+                onClick={() => setOpenDropdown(openDropdown === 'notif' ? null : 'notif')}
+                className="relative rounded-lg p-2 text-muted transition hover:bg-wash hover:text-ink"
+              >
+                <Bell className="h-4 w-4" />
+              </button>
+              {openDropdown === 'notif' && (
+                <div role="menu" className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-line bg-white shadow-xl shadow-[#0F172A]/10">
+                  <div className="border-b border-line px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Needs attention</p>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    <p className="px-3 py-4 text-xs leading-relaxed text-muted">Nothing needs attention — no membership expires in the next seven days.</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats row */}
@@ -282,7 +448,6 @@ export default function AdminPaymentsPage() {
             <p className="text-2xl font-bold text-slate-900">{formatMoney(totalPending)}</p>
           </div>
         </div>
-
         {/* Search + Tabs */}
         <div className="flex flex-col gap-4 mb-6">
           <div className="relative">
@@ -312,6 +477,7 @@ export default function AdminPaymentsPage() {
             </button>
           </div>
         </div>
+
         {/* Tab content */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           {tab === 'active' ? (
@@ -546,13 +712,11 @@ export default function AdminPaymentsPage() {
   );
 }
 
-// Phone icon imported separately since it's not in the original import set
 function PhoneIcon({ className }: { className?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 ${className ?? ''}`}>
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 1 .72 2.11 20 20 0 0 0 4.5 4.5A20 20 0 0 0 12.48 17a2 2 0 0 1-1.72 2h3a2 2 0 0 1 2-2z" />
     </svg>
   );
 }
-
 
