@@ -5,6 +5,8 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.2'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+        classpath 'org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.0.21'
         classpath 'com.google.gms:google-services:4.4.2'
     }
 }
@@ -15,18 +17,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url 'https://jitpack.io' }
     }
-    // Cordova/AndroidX still drag in kotlin-stdlib-jdk7 / -jdk8 1.6.21, whose
-    // classes were folded into kotlin-stdlib in 1.8 — so they collide with it and
-    // :app:checkDebugDuplicateClasses fails. Dropping the two legacy artifacts is
-    // safer than pinning versions: @capacitor/geolocation compiles itself with
-    // Kotlin 2.x, and forcing kotlin-stdlib back to 1.8.22 would break that build.
     configurations.all {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
     }
-
-
 }
 
 task clean(type: Delete) {
