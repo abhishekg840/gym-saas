@@ -10,9 +10,9 @@ function isMasterPassword(password: string): boolean {
 }
 
 /**
- * Super Admin Management API
+ * Super Admin Multi-Tenant Master API
  *
- * GET /api/super-admin/tenants?identifier=...&password=...
+ * GET /api/super-admin/tenants?password=...
  * POST /api/super-admin/tenants
  * PATCH /api/super-admin/tenants
  */
@@ -33,23 +33,28 @@ export async function GET(request: Request) {
 
     if (tErr) throw tErr;
 
-    // 2. Fetch platform aggregates
-    // 2a. Hardware devices
+    // 2. Fetch platform hardware devices
     const { data: devices, error: devErr } = await supabaseAdmin
       .from('hardware_devices')
-      .select('id, tenant_id, device_name, device_type, status, last_heartbeat');
+      .select('id, tenant_id, device_name, device_type, ip_address, status, last_heartbeat, last_scanned_uid, last_scanned_at');
 
     if (devErr) console.warn('Could not fetch hardware devices:', devErr);
 
-    // 2b. Total active members count across all tenants
-    const { count: memberCount, error: mCountErr } = await supabaseAdmin
+    // 3. Fetch feature flags across tenants
+    const { data: flags, error: flagErr } = await supabaseAdmin
+      .from('tenant_feature_flags')
+      .select('tenant_id, flag, enabled');
+
+    if (flagErr) console.warn('Could not fetch tenant feature flags:', flagErr);
+
+    // 4. Fetch all members count and status
+    const { data: members, error: mErr } = await supabaseAdmin
       .from('members')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['active']);
+      .select('id, tenant_id, status');
 
-    if (mCountErr) console.warn('Could not count members:', mCountErr);
+    if (mErr) console.warn('Could not count members:', mErr);
 
-    // 2c. Total revenue / MRR from invoices
+    // 5. Total revenue / MRR from invoices
     const { data: invoices, error: invErr } = await supabaseAdmin
       .from('invoices')
       .select('amount, status, tenant_id')
@@ -57,9 +62,12 @@ export async function GET(request: Request) {
 
     if (invErr) console.warn('Could not fetch invoices:', invErr);
 
-    const totalRevenue = (invoices ?? []).reduce((sum: number, inv: { amount?: number | null }) => sum + (Number(inv.amount) || 0), 0);
+    const totalRevenue = (invoices ?? []).reduce(
+      (sum: number, inv: { amount?: number | null }) => sum + (Number(inv.amount) || 0),
+      0
+    );
 
-    // Count online devices (heartbeat within last 120 seconds)
+    // Online hardware devices (heartbeat within last 120 seconds)
     const nowMs = Date.now();
     const onlineDevicesCount = (devices ?? []).filter((d: { last_heartbeat?: string | null }) => {
       if (!d.last_heartbeat) return false;
@@ -67,15 +75,60 @@ export async function GET(request: Request) {
       return nowMs - hb < 120000;
     }).length;
 
+    const totalActiveMembers = (members ?? []).filter((m: { status?: string | null }) => m.status === 'active').length;
+
+    // Build per-tenant aggregate maps
+    const memberCountsByTenant: Record<string, { total: number; active: number }> = {};
+    (members ?? []).forEach((m: { tenant_id?: string | null; status?: string | null }) => {
+      if (!m.tenant_id) return;
+      if (!memberCountsByTenant[m.tenant_id]) {
+        memberCountsByTenant[m.tenant_id] = { total: 0, active: 0 };
+      }
+      memberCountsByTenant[m.tenant_id].total += 1;
+      if (m.status === 'active') {
+        memberCountsByTenant[m.tenant_id].active += 1;
+      }
+    });
+
+    const revenueByTenant: Record<string, number> = {};
+    (invoices ?? []).forEach((inv: { tenant_id?: string | null; amount?: number | null }) => {
+      if (!inv.tenant_id) return;
+      revenueByTenant[inv.tenant_id] = (revenueByTenant[inv.tenant_id] || 0) + (Number(inv.amount) || 0);
+    });
+
+    const flagsByTenant: Record<string, Record<string, boolean>> = {};
+    (flags ?? []).forEach((f: { tenant_id?: string | null; flag?: string | null; enabled?: boolean | null }) => {
+      if (!f.tenant_id || !f.flag) return;
+      if (!flagsByTenant[f.tenant_id]) flagsByTenant[f.tenant_id] = {};
+      flagsByTenant[f.tenant_id][f.flag] = Boolean(f.enabled);
+    });
+
+    const enrichedTenants = (tenants ?? []).map((t: Record<string, any>) => ({
+      ...t,
+      memberCount: memberCountsByTenant[t.id]?.total ?? 0,
+      activeMemberCount: memberCountsByTenant[t.id]?.active ?? 0,
+      totalRevenue: revenueByTenant[t.id] ?? 0,
+      featureFlags: flagsByTenant[t.id] ?? {
+        qr_gate: true,
+        rfid: true,
+        biometric: true,
+        pos_store: true,
+        whatsapp: true,
+        crm: true,
+      },
+    }));
+
     return NextResponse.json({
       ok: true,
-      tenants: tenants ?? [],
+      tenants: enrichedTenants,
       devices: devices ?? [],
       metrics: {
         totalRevenue,
         onlineDevicesCount,
-        totalActiveMembers: memberCount ?? 0,
+        totalActiveMembers,
         totalTenants: (tenants ?? []).length,
+        activeTenantsCount: (tenants ?? []).filter((t: { subscription_status?: string | null }) => t.subscription_status === 'active').length,
+        suspendedTenantsCount: (tenants ?? []).filter((t: { subscription_status?: string | null }) => t.subscription_status === 'suspended').length,
       },
     });
   } catch (err: unknown) {
@@ -95,7 +148,7 @@ export async function POST(request: Request) {
 
   if (!isMasterPassword(password)) {
     // Check RPC verification as fallback
-    const { data, error } = await supabase.rpc('fn_superadmin_list_tenants', {
+    const { error } = await supabase.rpc('fn_superadmin_list_tenants', {
       p_identifier: identifier,
       p_password: password,
     });
@@ -105,52 +158,6 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
-  }
-
-  // Action: list
-  if (action === 'list') {
-    const { data: tenants, error: tErr } = await supabaseAdmin
-      .from('tenants')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (tErr) {
-      return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });
-    }
-
-    const { data: devices } = await supabaseAdmin
-      .from('hardware_devices')
-      .select('id, tenant_id, device_name, device_type, status, last_heartbeat');
-
-    const { count: memberCount } = await supabaseAdmin
-      .from('members')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['active']);
-
-    const { data: invoices } = await supabaseAdmin
-      .from('invoices')
-      .select('amount, status, tenant_id')
-      .in('status', ['paid']);
-
-    const totalRevenue = (invoices ?? []).reduce((sum: number, inv: { amount?: number | null }) => sum + (Number(inv.amount) || 0), 0);
-    const nowMs = Date.now();
-    const onlineDevicesCount = (devices ?? []).filter((d: { last_heartbeat?: string | null }) => {
-      if (!d.last_heartbeat) return false;
-      const hb = new Date(d.last_heartbeat).getTime();
-      return nowMs - hb < 120000;
-    }).length;
-
-    return NextResponse.json({
-      ok: true,
-      data: tenants ?? [],
-      devices: devices ?? [],
-      metrics: {
-        totalRevenue,
-        onlineDevicesCount,
-        totalActiveMembers: memberCount ?? 0,
-        totalTenants: (tenants ?? []).length,
-      },
-    });
   }
 
   // Action: create_tenant
@@ -239,7 +246,6 @@ export async function POST(request: Request) {
 
     if (!tenantId) return badRequest('tenant_id is required');
 
-    // Stamp last_scanned_at and trigger remote unlock signal on the hardware device
     const updateData: Record<string, unknown> = {
       last_scanned_at: new Date().toISOString(),
       last_scanned_uid: 'SUPER_ADMIN_REMOTE_UNLOCK',
@@ -258,18 +264,100 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: 'Remote unlock pulse dispatched to device.' });
   }
 
+  // Action: toggle_flag
+  if (action === 'toggle_flag') {
+    const tenantId = String(payload.tenant_id ?? '');
+    const flag = String(payload.flag ?? '');
+    const enabled = Boolean(payload.enabled);
+
+    if (!tenantId || !flag) return badRequest('tenant_id and flag are required');
+
+    const { error } = await supabaseAdmin
+      .from('tenant_feature_flags')
+      .upsert(
+        {
+          tenant_id: tenantId,
+          flag,
+          enabled,
+          updated_at: new Date().toISOString(),
+          updated_by: 'super_admin',
+        },
+        { onConflict: 'tenant_id,flag' }
+      );
+
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, flag, enabled });
+  }
+
+  // Action: reset_owner_password
+  if (action === 'reset_owner_password') {
+    const tenantId = String(payload.tenant_id ?? '');
+    const newPassword = String(payload.new_password ?? '1234');
+    if (!tenantId) return badRequest('tenant_id is required');
+
+    const { data: tenant } = await supabaseAdmin
+      .from('tenants')
+      .select('phone, owner_name')
+      .eq('id', tenantId)
+      .single();
+
+    if (tenant?.phone && tenant?.owner_name) {
+      try {
+        await supabase.rpc('fn_staff_provision_owner', {
+          p_tenant_id: tenantId,
+          p_phone: tenant.phone,
+          p_full_name: tenant.owner_name,
+          p_initial_password: newPassword,
+        });
+      } catch (err) {
+        console.warn('RPC provision owner fallback:', err);
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: `Owner credentials reset to default password: "${newPassword}"`,
+    });
+  }
+
+  // Action: quarantine_tenant (Emergency Kill Switch)
+  if (action === 'quarantine_tenant') {
+    const tenantId = String(payload.tenant_id ?? '');
+    if (!tenantId) return badRequest('tenant_id is required');
+
+    await supabaseAdmin
+      .from('tenants')
+      .update({ subscription_status: 'suspended' })
+      .eq('id', tenantId);
+
+    await supabaseAdmin
+      .from('hardware_devices')
+      .update({ status: 'offline' })
+      .eq('tenant_id', tenantId);
+
+    const flags = ['qr_gate', 'rfid', 'biometric', 'pos_store', 'whatsapp', 'crm'];
+    for (const f of flags) {
+      await supabaseAdmin.from('tenant_feature_flags').upsert(
+        {
+          tenant_id: tenantId,
+          flag: f,
+          enabled: false,
+          updated_at: new Date().toISOString(),
+          updated_by: 'super_admin_quarantine',
+        },
+        { onConflict: 'tenant_id,flag' }
+      );
+    }
+
+    return NextResponse.json({ ok: true, message: 'Tenant quarantined. All access revoked immediately.' });
+  }
+
   return badRequest(`Unknown action: ${action}`);
 }
 
-/**
- * PATCH /api/super-admin/tenants
- *
- * Handles:
- * - action: 'update_branding'
- * - action: 'extend_saas'
- * - action: 'toggle_saas_hold'
- * - action: 'impersonate'
- */
 export async function PATCH(request: Request) {
   const parsed = await readJsonBody(request);
   if ('response' in parsed) return parsed.response;
@@ -308,10 +396,7 @@ export async function PATCH(request: Request) {
         address: address || null,
       };
 
-      const { error } = await supabaseAdmin
-        .from('tenants')
-        .update(updateData)
-        .eq('id', tenantId);
+      const { error } = await supabaseAdmin.from('tenants').update(updateData).eq('id', tenantId);
 
       if (error) throw error;
       return NextResponse.json({ ok: true, updated: updateData });
@@ -341,10 +426,7 @@ export async function PATCH(request: Request) {
         ...(newTier ? { subscription_tier: newTier } : {}),
       };
 
-      const { error } = await supabaseAdmin
-        .from('tenants')
-        .update(updateData)
-        .eq('id', tenantId);
+      const { error } = await supabaseAdmin.from('tenants').update(updateData).eq('id', tenantId);
 
       if (error) throw error;
       return NextResponse.json({ ok: true, new_expiry: newExpiry, tier: updateData.subscription_tier });
@@ -373,7 +455,6 @@ export async function PATCH(request: Request) {
 
     // 4. IMPERSONATE TENANT (GENERATE SECURE OWNER SESSION)
     if (action === 'impersonate') {
-      // Find tenant details and owner user record
       const { data: tenant, error: tErr } = await supabaseAdmin
         .from('tenants')
         .select('id, name, phone, owner_name')
@@ -382,7 +463,6 @@ export async function PATCH(request: Request) {
 
       if (tErr || !tenant) throw new Error('Tenant not found.');
 
-      // Fetch or seed gym owner user in gym_users
       const { data: ownerUser } = await supabaseAdmin
         .from('gym_users')
         .select('id, full_name, phone, role')
@@ -406,6 +486,18 @@ export async function PATCH(request: Request) {
         session: impersonatedSession,
         redirect_url: '/admin',
       });
+    }
+
+    // 5. UPDATE TIER DIRECTLY
+    if (action === 'update_tier') {
+      const tier = String(payload.tier ?? 'pro').toLowerCase();
+      const { error } = await supabaseAdmin
+        .from('tenants')
+        .update({ subscription_tier: tier })
+        .eq('id', tenantId);
+
+      if (error) throw error;
+      return NextResponse.json({ ok: true, tier });
     }
 
     return badRequest(`Unsupported PATCH action: ${action}`);
