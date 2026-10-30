@@ -76,6 +76,7 @@ interface PlatformBilling {
     subscription_status: string;
     subscription_expires_at: string | null;
     trial_ends_at: string | null;
+    logo_url?: string | null;
   };
   invoices: unknown[];
 }
@@ -1209,7 +1210,7 @@ export default function GymDashboard() {
     subStatus === 'suspended' || subStatus === 'expired' || (subDaysLeft ?? 0) < 0;
   const subExpiringSoon = !subLapsed && subDaysLeft !== null && subDaysLeft < 5;
 
-  if (session && tenantGrants.locked) {
+  if (session && (tenantGrants.locked || subLapsed)) {
     return <SubscriptionLock reason={tenantGrants.reasonLabel} />;
   }
 
@@ -1327,8 +1328,12 @@ export default function GymDashboard() {
       <header className="vy-topbar">
         <div className="vy-topbar-inner">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="vy-brand-mark">
-              <Dumbbell className="h-4 w-4 text-white" />
+            <div className="vy-brand-mark overflow-hidden">
+              {subTenant?.logo_url ? (
+                <img src={subTenant.logo_url} alt="Logo" className="h-full w-full object-cover" />
+              ) : (
+                <Dumbbell className="h-4 w-4 text-white" />
+              )}
             </div>
             <div className="min-w-0 leading-tight">
               <p className="truncate text-[14px] font-semibold tracking-tight text-ink">
@@ -1382,14 +1387,16 @@ export default function GymDashboard() {
               <CreditCard className="h-3.5 w-3.5 shrink-0" />
               Fees &amp; Dues
             </Link>
+            {tenantGrants.grants?.flags?.pos_store !== false && (
             <Link
               href="/store"
               title="Supplement store and counter POS"
               className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition hover:bg-wash hover:text-ink"
             >
               <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
-              Store /amp; POS
+              Store &amp; POS
             </Link>
+            )}
             <Link
               href="/trainers"
               className="rounded-lg px-3 py-1.5 text-[13px] text-muted transition hover:bg-wash hover:text-ink"
@@ -1478,6 +1485,7 @@ export default function GymDashboard() {
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5">
+            {tenantGrants.grants?.flags?.qr_gate !== false && (
             <Link
               href="/scan"
               target="_blank"
@@ -1485,8 +1493,9 @@ export default function GymDashboard() {
               className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink-2 transition hover:border-line-strong hover:bg-wash sm:inline-flex"
             >
               <QrCode className="h-3.5 w-3.5" />
-              Scan
+              Scan Gate
             </Link>
+            )}
 
             {/* Notifications — a real attention list built from the roster
                 (members expiring within seven days), never a fabricated badge. */}

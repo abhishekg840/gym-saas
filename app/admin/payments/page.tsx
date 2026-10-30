@@ -158,6 +158,7 @@ export default function AdminPaymentsPage() {
   const [receiptPlanName, setReceiptPlanName] = useState<string>('Gym Membership');
   const [receiptExpiry, setReceiptExpiry] = useState<string>('—');
 
+  const [tenantLogo, setTenantLogo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
@@ -190,6 +191,21 @@ export default function AdminPaymentsPage() {
     }
     setLoading(true);
     try {
+      // Check tenant suspension and logo
+      const { data: tenantRow } = await supabase
+        .from('tenants')
+        .select('subscription_status, logo_url')
+        .eq('id', tenantId)
+        .maybeSingle();
+
+      if (tenantRow?.subscription_status === 'suspended') {
+        router.replace('/admin');
+        return;
+      }
+      if (tenantRow?.logo_url) {
+        setTenantLogo(tenantRow.logo_url);
+      }
+
       const now = new Date();
       const nowStr = now.toISOString().split('T')[0];
       const sevenDaysLater = new Date(now.getTime() + 7 * 86400000).toISOString().split('T')[0];
@@ -477,8 +493,12 @@ export default function AdminPaymentsPage() {
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 flex">
-              <Dumbbell className="h-4 w-4 text-white" />
+            <div className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 flex overflow-hidden">
+              {tenantLogo ? (
+                <img src={tenantLogo} alt="Logo" className="h-full w-full object-cover" />
+              ) : (
+                <Dumbbell className="h-4 w-4 text-white" />
+              )}
             </div>
             <div className="min-w-0 leading-tight">
               <p className="truncate text-[14px] font-semibold tracking-tight text-slate-900">
