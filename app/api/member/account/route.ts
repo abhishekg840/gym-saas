@@ -35,7 +35,7 @@ interface PasswordCheck {
  * Password policy, enforced here as well as in Supabase Auth. The client shows
  * the same rules, so a member is never told "too weak" only after submitting.
  */
-export function checkPassword(password: string, confirm: string): PasswordCheck {
+function checkPassword(password: string, confirm: string): PasswordCheck {
   if (password.length < MIN_PASSWORD) {
     return { ok: false, error: `Use at least ${MIN_PASSWORD} characters.` };
   }

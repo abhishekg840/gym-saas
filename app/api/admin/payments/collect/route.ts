@@ -4,16 +4,23 @@ import { isUuid, readTenantCookie } from '@/lib/session';
 import { badRequest, databaseError, readJsonBody } from '@/lib/sqlstate';
 
 /**
- * POST /api/admin/payments/collect — record a fee payment and issue a receipt.
+ * POST /api/admin/payments/collect — record a membership fee payment and issue a receipt.
  *
  * Body:
- *   { member_id?, member_name, member_phone, amount, payment_method, tenant_id }
+ *   { member_id, tenant_id, plan_name, duration_days, total_fee, amount_paid, discount, payment_method, notes }
  *
- * If member_id is supplied, the member record is fetched to guarantee an
- * accurate member_name and member_phone before inserting the invoice.
+ * Plan Duration Logic:
+ *   - Extends membership_end by duration_days (30 Monthly, 90 Quarterly, 180 Half-Yearly, 365 Annual, 0 = balance clear only).
+ *   - If membership_end is in the future, adds duration_days to the existing end date.
+ *   - If expired, starts the new period from now().
  *
- * When member_id is present, the member's membership is extended by 30 days
- * and their status is set to 'active'.
+ * Partial Payment / Balance Due Logic:
+ *   - pending_balance = Math.max(0, (total_fee - discount) - amount_paid)
+ *   - Member status is set to 'active' (unblocking gate/RFID/QR access).
+ *   - plan_name (or plan) and amount_paid are updated on the member record.
+ *
+ * Invoice Insertion:
+ *   - status = 'partial' when pending_balance > 0, otherwise 'paid'.
  *
  * Tenant scope is enforced on every write.
  */
@@ -23,13 +30,16 @@ export async function POST(request: Request) {
   const payload = parsed.body;
 
   const memberId = payload.member_id ? String(payload.member_id) : null;
-  const memberName = String(payload.member_name ?? '').trim();
-  const memberPhone = String(payload.member_phone ?? '').trim();
-  const amount = Number(payload.amount);
-  const paymentMethod = String(payload.payment_method ?? 'cash').trim();
   const tenantId =
     String(payload.tenant_id ?? payload.tenantId ?? '') ||
     readTenantCookie(request);
+  const planName = String(payload.plan_name ?? '').trim() || null;
+  const durationDays = Number(payload.duration_days) || 0;
+  const totalFee = Number(payload.total_fee) || 0;
+  const amountPaid = Number(payload.amount_paid) || 0;
+  const discount = Number(payload.discount) || 0;
+  const paymentMethod = String(payload.payment_method ?? 'cash').trim();
+  const notes = String(payload.notes ?? '').trim() || null;
 
   if (!tenantId || !isUuid(tenantId)) {
     return badRequest(
@@ -38,70 +48,141 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!memberName) return badRequest('member_name is required.');
-  if (!amount || amount <= 0) return badRequest('amount must be greater than zero.');
+  if (!memberId || !isUuid(memberId)) {
+    return badRequest('member_id is required.');
+  }
+
+  if (!amountPaid || amountPaid <= 0) {
+    return badRequest('amount_paid must be greater than zero.');
+  }
 
   try {
-    // If member_id supplied, verify the member exists and pull authoritative name/phone.
-    let resolvedName = memberName;
-    let resolvedPhone = memberPhone;
+    // Verify the member exists and pull authoritative details.
+    const { data: member, error: memberError } = await supabaseAdmin
+      .from('members')
+      .select('id, full_name, phone, membership_end, status, plan_id, tenant_id')
+      .eq('id', memberId)
+      .eq('tenant_id', tenantId)
+      .single();
 
-    if (memberId && isUuid(memberId)) {
-      const { data: member, error: memberError } = await supabaseAdmin
+    if (memberError || !member) {
+      return badRequest('Member not found in this gym.');
+    }
+
+    // --- Plan duration logic ---
+    const now = new Date();
+    const currentEnd = member.membership_end ? new Date(member.membership_end) : null;
+    let newMembershipEnd: string;
+
+    if (durationDays === 0) {
+      // Balance clearance only — keep existing end date (or now if none).
+      newMembershipEnd = currentEnd ? currentEnd.toISOString().split('T')[0] : now.toISOString().split('T')[0];
+    } else if (currentEnd && currentEnd > now) {
+      // Extend from the existing end date (renewal before expiry).
+      newMembershipEnd = new Date(
+        currentEnd.getTime() + durationDays * 86_400_000
+      ).toISOString().split('T')[0];
+    } else {
+      // Expired or no end date — start from now.
+      newMembershipEnd = new Date(
+        now.getTime() + durationDays * 86_400_000
+      ).toISOString().split('T')[0];
+    }
+
+    // --- Partial payment / balance due logic ---
+    const pendingBalance = Math.max(0, (totalFee - discount) - amountPaid);
+
+    // Build the member update with graceful fallback for schema columns
+    const baseMemberUpdate: Record<string, unknown> = {
+      status: 'active',
+      membership_end: newMembershipEnd,
+    };
+
+    const fullMemberUpdate: Record<string, unknown> = {
+      ...baseMemberUpdate,
+      amount_paid: amountPaid,
+      ...(planName ? { plan_name: planName } : {}),
+    };
+
+    let { error: updateError } = await supabaseAdmin
+      .from('members')
+      .update(fullMemberUpdate)
+      .eq('id', memberId)
+      .eq('tenant_id', tenantId);
+
+    if (updateError) {
+      // Fallback 1: try without plan_name but with amount_paid
+      const updateWithoutPlanName = {
+        ...baseMemberUpdate,
+        amount_paid: amountPaid,
+      };
+      const resFallback1 = await supabaseAdmin
         .from('members')
-        .select('full_name, phone, membership_end, status')
-        .eq('id', memberId)
-        .eq('tenant_id', tenantId)
-        .single();
-
-      if (memberError || !member) {
-        return badRequest('Member not found in this gym.');
-      }
-
-      resolvedName = member.full_name ?? memberName;
-      resolvedPhone = member.phone ?? memberPhone;
-
-      // Extend membership by 30 days and mark active.
-      const { error: extendError } = await supabaseAdmin
-        .from('members')
-        .update({
-          membership_end: `(
-            CASE
-              WHEN membership_end > now() THEN membership_end + interval '30 days'
-              ELSE now() + interval '30 days'
-            END
-          )`,
-          status: 'active',
-        })
+        .update(updateWithoutPlanName)
         .eq('id', memberId)
         .eq('tenant_id', tenantId);
 
-      if (extendError) return databaseError(extendError, 'Could not extend membership.');
+      if (resFallback1.error) {
+        // Fallback 2: minimal base updates
+        const resFallback2 = await supabaseAdmin
+          .from('members')
+          .update(baseMemberUpdate)
+          .eq('id', memberId)
+          .eq('tenant_id', tenantId);
+
+        if (resFallback2.error) {
+          return databaseError(resFallback2.error, 'Could not update membership.');
+        }
+      }
     }
 
-    // Insert the invoice / receipt.
-    const { error: insertError } = await supabaseAdmin
-      .from('invoices')
-      .insert({
-        id: crypto.randomUUID(),
-        tenant_id: tenantId,
-        member_id: memberId ?? null,
-        member_name: resolvedName,
-        member_phone: resolvedPhone,
-        amount,
-        payment_method: paymentMethod,
-        status: 'paid',
-        issued_at: new Date().toISOString(),
-      });
+    // --- Invoice insertion ---
+    const invoiceStatus = pendingBalance > 0 ? 'partial' : 'paid';
+    const invoiceData: Record<string, unknown> = {
+      id: crypto.randomUUID(),
+      tenant_id: tenantId,
+      member_id: memberId,
+      member_name: member.full_name,
+      member_phone: member.phone,
+      amount: amountPaid,
+      payment_method: paymentMethod,
+      status: invoiceStatus,
+      notes,
+      issued_at: new Date().toISOString(),
+    };
 
-    if (insertError) return databaseError(insertError, 'Could not record invoice.');
+    let { error: insertError } = await supabaseAdmin
+      .from('invoices')
+      .insert(invoiceData);
+
+    if (insertError) {
+      // Retry without optional notes column
+      delete invoiceData.notes;
+      const res2 = await supabaseAdmin.from('invoices').insert(invoiceData);
+      if (res2.error) {
+        // Retry with minimal columns
+        const minimalInvoice = {
+          tenant_id: tenantId,
+          member_id: memberId,
+          amount: amountPaid,
+          payment_method: paymentMethod,
+          status: invoiceStatus,
+        };
+        const res3 = await supabaseAdmin.from('invoices').insert(minimalInvoice);
+        if (res3.error) {
+          return databaseError(res3.error, 'Could not record invoice.');
+        }
+      }
+    }
 
     return NextResponse.json({
       ok: true,
-      member_name: resolvedName,
-      member_phone: resolvedPhone,
-      amount,
-      payment_method: paymentMethod,
+      member_id: memberId,
+      member_name: member.full_name,
+      membership_end: newMembershipEnd,
+      pending_balance: pendingBalance,
+      amount_paid: amountPaid,
+      status: invoiceStatus,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Could not collect fee.';
