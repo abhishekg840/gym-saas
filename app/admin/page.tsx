@@ -43,7 +43,11 @@ import {
   ShieldCheck,
   Clock,
   IndianRupee,
-  Activity
+  Activity,
+
+  Utensils,
+
+  DollarSign
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -61,6 +65,7 @@ import AttendanceChart from '@/components/attendance-chart';
 import { clearSession, readSession } from '@/lib/session';
 import { waLink, waMessages } from '@/lib/whatsapp';
 import { useTenantGrants } from '@/lib/use-tenant-grants';
+import { useFeatureFlags } from '@/lib/use-feature-flags';
 import SubscriptionLock from '@/components/subscription-lock';
 
 interface Plan {
@@ -333,6 +338,7 @@ export default function GymDashboard() {
   // whose every action the server would refuse with a 403. Fail-open by design:
   // a transient read never locks a paying gym out (see use-tenant-grants.ts).
   const tenantGrants = useTenantGrants();
+  const { isEnabled: isFeatureEnabled } = useFeatureFlags();
 
   useEffect(() => {
     const parsed = readSession();
@@ -1424,7 +1430,7 @@ export default function GymDashboard() {
                     : 'text-muted hover:bg-wash hover:text-ink'
                 }`}
               >
-                More
+                More Modules
                 <ChevronDown
                   className={`h-3.5 w-3.5 transition-transform ${
                     openDropdown === 'more' ? 'rotate-180' : ''
@@ -1434,15 +1440,56 @@ export default function GymDashboard() {
               {openDropdown === 'more' && (
                 <div
                   role="menu"
-                  className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-line bg-white py-1 shadow-xl shadow-[#0F172A]/10"
+                  className="absolute left-0 top-full z-50 mt-1 w-52 rounded-xl border border-line bg-white py-1.5 shadow-xl shadow-[#0F172A]/10"
                 >
-                  <Link
-                    href="/leads"
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
-                  >
-                    <Target className="h-3.5 w-3.5 text-muted" />
-                    Leads CRM
-                  </Link>
+                  {isFeatureEnabled('lead_crm') && (
+                    <Link
+                      href="/admin/crm"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink font-medium"
+                    >
+                      <Target className="h-3.5 w-3.5 text-blue-600" />
+                      Leads Pipeline & CRM
+                    </Link>
+                  )}
+                  {isFeatureEnabled('expense_tracker') && (
+                    <Link
+                      href="/admin/expenses"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink font-medium"
+                    >
+                      <IndianRupee className="h-3.5 w-3.5 text-amber-600" />
+                      Expense & Petty Cash
+                    </Link>
+                  )}
+                  {isFeatureEnabled('workout_builder') && (
+                    <Link
+                      href="/admin/workouts"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink font-medium"
+                    >
+                      <Dumbbell className="h-3.5 w-3.5 text-purple-600" />
+                      Workout Routines
+                    </Link>
+                  )}
+                  {isFeatureEnabled('diet_planner') && (
+                    <Link
+                      href="/admin/diet"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink font-medium"
+                    >
+                      <Utensils className="h-3.5 w-3.5 text-emerald-600" />
+                      Diet & Nutrition Plans
+                    </Link>
+                  )}
+                  {isFeatureEnabled('trainer_payouts') && (
+                    <Link
+                      href="/admin/payouts"
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink font-medium"
+                    >
+                      <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+                      Trainer Payouts & Split
+                    </Link>
+                  )}
+
+                  <div className="my-1 border-t border-slate-100" />
+
                   <Link
                     href="/admin/challenges"
                     title="Launch and manage 30-day gym challenges"
@@ -1476,7 +1523,7 @@ export default function GymDashboard() {
                       className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-2 transition hover:bg-wash hover:text-ink"
                     >
                       <ServerCog className="h-3.5 w-3.5 text-muted" />
-                      Hardware
+                      Hardware Fleet
                     </Link>
                   )}
                 </div>
