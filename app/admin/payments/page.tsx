@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { readSession, type GymSession } from '@/lib/session';
+import { useTenantBranding } from '@/lib/use-tenant-branding';
 import { waLink } from '@/lib/whatsapp';
 
 const PLAN_PRESETS = [
@@ -128,6 +129,7 @@ export default function AdminPaymentsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [session, setSession] = useState<GymSession | null>(null);
+  const { branding: tenantBranding } = useTenantBranding();
   const [currentRole, setCurrentRole] = useState<'owner' | 'reception'>('owner');
   const [tab, setTab] = useState<TabKind>('overdue');
   const [search, setSearch] = useState('');
@@ -493,19 +495,22 @@ export default function AdminPaymentsPage() {
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 flex overflow-hidden">
-              {tenantLogo ? (
-                <img src={tenantLogo} alt="Logo" className="h-full w-full object-cover" />
+            <div
+              className="h-9 w-9 shrink-0 items-center justify-center rounded-lg flex overflow-hidden shadow-xs"
+              style={{ backgroundColor: tenantBranding.primary_color || '#059669' }}
+            >
+              {tenantBranding.logo_url || tenantLogo ? (
+                <img src={tenantBranding.logo_url || tenantLogo || ""} alt="Logo" className="h-full w-full object-cover" />
               ) : (
                 <Dumbbell className="h-4 w-4 text-white" />
               )}
             </div>
             <div className="min-w-0 leading-tight">
-              <p className="truncate text-[14px] font-semibold tracking-tight text-slate-900">
-                {session?.tenantName || 'Gym'}
+              <p className="truncate text-[14px] font-bold tracking-tight text-slate-900">
+                {tenantBranding.name || session?.tenantName || 'Gym'}
               </p>
               <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                GymSaaS |{' '}
+                {tenantBranding.name} |{' '}
                 <button
                   type="button"
                   onClick={() => setCurrentRole((p) => (p === 'owner' ? 'reception' : 'owner'))}

@@ -60,10 +60,33 @@ export async function GET(request: Request) {
       if (r.flag === 'lead_crm') flags['crm'] = Boolean(r.enabled);
     });
 
+    // Also fetch tenant branding
+    const { data: tenant } = await supabaseAdmin
+      .from('tenants')
+      .select('id, name, slug, logo_url, address, phone')
+      .eq('id', tenantId)
+      .single();
+
+    let brandColor = '#059669';
+    const brandRow = (rows ?? []).find((r: { flag: string; updated_by?: string }) => r.flag === 'cfg:brand_color' || r.flag === 'cfg:primary_color');
+    if (brandRow && 'updated_by' in brandRow && typeof brandRow.updated_by === 'string' && brandRow.updated_by.startsWith('#')) {
+      brandColor = brandRow.updated_by;
+    }
+
+    const branding = {
+      name: tenant?.name || 'Gym OS',
+      subdomain_slug: tenant?.slug || null,
+      logo_url: tenant?.logo_url || null,
+      primary_color: brandColor,
+      address: tenant?.address || null,
+      phone: tenant?.phone || null,
+    };
+
     return NextResponse.json({
       ok: true,
       tenant_id: tenantId,
       flags,
+      branding,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch feature flags';

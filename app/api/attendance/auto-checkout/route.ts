@@ -335,3 +335,4 @@ async function runAutoCheckoutSweep(tenantId?: string) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+

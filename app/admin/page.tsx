@@ -66,6 +66,7 @@ import { clearSession, readSession } from '@/lib/session';
 import { waLink, waMessages } from '@/lib/whatsapp';
 import { useTenantGrants } from '@/lib/use-tenant-grants';
 import { useFeatureFlags } from '@/lib/use-feature-flags';
+import { useTenantBranding } from '@/lib/use-tenant-branding';
 import SubscriptionLock from '@/components/subscription-lock';
 
 interface Plan {
@@ -339,6 +340,7 @@ export default function GymDashboard() {
   // a transient read never locks a paying gym out (see use-tenant-grants.ts).
   const tenantGrants = useTenantGrants();
   const { isEnabled: isFeatureEnabled } = useFeatureFlags();
+  const { branding: tenantBranding } = useTenantBranding();
 
   useEffect(() => {
     const parsed = readSession();
@@ -1334,19 +1336,26 @@ export default function GymDashboard() {
       <header className="vy-topbar">
         <div className="vy-topbar-inner">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="vy-brand-mark overflow-hidden">
-              {subTenant?.logo_url ? (
-                <img src={subTenant.logo_url} alt="Logo" className="h-full w-full object-cover" />
+            <div
+              className="vy-brand-mark overflow-hidden flex items-center justify-center rounded-lg shadow-xs"
+              style={{ backgroundColor: tenantBranding.primary_color || '#059669' }}
+            >
+              {tenantBranding.logo_url || subTenant?.logo_url ? (
+                <img
+                  src={tenantBranding.logo_url || subTenant?.logo_url || ''}
+                  alt={tenantBranding.name}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <Dumbbell className="h-4 w-4 text-white" />
               )}
             </div>
             <div className="min-w-0 leading-tight">
-              <p className="truncate text-[14px] font-semibold tracking-tight text-ink">
-                {session?.tenantName || 'Gym'}
+              <p className="truncate text-[14px] font-bold tracking-tight text-ink">
+                {tenantBranding.name || session?.tenantName || 'Gym'}
               </p>
               <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-faint">
-                Vyroniq
+                {tenantBranding.subdomain_slug ? `${tenantBranding.subdomain_slug}.gym` : 'Gym OS'}
                 <span aria-hidden="true">·</span>
                 <button
                   type="button"
@@ -1808,7 +1817,12 @@ export default function GymDashboard() {
           <button
             type="button"
             onClick={() => setEnrollOpen(true)}
-            className={QA_CLASS}
+            style={{
+              backgroundColor: tenantBranding.primary_color || '#059669',
+              borderColor: tenantBranding.primary_color || '#059669',
+              color: '#ffffff',
+            }}
+            className="vy-btn !px-3 !py-1.5 text-[12px] font-bold shadow-xs hover:opacity-95 transition"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Member
@@ -3066,7 +3080,7 @@ export default function GymDashboard() {
             </nav>
 
             <p className="border-t border-line px-4 py-3 text-[10px] uppercase tracking-wider text-faint">
-              Vyroniq Gym OS · {session?.phone}
+              {tenantBranding.name || "Gym OS"} · {session?.phone}
             </p>
           </div>
         </div>
