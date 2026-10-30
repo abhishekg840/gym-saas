@@ -103,13 +103,13 @@ fun OwnerAppEntry() {
                     .padding(innerPadding)
             ) {
                 when (currentScreen) {
-                    is OwnerScreen.Dashboard -> ExecutiveDashboardScreen(
+                    OwnerScreen.Dashboard -> ExecutiveDashboardScreen(
                         onNavigateToBilling = { currentScreen = OwnerScreen.Billing },
                         onNavigateToMembers = { currentScreen = OwnerScreen.Members }
                     )
-                    is OwnerScreen.Members -> MemberDirectoryScreen()
-                    is OwnerScreen.Billing -> BillingHubScreen()
-                    is OwnerScreen.Hardware -> HardwareTerminalScreen()
+                    OwnerScreen.Members -> MemberDirectoryScreen()
+                    OwnerScreen.Billing -> BillingHubScreen()
+                    OwnerScreen.Hardware -> HardwareTerminalScreen()
                 }
             }
         }

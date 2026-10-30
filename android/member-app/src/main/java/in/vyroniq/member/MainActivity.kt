@@ -104,11 +104,11 @@ fun MainAppEntry() {
                     .padding(innerPadding)
             ) {
                 when (currentScreen) {
-                    is Screen.Pass -> PassScreen()
-                    is Screen.Attendance -> AttendanceScreen()
-                    is Screen.Membership -> MembershipScreen()
-                    is Screen.Store -> StoreScreen()
-                    is Screen.Profile -> ProfileScreen(onLogout = { isLoggedIn = false })
+                    Screen.Pass -> PassScreen()
+                    Screen.Attendance -> AttendanceScreen()
+                    Screen.Membership -> MembershipScreen()
+                    Screen.Store -> StoreScreen()
+                    Screen.Profile -> ProfileScreen(onLogout = { isLoggedIn = false })
                 }
             }
         }

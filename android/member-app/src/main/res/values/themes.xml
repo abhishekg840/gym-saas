@@ -1,8 +1,7 @@
 <resources>
-    <style name="Theme.Vyroniq" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Vyroniq" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">#0B0F17</item>
         <item name="android:navigationBarColor">#0B0F17</item>
         <item name="android:windowBackground">#0B0F17</item>
     </style>
 </resources>
-

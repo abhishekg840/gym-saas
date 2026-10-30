@@ -291,7 +291,7 @@ fun PassScreen() {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     LinearProgressIndicator(
-                        progress = { remainingSeconds / 30f },
+                        progress = remainingSeconds / 30f,
                         color = Emerald500,
                         trackColor = Slate800,
                         modifier = Modifier
