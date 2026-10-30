@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft, Volume2, LogIn, LogOut, Flame } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Dumbbell, RefreshCw, Camera, ArrowLeft, Volume2, LogIn, LogOut, Flame, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { readSession } from '@/lib/session';
 
-/** Which way the next scan is read: an entry (Check-In) or an exit (Check-Out). */
-type ScanMode = 'in' | 'out';
+/** Which way the next scan is read: auto-smart, entry (Check-In) or exit (Check-Out). */
+type ScanMode = 'auto' | 'in' | 'out';
 
 interface VerificationResult {
   allowed: boolean;
@@ -26,12 +26,9 @@ export default function GymScanner() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  // Dual-gate mode. Defaults to Entry, which is by far the common case at a
-  // kiosk. Held in a ref too, because the camera callback below is created once
-  // inside a mount-only effect and must read the CURRENT mode without that
-  // effect re-running (which would tear down and restart the camera).
-  const [mode, setMode] = useState<ScanMode>('in');
-  const modeRef = useRef<ScanMode>('in');
+  // Smart-gate mode. Defaults to Auto, which automatically detects whether to Check-In or Check-Out.
+  const [mode, setMode] = useState<ScanMode>('auto');
+  const modeRef = useRef<ScanMode>('auto');
 
   const isProcessingRef = useRef(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -141,18 +138,18 @@ export default function GymScanner() {
           setVerifying(true);
 
           try {
-            // The gate decision lives on the server: it scopes the member lookup to
-            // this gym's tenant and refuses frozen memberships. The kiosk only renders.
-            // Check-Out hits a different endpoint that pairs the entry and stamps the
-            // workout duration; Check-In is the classic verify path.
-            const direction = modeRef.current;
-            const endpoint = direction === 'out' ? '/api/scan/checkout' : '/api/scan/verify';
+            // Smart auto-attendance engine:
+            // Checks for open session < 4 hours and automatically checks out if active,
+            // or checks in if no active session, without requiring manual toggle.
+            const selectedMode = modeRef.current;
+            const endpoint = '/api/attendance/scan';
             const response = await fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'same-origin',
               body: JSON.stringify({
                 token: decodedText,
+                mode: selectedMode,
                 tenant_id: readSession()?.tenantId ?? null,
               }),
             });
@@ -164,8 +161,11 @@ export default function GymScanner() {
               phone?: string;
               expiry?: string | null;
               member_id?: string | null;
+              direction?: 'in' | 'out';
               duration_minutes?: number | null;
             };
+
+            const resolvedDirection: ScanMode = verdict.direction || (selectedMode === 'out' ? 'out' : 'in');
 
             if (typeof verdict.allowed !== 'boolean') {
               playSound('denied');
@@ -174,7 +174,7 @@ export default function GymScanner() {
                 name: verdict.name || 'Rejected',
                 phone: verdict.phone || '',
                 expiry: 'N/A',
-                direction,
+                direction: resolvedDirection,
                 reason: verdict.reason || `Gate rejected the scan (HTTP ${response.status}).`,
               });
             } else {
@@ -184,12 +184,12 @@ export default function GymScanner() {
                 name: verdict.name || 'Unknown',
                 phone: verdict.phone || 'N/A',
                 expiry: verdict.expiry || 'N/A',
-                direction,
+                direction: resolvedDirection,
                 duration_minutes:
                   typeof verdict.duration_minutes === 'number' ? verdict.duration_minutes : null,
                 reason:
                   verdict.reason ||
-                  (direction === 'out'
+                  (resolvedDirection === 'out'
                     ? 'Session complete. See you tomorrow!'
                     : verdict.allowed
                       ? 'Access Approved. Welcome!'
@@ -199,7 +199,7 @@ export default function GymScanner() {
 
               // Attendance is already recorded server-side; this only pings the feed.
               // The welcome chime is an ENTRY thing — an exit is not a "welcome".
-              if (verdict.allowed && verdict.member_id && direction === 'in') {
+              if (verdict.allowed && verdict.member_id && resolvedDirection === 'in') {
                 fetch('/api/notifications/checkin', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -266,15 +266,27 @@ export default function GymScanner() {
         </div>
       </div>
 
-      {/* Dual-gate toggle: Check-In (Entry) vs Check-Out (Exit). Entry is the
-          default because it is the common case; the operator flips to Exit when
-          a member is leaving. Tapping switches the endpoint the next scan posts
-          to (see the camera callback above). */}
+      {/* Smart Gate Mode Selector: Auto-Detect (Default), Check-In, Check-Out */}
       <div
         role="group"
         aria-label="Scan direction"
-        className="mb-6 grid w-full max-w-md grid-cols-2 gap-2"
+        className="mb-6 grid w-full max-w-md grid-cols-3 gap-2"
       >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            chooseMode('auto');
+          }}
+          aria-pressed={mode === 'auto'}
+          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition ${
+            mode === 'auto'
+              ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]'
+              : 'border-line bg-surface text-muted hover:text-ink'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> Auto-Detect
+        </button>
         <button
           type="button"
           onClick={(e) => {
@@ -282,13 +294,13 @@ export default function GymScanner() {
             chooseMode('in');
           }}
           aria-pressed={mode === 'in'}
-          className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition ${
             mode === 'in'
-              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]'
+              ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300 shadow-[0_0_0_1px_rgba(16,185,129,0.25)]'
               : 'border-line bg-surface text-muted hover:text-ink'
           }`}
         >
-          <LogIn className="w-4 h-4" /> 🟢 Check-In
+          <LogIn className="w-3.5 h-3.5" /> Check-In
         </button>
         <button
           type="button"
@@ -297,13 +309,13 @@ export default function GymScanner() {
             chooseMode('out');
           }}
           aria-pressed={mode === 'out'}
-          className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition ${
             mode === 'out'
-              ? 'border-rose-500/40 bg-rose-500/15 text-rose-300 shadow-[0_0_0_1px_rgba(244,63,94,0.25)]'
+              ? 'border-rose-500/40 bg-rose-500/20 text-rose-300 shadow-[0_0_0_1px_rgba(244,63,94,0.25)]'
               : 'border-line bg-surface text-muted hover:text-ink'
           }`}
         >
-          <LogOut className="w-4 h-4" /> 🔴 Check-Out
+          <LogOut className="w-3.5 h-3.5" /> Check-Out
         </button>
       </div>
 

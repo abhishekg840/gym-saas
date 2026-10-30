@@ -44,6 +44,7 @@ import AccountSettings from '@/components/account-settings';
 import BadgeShowcase from '@/components/badge-showcase';
 import HardwareIdentityCard from '@/components/hardware-identity-card';
 import PasswordGate from '@/components/password-gate';
+import ActiveSessionModal from '@/components/active-session-modal';
 import { loadHardwareIdentity, rfidDisplay, slotDisplay, HARDWARE_IDENTITY_HINT, type HardwareIdentity } from '@/lib/identity';
 import { loadBadges, loadMemberStats, type MemberBadge, type MemberStats } from '@/lib/gamification';
 import {
@@ -613,6 +614,13 @@ export default function MemberDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 text-slate-900">
+      {memberId && (
+        <ActiveSessionModal
+          memberId={memberId}
+          tenantId={data?.tenant_id || pass?.tenant_id || null}
+          onSessionClosed={refresh}
+        />
+      )}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">

@@ -14,6 +14,7 @@ import {
 } from '@/lib/geofence';
 import { PASS_WINDOW_MS, type PassGeoProof } from '@/lib/passtoken';
 import { mintGatePass } from '@/lib/passmint';
+import ActiveSessionModal from '@/components/active-session-modal';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import {
@@ -476,6 +477,12 @@ export default function MemberSelfServicePortal() {
         </div>
       ) : (
         <div className="w-full max-w-sm space-y-4 pb-24">
+          {member?.id && (
+            <ActiveSessionModal
+              memberId={member.id}
+              tenantId={member.tenant_id}
+            />
+          )}
           <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
