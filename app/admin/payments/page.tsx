@@ -52,13 +52,13 @@ type TabKind = 'overdue' | 'expiring' | 'frozen' | 'ledger';
 
 interface MemberRow {
   id: string;
-  full_name: string;
-  phone: string;
+  full_name?: string | null;
+  phone?: string | null;
   email?: string | null;
-  membership_end: string | null;
-  status: string;
-  amount_paid: number;
-  invoice_count?: number;
+  membership_end?: string | null;
+  status?: string | null;
+  amount_paid?: number | null;
+  invoice_count?: number | null;
   last_invoice?: string | null;
   is_frozen?: boolean | null;
   freeze_start_date?: string | null;
@@ -71,15 +71,57 @@ interface MemberRow {
 
 interface InvoiceRow {
   id: string;
-  member_id: string | null;
-  member_name: string;
-  member_phone: string;
-  amount: number;
-  payment_method: string;
-  status: string;
-  issued_at: string;
-  tenant_id: string | null;
+  member_id?: string | null;
+  member_name?: string | null;
+  member_phone?: string | null;
+  amount?: number | null;
+  payment_method?: string | null;
+  status?: string | null;
+  issued_at?: string | null;
+  tenant_id?: string | null;
   notes?: string | null;
+}
+
+/** Safe Date Formatter: never throws an invalid date exception */
+function formatSafeDate(dateVal: string | null | undefined): string {
+  if (!dateVal) return '—';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+/** Safe Overdue Days calculation */
+function getOverdueDays(dateStr: string | null | undefined): number {
+  if (!dateStr) return 1;
+  try {
+    const end = new Date(dateStr);
+    if (isNaN(end.getTime())) return 1;
+    const now = new Date();
+    return Math.max(1, Math.floor((now.getTime() - end.getTime()) / 86400000));
+  } catch {
+    return 1;
+  }
+}
+
+/** Safe Expiring Days calculation */
+function getDaysLeft(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  try {
+    const end = new Date(dateStr);
+    if (isNaN(end.getTime())) return 0;
+    const now = new Date();
+    return Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000));
+  } catch {
+    return 0;
+  }
 }
 
 export default function AdminPaymentsPage() {
@@ -114,25 +156,28 @@ export default function AdminPaymentsPage() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptInvoice, setReceiptInvoice] = useState<InvoiceRow | null>(null);
   const [receiptPlanName, setReceiptPlanName] = useState<string>('Gym Membership');
-  const [receiptExpiry, setReceiptExpiry] = useState<string>('-');
+  const [receiptExpiry, setReceiptExpiry] = useState<string>('—');
 
   const [loading, setLoading] = useState(true);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
   // ---- Session & role ----
   useEffect(() => {
-    const s = readSession();
-    if (!s) {
-      router.push('/login');
-      return;
+    try {
+      const s = readSession();
+      if (!s) {
+        router.push('/login');
+        return;
+      }
+      if (s.role === 'member') {
+        router.replace('/member/dashboard');
+        return;
+      }
+      setSession(s);
+      setCurrentRole(s.role === 'super_admin' || s.role === 'owner' ? 'owner' : 'reception');
+    } catch {
+      // Fallback
     }
-    if (s.role === 'member') {
-      router.replace('/member/dashboard');
-      return;
-    }
-    setSession(s);
-    setCurrentRole(s.role === 'super_admin' || s.role === 'owner' ? 'owner' : 'reception');
   }, [router]);
 
   const tenantId = session?.tenantId ?? null;
@@ -149,29 +194,33 @@ export default function AdminPaymentsPage() {
       const nowStr = now.toISOString().split('T')[0];
       const sevenDaysLater = new Date(now.getTime() + 7 * 86400000).toISOString().split('T')[0];
 
-      const { data: members } = await supabase
+      const { data: members, error: mErr } = await supabase
         .from('members')
         .select('*')
         .eq('tenant_id', tenantId)
         .order('full_name', { ascending: true });
 
-      const all = (members ?? []) as MemberRow[];
+      if (mErr) console.error('Error fetching members:', mErr);
+
+      const all = ((members ?? []) as MemberRow[]).filter((m) => m && m.id);
       setAllMembers(all);
 
       const overdue = all.filter((m) => {
-        if (m.status === 'frozen' || m.is_frozen) return false;
+        const status = String(m.status ?? '').toLowerCase();
+        if (status === 'frozen' || m.is_frozen) return false;
         const end = m.membership_end ? new Date(m.membership_end) : null;
-        const isExpired = end ? end < now : true;
-        const isBlocked = m.status === 'expired' || m.status === 'blocked';
+        const isExpired = end && !isNaN(end.getTime()) ? end < now : true;
+        const isBlocked = status === 'expired' || status === 'blocked';
         return isExpired || isBlocked;
       });
       setOverdueMembers(overdue);
 
       const expiring = all
         .filter((m) => {
-          if (m.status === 'frozen' || m.is_frozen) return false;
+          const status = String(m.status ?? '').toLowerCase();
+          if (status === 'frozen' || m.is_frozen) return false;
           const end = m.membership_end ? new Date(m.membership_end) : null;
-          if (!end || end < now) return false;
+          if (!end || isNaN(end.getTime()) || end < now) return false;
           const endStr = end.toISOString().split('T')[0];
           return endStr >= nowStr && endStr <= sevenDaysLater;
         })
@@ -182,18 +231,23 @@ export default function AdminPaymentsPage() {
         });
       setExpiringMembers(expiring);
 
-      const frozen = all.filter((m) => m.status === 'frozen' || m.is_frozen);
+      const frozen = all.filter((m) => {
+        const status = String(m.status ?? '').toLowerCase();
+        return status === 'frozen' || m.is_frozen === true;
+      });
       setFrozenMembers(frozen);
 
-      const { data: invoices } = await supabase
+      const { data: invoices, error: invErr } = await supabase
         .from('invoices')
         .select('*')
         .eq('tenant_id', tenantId)
         .order('issued_at', { ascending: false })
         .limit(200);
-      setLedgerInvoices((invoices ?? []) as InvoiceRow[]);
-    } catch {
-      // Silently fail - tables still render
+
+      if (invErr) console.error('Error fetching invoices:', invErr);
+      setLedgerInvoices(((invoices ?? []) as InvoiceRow[]).filter((i) => i && i.id));
+    } catch (err) {
+      console.error('loadTabData unexpected error:', err);
     } finally {
       setLoading(false);
     }
@@ -213,7 +267,6 @@ export default function AdminPaymentsPage() {
       const disc = Number(discount) || 0;
       setAmountPaying(String(Math.max(0, preset.price - disc)));
     } else {
-      // Custom / Balance clearance
       setPlanFee('0');
       setPlanDays(0);
       setAmountPaying('0');
@@ -226,24 +279,17 @@ export default function AdminPaymentsPage() {
   const numPaid = Number(amountPaying) || 0;
   const calculatedBalance = Math.max(0, numFee - numDisc - numPaid);
 
-  let previewNewExpiry = '-';
+  let previewNewExpiry = '—';
   if (collectMember) {
     const now = new Date();
     const currentEnd = collectMember.membership_end ? new Date(collectMember.membership_end) : null;
+    const isValidDate = currentEnd && !isNaN(currentEnd.getTime());
     if (planDays > 0) {
-      const baseDate = currentEnd && currentEnd > now ? currentEnd : now;
+      const baseDate = isValidDate && currentEnd > now ? currentEnd : now;
       const futureDate = new Date(baseDate.getTime() + planDays * 86400000);
-      previewNewExpiry = futureDate.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    } else if (currentEnd) {
-      previewNewExpiry = currentEnd.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
+      previewNewExpiry = formatSafeDate(futureDate.toISOString());
+    } else if (isValidDate) {
+      previewNewExpiry = formatSafeDate(collectMember.membership_end);
     }
   }
 
@@ -320,7 +366,7 @@ export default function AdminPaymentsPage() {
       }
 
       setCollectNotice({
-        message: `Success! Paid ₹${numPaid.toLocaleString('en-IN')}. New expiry: ${data.membership_end}. Remaining dues: ₹${data.pending_balance.toLocaleString('en-IN')}`,
+        message: `Success! Paid ₹${Number(numPaid || 0).toLocaleString('en-IN')}. New expiry: ${data.membership_end || '—'}. Remaining dues: ₹${Number(data.pending_balance || 0).toLocaleString('en-IN')}`,
         kind: 'ok',
       });
 
@@ -340,77 +386,88 @@ export default function AdminPaymentsPage() {
     setReceiptInvoice(invoice);
     const matchedMember = allMembers.find((m) => m.id === invoice.member_id);
     setReceiptPlanName(matchedMember?.plan_name || 'Gym Membership');
-    if (matchedMember?.membership_end) {
-      setReceiptExpiry(
-        new Date(matchedMember.membership_end).toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-        })
-      );
-    } else {
-      setReceiptExpiry('-');
-    }
+    setReceiptExpiry(formatSafeDate(matchedMember?.membership_end));
     setReceiptOpen(true);
   };
 
-  // Helper for Overdue Days calculation
-  const getOverdueDays = (dateStr: string | null) => {
-    if (!dateStr) return 1;
-    const end = new Date(dateStr);
-    const now = new Date();
-    const diff = Math.max(1, Math.floor((now.getTime() - end.getTime()) / 86400000));
-    return diff;
-  };
-
-  // Helper for Expiring Days calculation
-  const getDaysLeft = (dateStr: string | null) => {
-    if (!dateStr) return 0;
-    const end = new Date(dateStr);
-    const now = new Date();
-    const diff = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000));
-    return diff;
-  };
-
-  // WhatsApp Actions
+  // WhatsApp Actions with safety guards
   const sendWhatsAppUpi = (m: MemberRow) => {
     const gymName = session?.tenantName || 'Gym';
-    const msg = `Hi ${m.full_name}, your membership at ${gymName} is overdue. Gate access is currently paused. Please pay online via UPI or visit the desk to renew immediately:`;
-    window.open(waLink(m.phone, msg), '_blank');
+    const memberName = m.full_name || 'Member';
+    const phone = m.phone || '';
+    if (!phone) {
+      alert('This member does not have a phone number on file.');
+      return;
+    }
+    const msg = `Hi ${memberName}, your membership at ${gymName} is overdue. Gate access is currently paused. Please pay online via UPI or visit the desk to renew immediately:`;
+    window.open(waLink(phone, msg), '_blank');
   };
 
   const sendWhatsAppReminder = (m: MemberRow) => {
     const gymName = session?.tenantName || 'Gym';
+    const memberName = m.full_name || 'Member';
+    const phone = m.phone || '';
+    if (!phone) {
+      alert('This member does not have a phone number on file.');
+      return;
+    }
     const daysLeft = getDaysLeft(m.membership_end);
-    const msg = `Hi ${m.full_name}, friendly reminder that your gym membership at ${gymName} expires in ${daysLeft} days (${m.membership_end ? new Date(m.membership_end).toLocaleDateString('en-IN') : 'soon'}). Renew early at the desk to avoid entry interruptions!`;
-    window.open(waLink(m.phone, msg), '_blank');
+    const expiryDisplay = formatSafeDate(m.membership_end);
+    const msg = `Hi ${memberName}, friendly reminder that your gym membership at ${gymName} expires in ${daysLeft} days (${expiryDisplay}). Renew early at the desk to avoid entry interruptions!`;
+    window.open(waLink(phone, msg), '_blank');
   };
 
   const sendWhatsAppReceipt = (inv: InvoiceRow) => {
     const gymName = session?.tenantName || 'Gym';
-    const msg = `*PAYMENT RECEIPT — ${gymName.toUpperCase()}*\n\nHello ${inv.member_name},\nWe have received your payment of *₹${inv.amount.toLocaleString('en-IN')}* via ${inv.payment_method.toUpperCase()}.\nReceipt ID: #${inv.id.slice(0, 8).toUpperCase()}\nDate: ${new Date(inv.issued_at).toLocaleDateString('en-IN')}\nStatus: ${inv.status.toUpperCase()}\n\nThank you for training with us!`;
-    window.open(waLink(inv.member_phone, msg), '_blank');
+    const memberName = inv.member_name || 'Member';
+    const phone = inv.member_phone || '';
+    if (!phone) {
+      alert('This invoice does not have a member phone number.');
+      return;
+    }
+    const invIdDisplay = inv.id ? String(inv.id).slice(0, 8).toUpperCase() : 'RECEIPT';
+    const amountDisplay = Number(inv.amount || 0).toLocaleString('en-IN');
+    const paymentMethodDisplay = String(inv.payment_method || 'CASH').toUpperCase();
+    const dateDisplay = formatSafeDate(inv.issued_at);
+    const statusDisplay = String(inv.status || 'PAID').toUpperCase();
+
+    const msg = `*PAYMENT RECEIPT — ${gymName.toUpperCase()}*\n\nHello ${memberName},\nWe have received your payment of *₹${amountDisplay}* via ${paymentMethodDisplay}.\nReceipt ID: #${invIdDisplay}\nDate: ${dateDisplay}\nStatus: ${statusDisplay}\n\nThank you for training with us!`;
+    window.open(waLink(phone, msg), '_blank');
   };
 
-  // Filtering
-  const s = search.toLowerCase();
-  const filteredOverdue = overdueMembers.filter(
-    (m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s)
-  );
-  const filteredExpiring = expiringMembers.filter(
-    (m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s)
-  );
-  const filteredFrozen = frozenMembers.filter(
-    (m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s)
-  );
-  const filteredLedger = ledgerInvoices.filter(
-    (i) => i.member_name.toLowerCase().includes(s) || i.member_phone.includes(s) || i.id.toLowerCase().includes(s)
-  );
+  // Filtering safely
+  const s = String(search || '').toLowerCase().trim();
+  const filteredOverdue = overdueMembers.filter((m) => {
+    const name = String(m?.full_name ?? '').toLowerCase();
+    const phone = String(m?.phone ?? '');
+    return name.includes(s) || phone.includes(s);
+  });
 
-  const ms = memberSearch.toLowerCase();
-  const searchEligibleMembers = allMembers.filter(
-    (m) => m.full_name.toLowerCase().includes(ms) || m.phone.includes(ms)
-  );
+  const filteredExpiring = expiringMembers.filter((m) => {
+    const name = String(m?.full_name ?? '').toLowerCase();
+    const phone = String(m?.phone ?? '');
+    return name.includes(s) || phone.includes(s);
+  });
+
+  const filteredFrozen = frozenMembers.filter((m) => {
+    const name = String(m?.full_name ?? '').toLowerCase();
+    const phone = String(m?.phone ?? '');
+    return name.includes(s) || phone.includes(s);
+  });
+
+  const filteredLedger = ledgerInvoices.filter((i) => {
+    const name = String(i?.member_name ?? '').toLowerCase();
+    const phone = String(i?.member_phone ?? '');
+    const id = String(i?.id ?? '').toLowerCase();
+    return name.includes(s) || phone.includes(s) || id.includes(s);
+  });
+
+  const ms = String(memberSearch || '').toLowerCase().trim();
+  const searchEligibleMembers = allMembers.filter((m) => {
+    const name = String(m?.full_name ?? '').toLowerCase();
+    const phone = String(m?.phone ?? '');
+    return name.includes(ms) || phone.includes(ms);
+  });
 
   const isActive = (route: string) => pathname === route;
 
@@ -643,14 +700,18 @@ export default function AdminPaymentsPage() {
                   filteredOverdue.map((m) => {
                     const daysOver = getOverdueDays(m.membership_end);
                     const isBusy = actionBusyId === m.id;
+                    const memberName = m.full_name || 'Member';
+                    const memberPhone = m.phone || 'No phone';
+                    const expiryDisplay = formatSafeDate(m.membership_end);
+
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/60 transition">
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          <div>{m.full_name}</div>
-                          <div className="text-[11px] text-slate-400">{m.phone}</div>
+                          <div>{memberName}</div>
+                          <div className="text-[11px] text-slate-400">{memberPhone}</div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">
-                          {m.membership_end ? new Date(m.membership_end).toLocaleDateString('en-IN') : 'Expired'}
+                          {expiryDisplay}
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[11px] font-semibold text-rose-700">
@@ -723,14 +784,18 @@ export default function AdminPaymentsPage() {
                 ) : (
                   filteredExpiring.map((m) => {
                     const daysLeft = getDaysLeft(m.membership_end);
+                    const memberName = m.full_name || 'Member';
+                    const memberPhone = m.phone || 'No phone';
+                    const expiryDisplay = formatSafeDate(m.membership_end);
+
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/60 transition">
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          <div>{m.full_name}</div>
-                          <div className="text-[11px] text-slate-400">{m.phone}</div>
+                          <div>{memberName}</div>
+                          <div className="text-[11px] text-slate-400">{memberPhone}</div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">
-                          {m.membership_end ? new Date(m.membership_end).toLocaleDateString('en-IN') : '-'}
+                          {expiryDisplay}
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
@@ -795,19 +860,24 @@ export default function AdminPaymentsPage() {
                 ) : (
                   filteredFrozen.map((m) => {
                     const isBusy = actionBusyId === m.id;
+                    const memberName = m.full_name || 'Member';
+                    const memberPhone = m.phone || 'No phone';
+                    const expiryDisplay = formatSafeDate(m.membership_end);
+                    const freezeStartDisplay = formatSafeDate(m.freeze_start_date);
+
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/60 transition">
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          <div>{m.full_name}</div>
-                          <div className="text-[11px] text-slate-400">{m.phone}</div>
+                          <div>{memberName}</div>
+                          <div className="text-[11px] text-slate-400">{memberPhone}</div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">
-                          {m.membership_end ? new Date(m.membership_end).toLocaleDateString('en-IN') : '-'}
+                          {expiryDisplay}
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 border border-sky-200 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
                             <PauseCircle className="h-3 w-3" />
-                            Paused / Frozen {m.freeze_start_date ? `since ${m.freeze_start_date}` : ''}
+                            Paused / Frozen {m.freeze_start_date ? `since ${freezeStartDisplay}` : ''}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -859,59 +929,65 @@ export default function AdminPaymentsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredLedger.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-slate-50/60 transition">
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        <div className="font-mono text-[11px]">#{inv.id.slice(0, 8).toUpperCase()}</div>
-                        <div className="text-[11px] text-slate-400">
-                          {new Date(inv.issued_at).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        <div>{inv.member_name}</div>
-                        <div className="text-[11px] text-slate-400">{inv.member_phone}</div>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-900">
-                        ₹{inv.amount.toLocaleString('en-IN')}
-                      </td>
-                      <td className="px-4 py-3 uppercase text-slate-600 font-mono text-[11px]">
-                        {inv.payment_method}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                            inv.status === 'paid'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}
-                        >
-                          {inv.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => sendWhatsAppReceipt(inv)}
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition"
+                  filteredLedger.map((inv) => {
+                    const invIdDisplay = inv.id ? String(inv.id).slice(0, 8).toUpperCase() : '—';
+                    const issuedDateDisplay = formatSafeDate(inv.issued_at);
+                    const memberName = inv.member_name || 'Member';
+                    const memberPhone = inv.member_phone || 'No phone';
+                    const amountDisplay = Number(inv.amount || 0).toLocaleString('en-IN');
+                    const paymentMethodDisplay = String(inv.payment_method || 'CASH').toUpperCase();
+                    const statusVal = String(inv.status || 'paid').toLowerCase();
+
+                    return (
+                      <tr key={inv.id} className="hover:bg-slate-50/60 transition">
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          <div className="font-mono text-[11px]">#{invIdDisplay}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {issuedDateDisplay}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-900">
+                          <div>{memberName}</div>
+                          <div className="text-[11px] text-slate-400">{memberPhone}</div>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">
+                          ₹{amountDisplay}
+                        </td>
+                        <td className="px-4 py-3 uppercase text-slate-600 font-mono text-[11px]">
+                          {paymentMethodDisplay}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                              statusVal === 'paid'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
                           >
-                            <Send className="h-3 w-3 text-emerald-600" /> WhatsApp Receipt
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openReceiptModal(inv)}
-                            className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-slate-800 transition"
-                          >
-                            <Printer className="h-3 w-3" /> View Receipt
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            {statusVal}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => sendWhatsAppReceipt(inv)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition"
+                            >
+                              <Send className="h-3 w-3 text-emerald-600" /> WhatsApp Receipt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openReceiptModal(inv)}
+                              className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+                            >
+                              <Printer className="h-3 w-3" /> View Receipt
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -960,11 +1036,18 @@ export default function AdminPaymentsPage() {
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 >
                   <option value="">-- Choose Member --</option>
-                  {searchEligibleMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.full_name} ({m.phone}) — {m.status.toUpperCase()} | Exp: {m.membership_end || 'None'}
-                    </option>
-                  ))}
+                  {searchEligibleMembers.map((m) => {
+                    const memberName = m.full_name || 'Member';
+                    const memberPhone = m.phone || 'No phone';
+                    const memberStatus = String(m.status || 'ACTIVE').toUpperCase();
+                    const expiryDisplay = formatSafeDate(m.membership_end);
+
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {memberName} ({memberPhone}) — {memberStatus} | Exp: {expiryDisplay}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -972,15 +1055,13 @@ export default function AdminPaymentsPage() {
               {collectMember && (
                 <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-200 text-slate-600 flex justify-between items-center text-[11px]">
                   <div>
-                    <span className="font-semibold text-slate-900">{collectMember.full_name}</span>
-                    <span className="text-slate-400 ml-1.5">({collectMember.phone})</span>
+                    <span className="font-semibold text-slate-900">{collectMember.full_name || 'Member'}</span>
+                    <span className="text-slate-400 ml-1.5">({collectMember.phone || 'No phone'})</span>
                   </div>
                   <div>
                     Current Expiry:{' '}
                     <span className="font-medium text-slate-800">
-                      {collectMember.membership_end
-                        ? new Date(collectMember.membership_end).toLocaleDateString('en-IN')
-                        : 'Expired'}
+                      {formatSafeDate(collectMember.membership_end)}
                     </span>
                   </div>
                 </div>
@@ -1005,7 +1086,7 @@ export default function AdminPaymentsPage() {
                       >
                         <div className="font-medium">{p.name}</div>
                         <div className="text-[11px] text-slate-500">
-                          {p.days} Days — ₹{p.price.toLocaleString('en-IN')}
+                          {p.days} Days — ₹{Number(p.price || 0).toLocaleString('en-IN')}
                         </div>
                       </button>
                     );
@@ -1075,7 +1156,7 @@ export default function AdminPaymentsPage() {
                       calculatedBalance > 0 ? 'text-amber-400' : 'text-emerald-400'
                     }`}
                   >
-                    ₹{calculatedBalance.toLocaleString('en-IN')} {calculatedBalance > 0 ? '(PARTIAL DUE)' : '(PAID)'}
+                    ₹{Number(calculatedBalance || 0).toLocaleString('en-IN')} {calculatedBalance > 0 ? '(PARTIAL DUE)' : '(PAID)'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
@@ -1183,47 +1264,43 @@ export default function AdminPaymentsPage() {
                 </h4>
                 <p className="text-[11px] text-slate-500">Official Membership Receipt</p>
                 <p className="text-[10px] font-mono text-slate-400 mt-1">
-                  Invoice #{receiptInvoice.id.slice(0, 8).toUpperCase()}
+                  Invoice #{receiptInvoice.id ? String(receiptInvoice.id).slice(0, 8).toUpperCase() : 'RECEIPT'}
                 </p>
               </div>
 
               <div className="py-4 space-y-2 border-b border-dashed border-slate-300 text-[11px]">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Member Name:</span>
-                  <span className="font-semibold text-slate-800">{receiptInvoice.member_name}</span>
+                  <span className="font-semibold text-slate-800">{receiptInvoice.member_name || 'Member'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Phone:</span>
-                  <span className="font-mono text-slate-800">{receiptInvoice.member_phone}</span>
+                  <span className="font-mono text-slate-800">{receiptInvoice.member_phone || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Plan Description:</span>
-                  <span className="font-medium text-slate-800">{receiptPlanName}</span>
+                  <span className="font-medium text-slate-800">{receiptPlanName || 'Gym Membership'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Membership Valid Till:</span>
-                  <span className="font-semibold text-emerald-700">{receiptExpiry}</span>
+                  <span className="font-semibold text-emerald-700">{receiptExpiry || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Date Issued:</span>
                   <span className="text-slate-800">
-                    {new Date(receiptInvoice.issued_at).toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
+                    {formatSafeDate(receiptInvoice.issued_at)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Payment Mode:</span>
-                  <span className="font-mono uppercase text-slate-800">{receiptInvoice.payment_method}</span>
+                  <span className="font-mono uppercase text-slate-800">{receiptInvoice.payment_method || 'CASH'}</span>
                 </div>
               </div>
 
               <div className="py-4 border-b border-dashed border-slate-300 flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-900 uppercase">Amount Paid:</span>
                 <span className="text-lg font-extrabold text-emerald-600">
-                  ₹{receiptInvoice.amount.toLocaleString('en-IN')}
+                  ₹{Number(receiptInvoice.amount || 0).toLocaleString('en-IN')}
                 </span>
               </div>
 
