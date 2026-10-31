@@ -1,4 +1,4 @@
-package in.vyroniq.member
+﻿package `in`.vyroniq.member
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -23,20 +23,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import in.vyroniq.member.ui.navigation.Screen
-import in.vyroniq.member.ui.navigation.bottomNavItems
-import in.vyroniq.member.ui.screens.AttendanceScreen
-import in.vyroniq.member.ui.screens.LoginScreen
-import in.vyroniq.member.ui.screens.MembershipScreen
-import in.vyroniq.member.ui.screens.PassScreen
-import in.vyroniq.member.ui.screens.ProfileScreen
-import in.vyroniq.member.ui.screens.StoreScreen
-import in.vyroniq.member.ui.theme.Emerald400
-import in.vyroniq.member.ui.theme.Emerald600
-import in.vyroniq.member.ui.theme.Slate400
-import in.vyroniq.member.ui.theme.Slate900
-import in.vyroniq.member.ui.theme.Slate950
-import in.vyroniq.member.ui.theme.VyroniqTheme
+import `in`.vyroniq.member.ui.navigation.Screen
+import `in`.vyroniq.member.ui.navigation.bottomNavItems
+import `in`.vyroniq.member.ui.screens.AttendanceScreen
+import `in`.vyroniq.member.ui.screens.LoginScreen
+import `in`.vyroniq.member.ui.screens.MembershipScreen
+import `in`.vyroniq.member.ui.screens.PassScreen
+import `in`.vyroniq.member.ui.screens.ProfileScreen
+import `in`.vyroniq.member.ui.screens.StoreScreen
+import `in`.vyroniq.member.ui.theme.Emerald400
+import `in`.vyroniq.member.ui.theme.Emerald600
+import `in`.vyroniq.member.ui.theme.Slate400
+import `in`.vyroniq.member.ui.theme.Slate900
+import `in`.vyroniq.member.ui.theme.Slate950
+import `in`.vyroniq.member.ui.theme.VyroniqTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

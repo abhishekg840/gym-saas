@@ -1,13 +1,13 @@
-package in.vyroniq.owner.data.remote
+﻿package `in`.vyroniq.owner.data.remote
 
-import in.vyroniq.owner.BuildConfig
-import in.vyroniq.owner.data.model.CollectPaymentPayload
-import in.vyroniq.owner.data.model.CollectPaymentResponse
-import in.vyroniq.owner.data.model.DeleteMemberPayload
-import in.vyroniq.owner.data.model.DeleteMemberResponse
-import in.vyroniq.owner.data.model.GymMember
-import in.vyroniq.owner.data.model.HardwareDevice
-import in.vyroniq.owner.data.model.Tenant
+import `in`.vyroniq.owner.BuildConfig
+import `in`.vyroniq.owner.data.model.CollectPaymentPayload
+import `in`.vyroniq.owner.data.model.CollectPaymentResponse
+import `in`.vyroniq.owner.data.model.DeleteMemberPayload
+import `in`.vyroniq.owner.data.model.DeleteMemberResponse
+import `in`.vyroniq.owner.data.model.GymMember
+import `in`.vyroniq.owner.data.model.HardwareDevice
+import `in`.vyroniq.owner.data.model.Tenant
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response

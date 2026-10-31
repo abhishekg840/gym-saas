@@ -1,7 +1,7 @@
-package in.vyroniq.owner
+﻿package `in`.vyroniq.owner
 
 import android.app.Application
-import in.vyroniq.owner.data.security.OwnerSessionManager
+import `in`.vyroniq.owner.data.security.OwnerSessionManager
 
 class VyroniqOwnerApp : Application() {
     lateinit var sessionManager: OwnerSessionManager

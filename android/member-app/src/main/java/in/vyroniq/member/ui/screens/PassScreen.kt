@@ -1,4 +1,4 @@
-package in.vyroniq.member.ui.screens
+﻿package `in`.vyroniq.member.ui.screens
 
 import android.app.Activity
 import android.graphics.Bitmap
@@ -59,19 +59,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import in.vyroniq.member.VyroniqMemberApp
-import in.vyroniq.member.data.security.PassTokenGenerator
-import in.vyroniq.member.ui.theme.Amber500
-import in.vyroniq.member.ui.theme.Emerald400
-import in.vyroniq.member.ui.theme.Emerald500
-import in.vyroniq.member.ui.theme.Emerald600
-import in.vyroniq.member.ui.theme.Rose500
-import in.vyroniq.member.ui.theme.Slate400
-import in.vyroniq.member.ui.theme.Slate700
-import in.vyroniq.member.ui.theme.Slate800
-import in.vyroniq.member.ui.theme.Slate900
-import in.vyroniq.member.ui.theme.Slate950
-import in.vyroniq.member.util.QrCodeGenerator
+import `in`.vyroniq.member.VyroniqMemberApp
+import `in`.vyroniq.member.data.security.PassTokenGenerator
+import `in`.vyroniq.member.ui.theme.Amber500
+import `in`.vyroniq.member.ui.theme.Emerald400
+import `in`.vyroniq.member.ui.theme.Emerald500
+import `in`.vyroniq.member.ui.theme.Emerald600
+import `in`.vyroniq.member.ui.theme.Rose500
+import `in`.vyroniq.member.ui.theme.Slate400
+import `in`.vyroniq.member.ui.theme.Slate700
+import `in`.vyroniq.member.ui.theme.Slate800
+import `in`.vyroniq.member.ui.theme.Slate900
+import `in`.vyroniq.member.ui.theme.Slate950
+import `in`.vyroniq.member.util.QrCodeGenerator
 import kotlinx.coroutines.delay
 
 @Composable

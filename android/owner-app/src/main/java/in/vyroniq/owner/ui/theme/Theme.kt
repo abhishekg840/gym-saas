@@ -1,4 +1,4 @@
-package in.vyroniq.owner.ui.theme
+package `in`.vyroniq.owner.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -32,4 +32,3 @@ fun VyroniqOwnerTheme(
         content = content
     )
 }
-

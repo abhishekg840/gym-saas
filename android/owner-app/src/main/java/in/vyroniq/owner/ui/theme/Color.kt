@@ -1,4 +1,4 @@
-package in.vyroniq.owner.ui.theme
+package `in`.vyroniq.owner.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
@@ -19,4 +19,3 @@ val Rose500 = Color(0xFFF43F5E)
 val Amber500 = Color(0xFFF59E0B)
 val Cyan500 = Color(0xFF06B6D4)
 val Violet500 = Color(0xFF8B5CF6)
-

@@ -1,4 +1,4 @@
-package in.vyroniq.member.util
+﻿package `in`.vyroniq.member.util
 
 import android.graphics.Bitmap
 import android.graphics.Color

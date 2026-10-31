@@ -1,4 +1,4 @@
-package in.vyroniq.owner
+﻿package `in`.vyroniq.owner
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -23,19 +23,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
-import in.vyroniq.owner.ui.navigation.OwnerScreen
-import in.vyroniq.owner.ui.navigation.ownerNavItems
-import in.vyroniq.owner.ui.screens.BillingHubScreen
-import in.vyroniq.owner.ui.screens.ExecutiveDashboardScreen
-import in.vyroniq.owner.ui.screens.HardwareTerminalScreen
-import in.vyroniq.owner.ui.screens.MemberDirectoryScreen
-import in.vyroniq.owner.ui.screens.OwnerLoginScreen
-import in.vyroniq.owner.ui.theme.Emerald400
-import in.vyroniq.owner.ui.theme.Emerald600
-import in.vyroniq.owner.ui.theme.Slate400
-import in.vyroniq.owner.ui.theme.Slate900
-import in.vyroniq.owner.ui.theme.Slate950
-import in.vyroniq.owner.ui.theme.VyroniqOwnerTheme
+import `in`.vyroniq.owner.ui.navigation.OwnerScreen
+import `in`.vyroniq.owner.ui.navigation.ownerNavItems
+import `in`.vyroniq.owner.ui.screens.BillingHubScreen
+import `in`.vyroniq.owner.ui.screens.ExecutiveDashboardScreen
+import `in`.vyroniq.owner.ui.screens.HardwareTerminalScreen
+import `in`.vyroniq.owner.ui.screens.MemberDirectoryScreen
+import `in`.vyroniq.owner.ui.screens.OwnerLoginScreen
+import `in`.vyroniq.owner.ui.theme.Emerald400
+import `in`.vyroniq.owner.ui.theme.Emerald600
+import `in`.vyroniq.owner.ui.theme.Slate400
+import `in`.vyroniq.owner.ui.theme.Slate900
+import `in`.vyroniq.owner.ui.theme.Slate950
+import `in`.vyroniq.owner.ui.theme.VyroniqOwnerTheme
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

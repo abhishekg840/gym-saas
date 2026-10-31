@@ -1,6 +1,6 @@
-package in.vyroniq.member.data.security
+﻿package `in`.vyroniq.member.data.security
 
-import in.vyroniq.member.BuildConfig
+import `in`.vyroniq.member.BuildConfig
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import javax.crypto.Mac

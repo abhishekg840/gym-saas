@@ -1,11 +1,11 @@
-package in.vyroniq.member.data.security
+﻿package `in`.vyroniq.member.data.security
 
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
-import in.vyroniq.member.data.model.MemberProfile
+import `in`.vyroniq.member.data.model.MemberProfile
 
 class EncryptedSessionManager(context: Context) {
 

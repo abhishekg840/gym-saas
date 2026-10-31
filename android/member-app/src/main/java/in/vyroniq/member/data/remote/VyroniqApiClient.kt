@@ -1,12 +1,12 @@
-package in.vyroniq.member.data.remote
+﻿package `in`.vyroniq.member.data.remote
 
-import in.vyroniq.member.BuildConfig
-import in.vyroniq.member.data.model.AttendanceRecord
-import in.vyroniq.member.data.model.InvoiceRecord
-import in.vyroniq.member.data.model.MemberProfile
-import in.vyroniq.member.data.model.PickupOrderRequest
-import in.vyroniq.member.data.model.PickupOrderResponse
-import in.vyroniq.member.data.model.StoreProduct
+import `in`.vyroniq.member.BuildConfig
+import `in`.vyroniq.member.data.model.AttendanceRecord
+import `in`.vyroniq.member.data.model.InvoiceRecord
+import `in`.vyroniq.member.data.model.MemberProfile
+import `in`.vyroniq.member.data.model.PickupOrderRequest
+import `in`.vyroniq.member.data.model.PickupOrderResponse
+import `in`.vyroniq.member.data.model.StoreProduct
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response

@@ -1,4 +1,4 @@
-package in.vyroniq.owner.ui.screens
+﻿package `in`.vyroniq.owner.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -48,18 +48,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
-import in.vyroniq.owner.VyroniqOwnerApp
-import in.vyroniq.owner.data.model.Tenant
-import in.vyroniq.owner.data.remote.OwnerApiClient
-import in.vyroniq.owner.data.security.BiometricAuthManager
-import in.vyroniq.owner.ui.theme.Emerald400
-import in.vyroniq.owner.ui.theme.Emerald500
-import in.vyroniq.owner.ui.theme.Emerald600
-import in.vyroniq.owner.ui.theme.Slate400
-import in.vyroniq.owner.ui.theme.Slate700
-import in.vyroniq.owner.ui.theme.Slate800
-import in.vyroniq.owner.ui.theme.Slate900
-import in.vyroniq.owner.ui.theme.Slate950
+import `in`.vyroniq.owner.VyroniqOwnerApp
+import `in`.vyroniq.owner.data.model.Tenant
+import `in`.vyroniq.owner.data.remote.OwnerApiClient
+import `in`.vyroniq.owner.data.security.BiometricAuthManager
+import `in`.vyroniq.owner.ui.theme.Emerald400
+import `in`.vyroniq.owner.ui.theme.Emerald500
+import `in`.vyroniq.owner.ui.theme.Emerald600
+import `in`.vyroniq.owner.ui.theme.Slate400
+import `in`.vyroniq.owner.ui.theme.Slate700
+import `in`.vyroniq.owner.ui.theme.Slate800
+import `in`.vyroniq.owner.ui.theme.Slate900
+import `in`.vyroniq.owner.ui.theme.Slate950
 import kotlinx.coroutines.launch
 
 @Composable

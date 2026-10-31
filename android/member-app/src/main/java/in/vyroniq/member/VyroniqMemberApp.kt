@@ -1,7 +1,7 @@
-package in.vyroniq.member
+﻿package `in`.vyroniq.member
 
 import android.app.Application
-import in.vyroniq.member.data.security.EncryptedSessionManager
+import `in`.vyroniq.member.data.security.EncryptedSessionManager
 
 class VyroniqMemberApp : Application() {
     lateinit var sessionManager: EncryptedSessionManager

@@ -1,4 +1,4 @@
-package in.vyroniq.owner.data.model
+﻿package `in`.vyroniq.owner.data.model
 
 import com.google.gson.annotations.SerializedName
 
